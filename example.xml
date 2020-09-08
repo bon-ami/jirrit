@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jirrit>
+        <user>Allen</user>
+        <!-- <log>jirrit.log</log> -->
+                <!-- this password is already BASE64'ed.
+                same as basic with real password -->
+        <pass type="basic">Allen</pass>
+        <server type="JIRA" name="BJ">
+                <url>http://jira.com:8080/</url>
+        </server>
+        <server type="Gerrit" name="common">
+                <pass type="digest">digest</pass>
+                <url>http://gerrit.com:8080/a/</url>
+                <magic>)]}'</magic>
+        </server>
+        <server type="Gerrit" name="BJ">
+                <pass type="plain">plain</pass>
+                <url>http://gerrit.bj:8080/a/</url>
+                <magic>)]}'</magic>
+        </server>
+</jirrit>
