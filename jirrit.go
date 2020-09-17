@@ -74,14 +74,15 @@ func readCfg(fn string, cfg *cfgs) (err error) {
 
 func main() {
 	var (
-		paramH, paramV, paramVV, paramVVV bool
-		paramID, paramCfg, paramLog       string
+		paramH, paramV, paramVV, paramVVV     bool
+		paramID, paramBra, paramCfg, paramLog string
 	)
 	flag.BoolVar(&paramH, "h", false, "Help Message")
-	flag.BoolVar(&paramV, "v", false, "verbose logging")
+	flag.BoolVar(&paramV, "v", false, "Log file output. Most actions need this.")
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
 	flag.BoolVar(&paramVVV, "vvv", false, "verbose messages with network I/O")
-	flag.StringVar(&paramID, "i", "", "Issue ID")
+	flag.StringVar(&paramID, "i", "", "Issue ID or assignee")
+	flag.StringVar(&paramBra, "b", "", "Branch")
 	flag.StringVar(&paramCfg, "c", "", "Config File")
 	flag.StringVar(&paramLog, "l", "", "Log File")
 	flag.Parse()
@@ -119,30 +120,33 @@ func main() {
 	} else {
 		eztools.LogPrint("Failed to open log file " + cfg.Log)
 	}
-	svr, fun, issueInfo := chooseSvrNAct(cats, cfg.Svrs, paramID)
-	if svr == nil || fun == nil {
-		return
-	}
-	authInfo, err := cfg2AuthInfo(*svr, cfg)
-	if err != nil {
-		eztools.LogErrFatal(err)
-		return
-	}
-	issues, err := fun(svr, authInfo, issueInfo)
-	if err != nil {
-		eztools.LogErrFatal(err)
-	}
-	if eztools.Debugging && eztools.Verbose > 0 {
-		if issues == nil {
-			eztools.Log("No results.")
-		} else {
-			for i, issue := range issues {
-				eztools.Log("Issue/Reviewer " + strconv.Itoa(i+1))
-				eztools.Log("ID/reviewer/submittable=" + issue[ISSUEINFO_IND_ID])
-				eztools.Log("HEAD/verified=" + issue[ISSUEINFO_IND_HEAD])
-				eztools.Log("PROJ/code-review=" + issue[ISSUEINFO_IND_PROJ])
-				eztools.Log("BRANCH/manual-testing/owner=" + issue[ISSUEINFO_IND_BRANCH])
-				eztools.Log("(approval) State=" + issue[ISSUEINFO_IND_APPROVAL])
+	for {
+		svr, fun, issueInfo := chooseSvrNAct(cats, cfg.Svrs,
+			issueInfos{ISSUEINFO_IND_ID: paramID, ISSUEINFO_IND_BRANCH: paramBra})
+		if svr == nil || fun == nil {
+			return
+		}
+		authInfo, err := cfg2AuthInfo(*svr, cfg)
+		if err != nil {
+			eztools.LogErrFatal(err)
+			return
+		}
+		issues, err := fun(svr, authInfo, issueInfo)
+		if err != nil {
+			eztools.LogErrFatal(err)
+		}
+		if eztools.Debugging && eztools.Verbose > 0 {
+			if issues == nil {
+				eztools.Log("No results.")
+			} else {
+				for i, issue := range issues {
+					eztools.Log("Issue/Reviewer " + strconv.Itoa(i+1))
+					eztools.Log("ID/reviewer/submittable=" + issue[ISSUEINFO_IND_ID])
+					eztools.Log("HEAD/verified=" + issue[ISSUEINFO_IND_HEAD])
+					eztools.Log("PROJ/code-review=" + issue[ISSUEINFO_IND_PROJ])
+					eztools.Log("BRANCH/manual-testing/owner=" + issue[ISSUEINFO_IND_BRANCH])
+					eztools.Log("(approval) State=" + issue[ISSUEINFO_IND_APPROVAL])
+				}
 			}
 		}
 	}
@@ -204,7 +208,8 @@ func isValidSvr(cats cat2Act, svr *svrs) bool {
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
 
-func chooseSvrNAct(cats cat2Act, candidates []svrs, id string) (*svrs, actionFunc, issueInfos) {
+func chooseSvrNAct(cats cat2Act, candidates []svrs,
+	issueInfo issueInfos) (*svrs, actionFunc, issueInfos) {
 	var choices []string
 	for _, svr := range candidates {
 		if !isValidSvr(cats, &svr) {
@@ -214,7 +219,6 @@ func chooseSvrNAct(cats cat2Act, candidates []svrs, id string) (*svrs, actionFun
 	}
 	eztools.ShowStrln(" Choose a server")
 	si := eztools.ChooseStrings(choices)
-	var issueInfo issueInfos
 	if si == eztools.InvalidID {
 		return nil, nil, issueInfo
 	}
@@ -230,7 +234,7 @@ func chooseSvrNAct(cats cat2Act, candidates []svrs, id string) (*svrs, actionFun
 		return nil, nil, issueInfo
 	}
 	return &candidates[si], cats[svr.Type][fi].f,
-		inputIssueInfo4Act(cats[svr.Type][fi].n, id)
+		inputIssueInfo4Act(cats[svr.Type][fi].n, issueInfo)
 }
 
 func restSth(method, url string, authInfo eztools.AuthInfo, bodyReq io.Reader, magic string) (body interface{}, err error) {
@@ -549,25 +553,40 @@ func gerritDetail(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([
 	return issues, err*/
 }
 
-func gerritReviews(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const REST_API_STR = "changes/"
-	return gerritGetReviews(svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_ID]+"/reviewers/", svr.Magic, authInfo)
+	return gerritGetReviews(svr.URL+REST_API_STR+
+		issueInfo[ISSUEINFO_IND_ID]+"/reviewers/", svr.Magic, authInfo)
 }
 
-func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	const REST_API_STR = "changes/?q="
+	return gerritGetIssues(svr.URL+REST_API_STR+
+		"status:merged+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
+		"+owner:"+issueInfo[ISSUEINFO_IND_ID],
+		svr.Magic, authInfo)
+}
+
+func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	const REST_API_STR = "changes/"
 	return gerritGetIssues(svr.URL+REST_API_STR, svr.Magic, authInfo)
 }
 
-func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	const REST_API_STR = "changes/?q="
-	return gerritGetIssues(svr.URL+REST_API_STR+ /*url.QueryEscape*/ ("status:open+owner:"+authInfo.User), svr.Magic, authInfo)
+	return gerritGetIssues(svr.URL+REST_API_STR+
+		/*url.QueryEscape*/ ("status:open+owner:"+authInfo.User), svr.Magic, authInfo)
 }
 
-func gerritMerge(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -577,7 +596,8 @@ func gerritMerge(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]
 	return nil, err
 }
 
-func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -610,9 +630,11 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos
 	return gerritMerge(svr, authInfo, issueInfo)
 }
 
-func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]issueInfos, error) {
+func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	const REST_API_STR = "rest/api/latest/search?jql="
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+REST_API_STR+url.QueryEscape("assignee=")+authInfo.User, authInfo, nil, svr.Magic)
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+REST_API_STR+
+		url.QueryEscape("assignee=")+authInfo.User, authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
 	}
@@ -622,15 +644,29 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo, issueInfo issueInfos) ([]i
 	return jiraParseIssues(bodyMap), err
 }
 
-func inputIssueInfo4Act(action, id string) (issueInfo issueInfos) {
+func useInputOrPromptStr(infI issueInfos, ind int, prompt string, infO *issueInfos) {
+	if len(infI[ind]) > 0 {
+		infO[ind] = infI[ind]
+		return
+	}
+	infO[ind] = eztools.PromptStr(prompt)
+}
+
+func useInputOrPrompt(infI issueInfos, ind int, infO *issueInfos) {
+	useInputOrPromptStr(infI, ind, issueInfoTxt[ind], infO)
+}
+
+func inputIssueInfo4Act(action string, infI issueInfos) (infO issueInfos) {
 	switch action {
-	case "detail Gerrit", "reviewers Gerrit", "merge Gerrit", "wait and merge Gerrit":
-		if len(id) > 0 {
-			issueInfo[ISSUEINFO_IND_ID] = id
-			return
-		}
-		i := ISSUEINFO_IND_ID
-		issueInfo[i] = eztools.PromptStr(issueInfoTxt[i])
+	case "detail Gerrit",
+		"reviewers Gerrit",
+		"merge Gerrit",
+		"wait and merge Gerrit":
+		useInputOrPrompt(infI, ISSUEINFO_IND_ID, &infO)
+	case "sb.'s all Gerrit":
+		useInputOrPromptStr(infI,
+			ISSUEINFO_IND_ID, ISSUEINFO_STR_ASSIGNEE, &infO)
+		useInputOrPrompt(infI, ISSUEINFO_IND_BRANCH, &infO)
 	}
 	return
 }
@@ -640,6 +676,7 @@ func makeCat2Act() cat2Act {
 		CATEGORY_JIRA: []action2Func{
 			{"my open JIRA", jiraMyOpen}},
 		CATEGORY_GERRIT: []action2Func{
+			{"sb.'s all Gerrit", gerritSbBraMerged},
 			{"my open Gerrit", gerritMyOpen},
 			{"all open Gerrit", gerritAllOpen},
 			{"detail Gerrit", gerritDetail},

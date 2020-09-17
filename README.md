@@ -1,11 +1,12 @@
 # jirrit
 ## Command line parameters
  - `-h` help message
- - `-v` verbose logging
+ - `-v` logging enabled. Most actions need logging.
  - `-vv` verbose messages
  - `-vvv` verbose messages with network I/O
  - `-c string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
- - `-i string` provide an issue ID. Some actions are subjected to a certain issue. Enter it when running or as a command param.
+ - `-i string` provide an issue ID or assignee. Some actions are subjected to a certain issue or issues. Enter it when running or as a command param.
+ - `-b string` provide a branch.
  - `-l string` provide a log file. It defaults to jirrit.log under current dir.
 ## Config xml
   As shown in example.xml, root name is jirrit.<BR>
@@ -22,6 +23,7 @@
  - Jira
   - list my open issues
  - Gerrit
+  - list issues by branch and assignee
   - list all open issues
   - list my open issues
   - show details of an issue by commit ID or change ID
