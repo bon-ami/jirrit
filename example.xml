@@ -8,6 +8,12 @@
         <server type="JIRA" name="BJ">
                 <url>http://jira.com:8080/</url>
         </server>
+        <server type="JIRA" name="CN">
+                <url>http://jira.com/</url>
+                <testpre>customfield_10900</testpre>
+                <teststep>customfield_10901</teststep>
+                <testexp>customfield_10902</testexp>
+        </server>
         <server type="Gerrit" name="common">
                 <pass type="digest">digest</pass>
                 <url>http://gerrit.com:8080/a/</url>

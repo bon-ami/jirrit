@@ -46,7 +46,7 @@ func test1(t *testing.T, cat, fun string) {
 			eztools.ShowStrln("Result " + strconv.Itoa(i))
 			eztools.RangeStrMap(v, func(k string, v interface{}) bool {
 				eztools.ShowStr(k + "=")
-				eztools.ShowSthLn(v)
+				eztools.ShowSthln(v)
 				return false
 			})
 		}
