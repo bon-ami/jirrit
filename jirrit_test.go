@@ -22,7 +22,7 @@ func runFunc(fun action2Func, svr *svrs, cfg cfgs) (string, bool) {
 		return fun.n + " failed", false
 	}
 	for _, issue := range issues {
-		eztools.ShowStrln("Issuse ID=" + issue[ISSUEINFO_IND_ID])
+		eztools.ShowStrln("Issuse ID=" + issue[ISSUEINFO_IND_CHG_ID])
 		eztools.ShowStrln("Issuse HEAD=" + issue[ISSUEINFO_IND_HEAD])
 		eztools.ShowStrln("Issuse PROJ=" + issue[ISSUEINFO_IND_PROJ])
 		eztools.ShowStrln("Issuse BRANCH=" + issue[ISSUEINFO_IND_BRANCH])
@@ -32,7 +32,7 @@ func runFunc(fun action2Func, svr *svrs, cfg cfgs) (string, bool) {
 
 func test1(t *testing.T, cat, fun string) {
 	var cfg cfgs
-	err := readCfg("", &cfg)
+	err := eztools.XMLsReadDefault("", module, &cfg)
 
 	if err != nil {
 		t.Error("test.xml fails")

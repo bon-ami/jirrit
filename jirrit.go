@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -53,52 +52,26 @@ type cfgs struct {
 	Svrs []svrs    `xml:"server"`
 }
 
-func read1Cfg(fn string, cfg *cfgs) (err error) {
-	if _, err = os.Stat(fn); os.IsNotExist(err) {
-		return err
-	}
-	err = eztools.XMLRead(fn, cfg)
-	return
-}
-
-func readCfg(fn string, cfg *cfgs) (err error) {
-	if len(fn) > 0 {
-		err = read1Cfg(fn, cfg)
-		if err == nil {
-			return
-		}
-	}
-	home, _ := os.UserHomeDir()
-	cfgPaths := [...]string{".", home}
-	for _, path1 := range cfgPaths {
-		err = read1Cfg(filepath.Join(path1, module+".xml"), cfg)
-		if err == nil {
-			break
-		}
-	}
-	return
-}
-
 func main() {
 	var (
 		paramH, paramV, paramVV, paramVVV bool
 		paramID, paramBra, paramCfg, paramLog,
 		paramHD, paramP string
 	)
-	flag.BoolVar(&paramH, "h", false, "Help Message")
+	flag.BoolVar(&paramH, "h", false, "help message")
 	flag.BoolVar(&paramV, "v", false,
-		"Log file output. Most actions need this.")
+		"log file output")
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
 	flag.BoolVar(&paramVVV, "vvv", false,
 		"verbose messages with network I/O")
-	flag.StringVar(&paramID, "i", "", "Issue ID or assignee")
-	flag.StringVar(&paramBra, "b", "", "Branch")
+	flag.StringVar(&paramID, "i", "", "issue ID or assignee")
+	flag.StringVar(&paramBra, "b", "", "branch")
 	flag.StringVar(&paramHD, "hd", "",
 		"new assignee when transferring issues")
 	flag.StringVar(&paramP, "p", "",
 		"new component when transferring issues")
-	flag.StringVar(&paramCfg, "c", "", "Config File")
-	flag.StringVar(&paramLog, "l", "", "Log File")
+	flag.StringVar(&paramCfg, "c", "", "config file")
+	flag.StringVar(&paramLog, "l", "", "log file")
 	flag.Parse()
 	if paramH {
 		flag.Usage()
@@ -115,7 +88,7 @@ func main() {
 	}
 	cats := makeCat2Act()
 	var cfg cfgs
-	err := readCfg(paramCfg, &cfg)
+	err := eztools.XMLsReadDefault(paramCfg, module, &cfg)
 	if err != nil {
 		eztools.LogErrFatal(err)
 		return
@@ -125,20 +98,21 @@ func main() {
 	} else if len(cfg.Log) < 1 {
 		cfg.Log = module + ".log"
 	}
-	logger, err := os.OpenFile(cfg.Log,
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err == nil {
-
-		if err = eztools.InitLogger(logger); err != nil {
-			eztools.LogErrPrint(err)
+	if eztools.Debugging {
+		logger, err := os.OpenFile(cfg.Log,
+			os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err == nil {
+			if err = eztools.InitLogger(logger); err != nil {
+				eztools.LogErrPrint(err)
+			}
+		} else {
+			eztools.LogPrint("Failed to open log file " + cfg.Log)
 		}
-	} else {
-		eztools.LogPrint("Failed to open log file " + cfg.Log)
 	}
 	for {
 		svr, fun, issueInfo := chooseSvrNAct(cats, cfg.Svrs,
 			issueInfos{
-				ISSUEINFO_IND_ID:     paramID,
+				ISSUEINFO_IND_CHG_ID: paramID,
 				ISSUEINFO_IND_HEAD:   paramHD,
 				ISSUEINFO_IND_PROJ:   paramP,
 				ISSUEINFO_IND_BRANCH: paramBra})
@@ -154,24 +128,30 @@ func main() {
 		if err != nil {
 			eztools.LogErrFatal(err)
 		}
+		var op func(...interface{})
 		if eztools.Debugging && eztools.Verbose > 0 {
-			if issues == nil {
-				eztools.Log("No results.")
-			} else {
-				for i, issue := range issues {
-					eztools.Log("Issue/Reviewer " +
-						strconv.Itoa(i+1))
-					eztools.Log("ID/reviewer/submittable=" +
-						issue[ISSUEINFO_IND_ID])
-					eztools.Log("HEAD/verified=" +
-						issue[ISSUEINFO_IND_HEAD])
-					eztools.Log("PROJ/code-review=" +
-						issue[ISSUEINFO_IND_PROJ])
-					eztools.Log("BRANCH/manual-testing/owner=" +
-						issue[ISSUEINFO_IND_BRANCH])
-					eztools.Log("(approval) State=" +
-						issue[ISSUEINFO_IND_APPROVAL])
-				}
+			op = eztools.LogPrint
+		} else {
+			op = eztools.ShowSthln
+		}
+		if issues == nil {
+			op("No results.")
+		} else {
+			for i, issue := range issues {
+				op("Issue/Reviewer " +
+					strconv.Itoa(i+1))
+				op("ID=" +
+					issue[ISSUEINFO_IND_ID])
+				op("Change-ID/reviewer/submittable=" +
+					issue[ISSUEINFO_IND_CHG_ID])
+				op("HEAD/verified=" +
+					issue[ISSUEINFO_IND_HEAD])
+				op("PROJ/code-review=" +
+					issue[ISSUEINFO_IND_PROJ])
+				op("BRANCH/manual-testing/owner=" +
+					issue[ISSUEINFO_IND_BRANCH])
+				op("(approval) State=" +
+					issue[ISSUEINFO_IND_APPROVAL])
 			}
 		}
 	}
@@ -317,7 +297,8 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 }
 
 const (
-	ISSUEINFO_IND_ID          = iota     // \
+	ISSUEINFO_IND_ID          = iota
+	ISSUEINFO_IND_CHG_ID                 // \
 	ISSUEINFO_IND_SUBMITTABLE = iota - 1 //
 	ISSUEINFO_IND_KEY         = iota - 2 // /
 	ISSUEINFO_IND_HEAD                   // \
@@ -328,7 +309,8 @@ const (
 	ISSUEINFO_IND_APPROVAL            // \
 	ISSUEINFO_IND_STATE    = iota - 5 // /
 	ISSUEINFO_IND_MAX
-	ISSUEINFO_STR_ID          = "change_id"      // \
+	ISSUEINFO_STR_ID          = "id"
+	ISSUEINFO_STR_CHG_ID      = "change_id"      // \
 	ISSUEINFO_STR_SUBMITTABLE = "submittable"    //
 	ISSUEINFO_STR_ASSIGNEE    = "assignee"       //
 	ISSUEINFO_STR_KEY         = "key"            //
@@ -347,20 +329,28 @@ const (
 
 type issueInfos [ISSUEINFO_IND_MAX]string
 
-var issueInfoTxt = [ISSUEINFO_IND_MAX]string{
-	ISSUEINFO_STR_ID, ISSUEINFO_STR_HEAD, ISSUEINFO_STR_PROJ,
-	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
-var issueDetailsTxt = [ISSUEINFO_IND_MAX]string{
-	ISSUEINFO_STR_SUBMITTABLE, ISSUEINFO_STR_HEAD, ISSUEINFO_STR_PROJ,
-	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
+var issueInfoTxt = issueInfos{
+	ISSUEINFO_STR_ID, ISSUEINFO_STR_CHG_ID, ISSUEINFO_STR_HEAD,
+	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
+var issueDetailsTxt = issueInfos{
+	ISSUEINFO_STR_ID, ISSUEINFO_STR_SUBMITTABLE, ISSUEINFO_STR_HEAD,
+	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
 
 // do we also need mergable and submit_type=MERGE_IF_NECESSARY/Fast Forward Only?
-var reviewInfoTxt = [ISSUEINFO_IND_MAX]string{
-	ISSUEINFO_STR_NAME, ISSUEINFO_STR_VERIFIED, ISSUEINFO_STR_CODEREVIEW,
-	ISSUEINFO_STR_MANUALTEST, ISSUEINFO_STR_APPROVAL}
+var reviewInfoTxt = issueInfos{
+	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_VERIFIED,
+	ISSUEINFO_STR_CODEREVIEW, ISSUEINFO_STR_MANUALTEST, ISSUEINFO_STR_APPROVAL}
 
-//var jiraInfoTxt = [ISSUEINFO_IND_MAX]string{ISSUEINFO_STR_KEY, ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}
+//var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY, ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}
 
+// gerritParseIssuesOrReviews parse body from gerrit responses into []issueInfos
+/*
+param:
+	m	body
+	issues	results are appended to this
+	strs	keywords to parse
+	issue	partially parsed fileds, usually for looping only
+*/
 func gerritParseIssuesOrReviews(m map[string]interface{},
 	issues []issueInfos, strs [ISSUEINFO_IND_MAX]string,
 	issue *issueInfos) []issueInfos {
@@ -374,13 +364,16 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 		issue = new(issueInfos)
 	}
 	for i := 0; i < ISSUEINFO_IND_MAX; i++ {
+		// try to match one field
 		if len(strs[i]) < 1 || m[strs[i]] == nil {
 			continue
 		}
 		str, ok := m[strs[i]].(string)
 		if !ok {
+			// not a string
 			if i == ISSUEINFO_IND_SUBMITTABLE &&
 				strs[i] == ISSUEINFO_STR_SUBMITTABLE {
+				// bool is different
 				bo, ok := m[strs[i]].(bool)
 				if !ok {
 					if eztools.Debugging {
@@ -397,6 +390,7 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 				}
 				continue
 			}
+			// other types
 			if eztools.Debugging {
 				if i != ISSUEINFO_IND_APPROVAL &&
 					strs[i] != ISSUEINFO_STR_APPROVAL {
@@ -414,6 +408,7 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 			gerritParseIssuesOrReviews(mp, issues, strs, issue)
 			continue
 		}
+		// string
 		if eztools.Debugging && eztools.Verbose > 2 {
 			eztools.ShowStrln("matching " + strs[i] + " <> " + str)
 		}
@@ -654,22 +649,22 @@ func loopStringMap(m map[string]interface{},
 func gerritDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	// change ID or commit/revision
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const REST_API_STR = "changes/?q=" // +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
-	return gerritGetDetails(svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_ID],
+	return gerritGetDetails(svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_CHG_ID],
 		svr.Magic, authInfo)
 }
 
 func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const REST_API_STR = "changes/"
 	return gerritGetReviews(svr.URL+REST_API_STR+
-		issueInfo[ISSUEINFO_IND_ID]+"/reviewers/", svr.Magic, authInfo)
+		issueInfo[ISSUEINFO_IND_CHG_ID]+"/reviewers/", svr.Magic, authInfo)
 }
 
 func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
@@ -677,7 +672,7 @@ func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
 	const REST_API_STR = "changes/?q="
 	return gerritGetIssues(svr.URL+REST_API_STR+
 		"status:merged+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
-		"+owner:"+issueInfo[ISSUEINFO_IND_ID],
+		"+owner:"+issueInfo[ISSUEINFO_IND_CHG_ID],
 		svr.Magic, authInfo)
 }
 
@@ -697,19 +692,58 @@ func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
+	return gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
+}
+
+func gerritAbandon(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	return gerritActOn1(svr, authInfo, issueInfo, nil, "/abandon")
+}
+
+func gerritAbandonMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	return gerritActOnMyOpen(svr, authInfo, issueInfo, "/abandon")
+}
+
+func gerritActOnMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos, action string) (res []issueInfos, err error) {
+	issueInfos, err := gerritMyOpen(svr, authInfo, issueInfo)
+	if err != nil {
+		return
+	}
+	for _, issueInfo := range issueInfos {
+		res, err = gerritActOn1(svr, authInfo, issueInfo, res, action)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos, issues []issueInfos,
+	action string) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
-		return nil, eztools.ErrInvalidInput
+		return issues, eztools.ErrInvalidInput
+	}
+	if eztools.Debugging {
+		switch eztools.PromptStr(action + " " + issueInfo[ISSUEINFO_IND_ID] +
+			"? ([Enter]=y=Y)") {
+		case "n", "N":
+			return issues, nil
+		}
 	}
 	const REST_API_STR = "changes/"
-	_, err := restSth("POST", svr.URL+
-		REST_API_STR+issueInfo[ISSUEINFO_IND_ID],
+	bodyMap, err := restMap("POST", svr.URL+
+		REST_API_STR+issueInfo[ISSUEINFO_IND_ID]+action,
 		authInfo, nil, svr.Magic)
-	return nil, err
+	return gerritParseIssuesOrReviews(bodyMap, issues, issueInfoTxt, nil),
+		err
 }
 
 func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	var (
@@ -744,12 +778,12 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
+		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_CHG_ID)
 		cfmInputOrPromptStr(&issueInfo,
 			ISSUEINFO_IND_HEAD, "change to assignee")
 		cfmInputOrPromptStr(&issueInfo,
 			ISSUEINFO_IND_PROJ, "change to component")
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
+		if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 ||
 			len(issueInfo[ISSUEINFO_IND_HEAD]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
@@ -803,7 +837,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		eztools.ShowByteln(jsonStr)
 		bodyMap, err := restMap(eztools.METHOD_PUT,
-			svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_ID],
+			svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_CHG_ID],
 			authInfo, bytes.NewReader(jsonStr), svr.Magic)
 		if err != nil {
 			return nil, err
@@ -906,8 +940,8 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) ([]issueInfos, error) {
 	trans := [...]string{"Implementing", "Assign owner", "Resolved"}
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_CHG_ID)
+		if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 		if len(qa) > 0 {
@@ -929,7 +963,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 				eztools.ShowStrln(jsonStr)
 				const REST_API_STR = "rest/api/latest/issue/"
 				bodyMap, err := restMap(eztools.METHOD_PUT,
-					svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_ID],
+					svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_CHG_ID],
 					authInfo, strings.NewReader(jsonStr), svr.Magic)
 				if err != nil {
 					return nil, err
@@ -941,7 +975,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		for _, tran := range trans {
 			if err := jiraTran1(svr, authInfo,
-				issueInfo[ISSUEINFO_IND_ID], tran); err != nil && err != eztools.ErrNoValidResults {
+				issueInfo[ISSUEINFO_IND_CHG_ID], tran); err != nil && err != eztools.ErrNoValidResults {
 				return nil, err
 			}
 		}
@@ -951,12 +985,12 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_CHG_ID)
+		if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 		if err := jiraTran1(svr, authInfo,
-			issueInfo[ISSUEINFO_IND_ID], ""); err != nil && err != eztools.ErrNoValidResults {
+			issueInfo[ISSUEINFO_IND_CHG_ID], ""); err != nil && err != eztools.ErrNoValidResults {
 			return nil, err
 		}
 	}
@@ -964,12 +998,12 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[ISSUEINFO_IND_CHG_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const REST_API_STR = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+REST_API_STR+
-		issueInfo[ISSUEINFO_IND_ID], authInfo, nil, svr.Magic)
+		issueInfo[ISSUEINFO_IND_CHG_ID], authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
 	}
@@ -1043,12 +1077,13 @@ func inputIssueInfo4Act(action string, inf *issueInfos) {
 	case "detail Gerrit",
 		"reviewers Gerrit",
 		"merge Gerrit",
+		"abandon Gerrit",
 		"detail JIRA",
 		"wait and merge Gerrit":
-		useInputOrPrompt(inf, ISSUEINFO_IND_ID)
+		useInputOrPrompt(inf, ISSUEINFO_IND_CHG_ID)
 	case "sb.'s all Gerrit":
 		useInputOrPromptStr(inf,
-			ISSUEINFO_IND_ID, ISSUEINFO_STR_ASSIGNEE)
+			ISSUEINFO_IND_CHG_ID, ISSUEINFO_STR_ASSIGNEE)
 		useInputOrPrompt(inf, ISSUEINFO_IND_BRANCH)
 	}
 	//eztools.ShowSthln(inf)
@@ -1075,6 +1110,8 @@ func makeCat2Act() cat2Act {
 			{"reviewers Gerrit", gerritReviews},
 			{"merge Gerrit", gerritMerge},
 			{"wait and merge Gerrit", gerritWaitNMerge},
+			{"abandon all my open Gerrit", gerritAbandonMyOpen},
+			{"abandon Gerrit", gerritAbandon},
 		}}
 	return c
 }

@@ -1,8 +1,9 @@
 # jirrit
 
 ## Command line parameters
+
  - `-h` help message
- - `-v` logging enabled. Most query actions need logging.
+ - `-v` logging enabled and more interactions. Most query actions need logging.
  - `-vv` verbose messages
  - `-vvv` verbose messages with network I/O
  - `-c string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
@@ -32,7 +33,8 @@ Usually, these fields can be seen in an issue's detail.
   - testexp is the field name for test expectation.
 
 ## Actions
- - Jira
+
+- Jira
   - list my open issues
   - detail an issue
   - transfer an issue
@@ -40,11 +42,13 @@ Usually, these fields can be seen in an issue's detail.
   - change an issue's states from open all the way to resolved
   - resolve an issue, adding test condition="none", steps="default design" and expectation="none"
   - resolve an issue, adding test condition="none", steps="general requirement" and expectation="none"
- - Gerrit
-  - list issues by branch and assignee
-  - list all open issues
-  - list my open issues
-  - show details of an issue by commit ID or change ID
-  - show reviewing scores of an issue
+- Gerrit
+  - list commits by branch and assignee
+  - list all open commits
+  - list my open commits
+  - show details of an commit by commit ID or change ID
+  - show reviewing scores of an commit
   - merge a commit
   - wait for a commit to be mergable and merge it
+  - abandon a commit
+  - abandon all my open commits
