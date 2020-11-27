@@ -22,7 +22,7 @@ func runFunc(fun action2Func, svr *svrs, cfg cfgs) (string, bool) {
 		return fun.n + " failed", false
 	}
 	for _, issue := range issues {
-		eztools.ShowStrln("Issuse ID=" + issue[ISSUEINFO_IND_CHG_ID])
+		eztools.ShowStrln("Issuse ID=" + issue[ISSUEINFO_IND_ID])
 		eztools.ShowStrln("Issuse HEAD=" + issue[ISSUEINFO_IND_HEAD])
 		eztools.ShowStrln("Issuse PROJ=" + issue[ISSUEINFO_IND_PROJ])
 		eztools.ShowStrln("Issuse BRANCH=" + issue[ISSUEINFO_IND_BRANCH])
@@ -81,11 +81,11 @@ func TestGerrit(t *testing.T) {
 }
 
 func TestGerritAllOpen(t *testing.T) {
-	test1(t, CATEGORY_GERRIT, "all open Gerrit")
+	test1(t, CATEGORY_GERRIT, "all open")
 }
 
 func TestGerritMyOpen(t *testing.T) {
-	test1(t, CATEGORY_GERRIT, "my open Gerrit")
+	test1(t, CATEGORY_GERRIT, "my open")
 }
 
 func TestMain(t *testing.T) {

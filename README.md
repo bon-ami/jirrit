@@ -6,11 +6,11 @@
  - `-v` logging enabled and more interactions. Most query actions need logging.
  - `-vv` verbose messages
  - `-vvv` verbose messages with network I/O
- - `-c string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-i string` provide an issue ID or assignee. Some actions are subjected to a certain issue or issues. Enter it when running or as a command param.
  - `-b string` provide a branch.
  - `-hd string` provide an new assignee for issue transfer.
  - `-p string` provide a component.
+ - `-c string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-l string` provide a log file. It defaults to jirrit.log under current dir.
 
 ## Config xml
@@ -35,20 +35,26 @@ Usually, these fields can be seen in an issue's detail.
 ## Actions
 
 - Jira
-  - list my open issues
-  - detail an issue
   - transfer an issue
   - change an issue's state
+  - show details of an issue
+  - list my open issues
   - change an issue's states from open all the way to resolved
   - resolve an issue, adding test condition="none", steps="default design" and expectation="none"
   - resolve an issue, adding test condition="none", steps="general requirement" and expectation="none"
 - Gerrit
   - list commits by branch and assignee
-  - list all open commits
   - list my open commits
+  - list all open commits
   - show details of an commit by commit ID or change ID
-  - show reviewing scores of an commit
+  - show current revision of a commit
+  - show current revision of all my open commits
+  - show reviewing scores of a commit
+  - rebase a commit
   - merge a commit
-  - wait for a commit to be mergable and merge it
-  - abandon a commit
+  - wait for a commit to be mergable and merge it, adding scores when needed
+  - Code-Review +2 (and Manual-Testing +1, if needed) to a commit
   - abandon all my open commits
+  - abandon a commit
+  - cherry pick all my open commits
+  - cherry pick a commit 
