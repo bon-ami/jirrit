@@ -161,10 +161,9 @@ func main() {
 					ISSUEINFO_STR_DISPNAME + "/" +
 					ISSUEINFO_STR_MANUALTEST + "=" +
 					issue[ISSUEINFO_IND_BRANCH])
-				op( //ISSUEINFO_STR_APPROVAL + "/" +
-					ISSUEINFO_STR_STATE + "/" +
-						ISSUEINFO_STR_SUBMIT_TYPE + "=" +
-						issue[ISSUEINFO_IND_STATE])
+				op(ISSUEINFO_STR_STATE + "/" +
+					ISSUEINFO_STR_SUBMIT_TYPE + "=" +
+					issue[ISSUEINFO_IND_STATE])
 			}
 		}
 	}
@@ -354,12 +353,13 @@ const (
 	ISSUEINFO_STR_DISPNAME    = "displayName"      //
 	ISSUEINFO_STR_MANUALTEST  = "Manual-Testing"   // /
 	// for code-review, verified and manual-testing
-	//ISSUEINFO_STR_APPROVAL    = "approvals"   // \
 	ISSUEINFO_STR_SUBMIT_TYPE = "submit_type" // \
+	ISSUEINFO_STR_APPROVALS   = "approvals"   //
 	ISSUEINFO_STR_STATE       = "status"      // /
 )
 
 type issueInfos [ISSUEINFO_IND_MAX]string
+type scoreInfos [ISSUEINFO_IND_SUBMIT_TYPE]int
 
 var issueInfoTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY, ISSUEINFO_STR_HEAD,
@@ -370,12 +370,12 @@ var issueDetailsTxt = issueInfos{
 var issueRevsTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_REV_CUR,
 	ISSUEINFO_STR_PROJ, /*placeholder*/
-	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE /*placeholder*/}
+	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_SUBMIT_TYPE}
 
 var reviewInfoTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_VERIFIED,
 	ISSUEINFO_STR_CODEREVIEW, ISSUEINFO_STR_MANUALTEST,
-	ISSUEINFO_STR_SUBMIT_TYPE}
+	ISSUEINFO_STR_APPROVALS}
 
 /*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
 ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME,
@@ -403,13 +403,25 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 		issue = new(issueInfos)
 	}
 	for i := 0; i < ISSUEINFO_IND_MAX; i++ {
-		// try to match one field
-		if len(strs[i]) < 1 || m[strs[i]] == nil {
+		// string array to loop?
+		mp, ok := m[strs[i]].(map[string]interface{})
+		if ok {
+			gerritParseIssuesOrReviews(mp, issues, strs, issue)
 			continue
 		}
+		// try to match one field
+		if len(strs[i]) < 1 || m[strs[i]] == nil {
+			if eztools.Debugging && eztools.Verbose > 2 {
+				if len(strs[i]) > 0 {
+					eztools.ShowStrln("unmatching " +
+						strs[i])
+				}
+			}
+			continue
+		}
+		// string?
 		str, ok := m[strs[i]].(string)
 		if ok {
-			// string
 			if eztools.Debugging && eztools.Verbose > 2 {
 				eztools.ShowStrln("matching " +
 					strs[i] + " <- " + str)
@@ -442,55 +454,22 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 				}
 				if eztools.Debugging && eztools.Verbose > 2 {
 					eztools.ShowStrln("matched " +
-						ISSUEINFO_STR_SUBMITTABLE + "=" + issue[i])
+						ISSUEINFO_STR_SUBMITTABLE +
+						"=" + issue[i])
 				}
 			}
 			continue
 		}
 		// other types
-		/*if eztools.Debugging {
-			if i != ISSUEINFO_IND_APPROVAL &&
-				strs[i] != ISSUEINFO_STR_APPROVAL {
-				eztools.Log(strs[i] +
-					" matched without string value!")
-			}
-		}*/
-		mp, ok := m[strs[i]].(map[string]interface{})
-		if !ok {
-			if eztools.Debugging {
-				eztools.LogPrint(reflect.TypeOf(
-					m[strs[i]]).String() +
-					" got instead of map " +
-					"string to interface!")
-			}
-			continue
+		if eztools.Debugging {
+			eztools.Log(strs[i] + " matched with unknown type " +
+				reflect.TypeOf(m[strs[i]]).String())
 		}
-		gerritParseIssuesOrReviews(mp, issues, strs, issue)
 	}
 	if issues != nil {
 		return append(issues, *issue)
 	}
 	return []issueInfos{*issue}
-}
-
-func gerritParseReviews(m map[string]interface{},
-	issues []issueInfos) []issueInfos {
-	return gerritParseIssuesOrReviews(m, issues, reviewInfoTxt, nil)
-}
-
-func gerritParseDetails(m map[string]interface{},
-	issues []issueInfos) []issueInfos {
-	return gerritParseIssuesOrReviews(m, issues, issueDetailsTxt, nil)
-}
-
-func gerritParseIssues(m map[string]interface{},
-	issues []issueInfos) []issueInfos {
-	return gerritParseIssuesOrReviews(m, issues, issueInfoTxt, nil)
-}
-
-func gerritParseRevs(m map[string]interface{},
-	issues []issueInfos) []issueInfos {
-	return gerritParseIssuesOrReviews(m, issues, issueRevsTxt, nil)
 }
 
 func gerritGetIssuesOrReviews(method, url, magic string,
@@ -516,29 +495,42 @@ func gerritGetIssuesOrReviews(method, url, magic string,
 	return issues, err
 }
 
+// no ID will return, since not in replies
 func gerritGetReviews(url, magic string, authInfo eztools.AuthInfo) (
 	[]issueInfos, error) {
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
-		magic, authInfo, gerritParseReviews)
+		magic, authInfo,
+		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			return gerritParseIssuesOrReviews(m, issues, reviewInfoTxt, nil)
+		})
 }
 
 func gerritGetDetails(url, magic string, authInfo eztools.AuthInfo) (
 	[]issueInfos, error) {
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
-		magic, authInfo, gerritParseDetails)
+		magic, authInfo,
+		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			return gerritParseIssuesOrReviews(m, issues, issueDetailsTxt, nil)
+		})
 }
 
 func gerritGetIssues(url, magic string, authInfo eztools.AuthInfo) (
 	[]issueInfos, error) {
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
-		magic, authInfo, gerritParseIssues)
+		magic, authInfo,
+		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			return gerritParseIssuesOrReviews(m, issues, issueInfoTxt, nil)
+		})
 }
 
 // gerritGetRevs retrieves from URL and parse response into revision info
 func gerritGetRevs(url, magic string, authInfo eztools.AuthInfo) (
 	[]issueInfos, error) {
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
-		magic, authInfo, gerritParseRevs)
+		magic, authInfo,
+		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			return gerritParseIssuesOrReviews(m, issues, issueRevsTxt, nil)
+		})
 }
 
 func jiraParse1Field(m map[string]interface{},
@@ -743,6 +735,7 @@ func gerritQuery1(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 // param: issueInfo[ISSUEINFO_IND_ID] any ID acceptable
+// return value: same as gerritGetDetails[0]
 func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
 	inf, err := gerritQuery1(svr, authInfo, issueInfo, "")
@@ -786,6 +779,41 @@ func gerritDetail(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritQuery1(svr, authInfo, issueInfo, "&o=CURRENT_REVISION")
 }
 
+// gerritReviews2Scores get all reviews and combine into one set of scores
+func gerritReviews2Scores(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) (inf []issueInfos, scores scoreInfos, err error) {
+	/*id, err := gerritAnyID2ID(svr, authInfo, issueInfo)
+	if err != nil {
+		eztools.LogErrPrint(err)
+	}*/
+	inf, err = gerritReviews(svr, authInfo, issueInfo)
+	if err != nil {
+		return
+	}
+	for _ /*j*/, inf1 := range inf {
+		for _, i := range []int{ISSUEINFO_IND_VERIFIED,
+			ISSUEINFO_IND_CODEREVIEW, ISSUEINFO_IND_MANUALTEST} {
+			if len(inf1[i]) > 0 {
+				if inf1[i] == " 0" {
+					// not parsable bo Atoi
+					continue
+				}
+				score1, err := strconv.Atoi(inf1[i])
+				if err != nil {
+					/*if eztools.Debugging && eztools.Verbose > 0 {
+						eztools.ShowStrln(inf1[i] + " is NOT a number!")
+					}*/
+					continue
+				}
+				scores[i] += score1
+			}
+		}
+		//inf[j][ISSUEINFO_IND_ID] = id[ISSUEINFO_IND_ID]
+	}
+	return
+}
+
+// no ID will return, since not in replies
 func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
@@ -999,23 +1027,24 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		eztools.LogPrint("NO revision found!")
 		return inf, eztools.ErrNoValidResults
 	}
-	const REST_API_STR = "changes/"
-	var jsonValue []byte
+
 	// check whether Manual-Testing exists
-	infReview, err := gerritReviews(svr, authInfo, infWtRev)
+	inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
 	if err != nil {
 		return inf, err
 	}
-	if len(infReview) != 1 {
-		eztools.LogPrint("NO single review info found!")
-		return infReview, eztools.ErrNoValidResults
+	if len(inf) < 1 {
+		eztools.LogPrint("NO review info found!")
+		return inf, eztools.ErrNoValidResults
 	}
 	type map2Marshal map[string]int
-	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2}
-	if len(infReview[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
+	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2, ISSUEINFO_STR_VERIFIED: 1}
+	if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
 		map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
 	}
 
+	const REST_API_STR = "changes/"
+	var jsonValue []byte
 	jsonValue, err = json.Marshal(map[string]map2Marshal{
 		"labels": map4Marshal})
 	if err != nil {
@@ -1043,37 +1072,24 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	var (
-		err       error
-		inf       []issueInfos
-		debugVeri bool
+		err               error
+		inf               []issueInfos
+		scores            scoreInfos
+		debugVeri, scored bool
+		submit_type       string
 	)
 	if eztools.Debugging && eztools.Verbose > 1 {
 		debugVeri = true
 	}
 	eztools.ShowStr("waiting for issue to be mergable.")
 	for err == nil {
-		/*const REST_API_STR = "changes/"
-		inf, err = gerritGetIssuesOrReviews(eztools.METHOD_GET, svr.URL+REST_API_STR+
-			issueInfo[ISSUEINFO_IND_ID]+"/reviewers/",
-			svr.Magic, authInfo,
-			func(m map[string]interface{},
-				issues []issueInfos) []issueInfos {
-				return gerritParseIssuesOrReviews(m, issues, reviewScoreTxt, nil)
-			})
-		*/
 		// check submittable
-		/*inf, err = gerritDetail(svr, authInfo, issueInfo)
-		if err != nil {
-			break
-		}*/
-		inf, err = gerritReviews(svr, authInfo, issueInfo)
+		inf, err = gerritDetail(svr, authInfo, issueInfo)
 		if err != nil {
 			break
 		}
-		if len(inf) != 1 {
-			eztools.ShowStrln("")
-			eztools.ShowStr("NO unique submit found!")
-			err = eztools.ErrInvalidInput
+		if len(inf) < 1 {
+			err = eztools.ErrNoValidResults
 			break
 		}
 		if inf[0][ISSUEINFO_IND_SUBMITTABLE] == "true" {
@@ -1081,22 +1097,47 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		}
 
 		if debugVeri {
-			i, e := strconv.Atoi(inf[0][ISSUEINFO_IND_VERIFIED])
-			if e == nil {
-				eztools.Log("Verified=" + strconv.Itoa(i))
+			// get submit_type
+			inf, err = gerritRev(svr, authInfo, issueInfo)
+			if err != nil {
+				break
 			}
+			if len(inf) != 1 {
+				err = eztools.ErrNoValidResults
+				break
+			}
+			submit_type = inf[0][ISSUEINFO_IND_SUBMIT_TYPE]
+		}
+
+		// get scores
+		_ /*inf*/, scores, err = gerritReviews2Scores(svr, authInfo, issueInfo)
+		if err != nil {
+			break
+		}
+		/*if len(inf) < 1 {
+			err = eztools.ErrNoValidResults
+			break
+		}*/
+
+		if debugVeri {
+			eztools.Log("Verified=" + strconv.Itoa(scores[ISSUEINFO_IND_VERIFIED]))
 			// MERGE_IF_NECESSARY/FAST_FORWARD_ONLY
 			eztools.Log(ISSUEINFO_STR_SUBMIT_TYPE + "=" +
-				inf[0][ISSUEINFO_IND_SUBMIT_TYPE])
+				submit_type)
 			debugVeri = false
 		}
-		ic, ec := strconv.Atoi(inf[0][ISSUEINFO_IND_CODEREVIEW])
-		im, em := strconv.Atoi(inf[0][ISSUEINFO_IND_MANUALTEST])
-		if (ec == nil && ic < 2) || (em == nil && im < 1) {
+		if scores[ISSUEINFO_IND_CODEREVIEW] < 2 ||
+			scores[ISSUEINFO_IND_MANUALTEST] < 1 ||
+			scores[ISSUEINFO_IND_VERIFIED] < 1 {
+			if scored {
+				err = errors.New("failed to score")
+				break
+			}
 			_, err = gerritScore(svr, authInfo, inf[0])
 			if err != nil {
 				break
 			}
+			scored = true
 		}
 
 		time.Sleep(5 * time.Second)
@@ -1416,29 +1457,29 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 	switch svrType {
 	case CATEGORY_JIRA:
 		switch action {
-		case "detail JIRA":
+		case "show details of a case":
 			useInputOrPrompt(inf, ISSUEINFO_IND_ID)
 		}
 	case CATEGORY_GERRIT:
 		switch action {
-		case "detail",
-			"reviewers",
-			"merge",
-			"rebase",
-			"abandon",
-			"revision/commit",
-			"score",
-			"wait and merge":
+		case "show details of a submit",
+			"show reviewers of a submit",
+			"rebase a submit",
+			"abandon a submit",
+			"show revision/commit of a submit",
+			"add scores to a submit",
+			"merge a submit",
+			"add socres, wait for it to be mergable and merge a submit":
 			useInputOrPrompt(inf, ISSUEINFO_IND_ID)
 		case "cherry pick all my open":
 			useInputOrPromptStr(inf,
 				ISSUEINFO_IND_HEAD, ISSUEINFO_STR_REV_CUR)
 			useInputOrPrompt(inf, ISSUEINFO_IND_BRANCH)
-		case "sb.'s all":
+		case "list open submits of someone":
 			useInputOrPromptStr(inf,
 				ISSUEINFO_IND_ID, ISSUEINFO_STR_ASSIGNEE)
 			useInputOrPrompt(inf, ISSUEINFO_IND_BRANCH)
-		case "cherry pick":
+		case "cherry pick a submit":
 			eztools.ShowStrln("Please input an ID that can make it " +
 				"distinguished, such as commit, instead of Change " +
 				"ID, which is reused among cherrypicks.")
@@ -1457,32 +1498,32 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 func makeCat2Act() cat2Act {
 	c := cat2Act{
 		CATEGORY_JIRA: []action2Func{
-			{"transfer", jiraTransfer},
-			{"transition", jiraTransition},
-			{"detail", jiraDetail},
-			{"my open", jiraMyOpen},
-			{"close", jiraClose},
+			{"transfer a case to someone", jiraTransfer},
+			{"move status of a case", jiraTransition},
+			{"show details of a case", jiraDetail},
+			{"list my open cases", jiraMyOpen},
+			{"close a case to resolved from any known statues", jiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
-			{"close default design", jiraCloseDef},
-			{"close general requirement", jiraCloseGen},
+			{"close a case with default design as steps", jiraCloseDef},
+			{"close a case with general requirement as steps", jiraCloseGen},
 		},
 		CATEGORY_GERRIT: []action2Func{
-			{"sb.'s all", gerritSbBraMerged},
-			{"my open", gerritMyOpen},
-			{"all open", gerritAllOpen},
-			{"detail", gerritDetail},
-			{"revision/commit", gerritRev},
-			{"all my open revisions/commits", gerritRevs},
-			{"reviewers", gerritReviews},
-			{"rebase", gerritRebase},
-			{"merge", gerritMerge},
-			{"wait and merge", gerritWaitNMerge},
-			{"score", gerritScore},
-			{"abandon all my", gerritAbandonMyOpen},
-			{"abandon", gerritAbandon},
-			{"cherry pick all my open", gerritPickMyOpen},
-			{"cherry pick", gerritPick},
+			{"list open submits of someone", gerritSbBraMerged},
+			{"list my open submits", gerritMyOpen},
+			{"list all my open revisions/commits", gerritRevs},
+			{"list all open submits", gerritAllOpen},
+			{"show details of a submit", gerritDetail},
+			{"show reviewers of a submit", gerritReviews},
+			{"show revision/commit of a submit", gerritRev},
+			{"rebase a submit", gerritRebase},
+			{"merge a submit", gerritMerge},
+			{"add scores to a submit", gerritScore},
+			{"add socres, wait for it to be mergable and merge a submit", gerritWaitNMerge},
+			{"abandon all my open submits", gerritAbandonMyOpen},
+			{"abandon a submit", gerritAbandon},
+			{"cherry pick all my open submits", gerritPickMyOpen},
+			{"cherry pick a submit", gerritPick},
 		}}
 	return c
 }
