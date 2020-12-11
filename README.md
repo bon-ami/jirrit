@@ -32,6 +32,9 @@ Usually, these fields can be seen in an issue's detail.
   - teststep is the field name for test steps.
   - testexp is the field name for test expectation.
 
+  For Gerrit servers, there may be more to config for scores.
+  - score contains the field name other than Code-Review and Verified, that needs +1. In my case, it is `Manual-Testing`.
+
 ## Actions
 
 - Jira
@@ -43,8 +46,9 @@ Usually, these fields can be seen in an issue's detail.
   - resolve an issue, adding test condition="none", steps="default design" and expectation="none"
   - resolve an issue, adding test condition="none", steps="general requirement" and expectation="none"
 - Gerrit
-  - list commits by branch and assignee
+  - list merged commits by branch and assignee
   - list my open commits
+  - list an assignee's open commits
   - list all open commits
   - show details of an commit by commit ID or change ID
   - show current revision of a commit
@@ -53,7 +57,8 @@ Usually, these fields can be seen in an issue's detail.
   - rebase a commit
   - merge a commit
   - wait for a commit to be mergable and merge it, adding scores when needed
-  - Code-Review +2 (and Manual-Testing +1, if needed) to a commit
+  - for all open commits of a branch by an assignee, wait them to be mergable and merge them, adding scores when needed
+  - Code-Review +2, Verified +1, (and Manual-Testing, or other field as configured, +1) to a commit
   - abandon all my open commits
   - abandon a commit
   - cherry pick all my open commits

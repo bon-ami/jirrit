@@ -39,6 +39,7 @@ type svrs struct {
 	URL     string    `xml:"url"`
 	Pass    passwords `xml:"pass"`
 	Magic   string    `xml:"magic"`
+	Score   string    `xml:"score"`
 	TstPre  string    `xml:"testpre"`
 	TstStep string    `xml:"teststep"`
 	TstExp  string    `xml:"testexp"`
@@ -158,8 +159,8 @@ func main() {
 					ISSUEINFO_STR_CODEREVIEW + "=" +
 					issue[ISSUEINFO_IND_PROJ])
 				op(ISSUEINFO_STR_BRANCH + "/" +
-					ISSUEINFO_STR_DISPNAME + "/" +
-					ISSUEINFO_STR_MANUALTEST + "=" +
+					ISSUEINFO_STR_DISPNAME + /*"/" +
+					ISSUEINFO_STR_MANUALTEST + */"=" +
 					issue[ISSUEINFO_IND_BRANCH])
 				op(ISSUEINFO_STR_STATE + "/" +
 					ISSUEINFO_STR_SUBMIT_TYPE + "=" +
@@ -335,7 +336,7 @@ const (
 	ISSUEINFO_IND_SUBMITTABLE = iota - 1 - ISSUEINFO_IND_MAX
 	ISSUEINFO_IND_VERIFIED
 	ISSUEINFO_IND_CODEREVIEW
-	ISSUEINFO_IND_MANUALTEST
+	ISSUEINFO_IND_SCORE
 	ISSUEINFO_IND_SUBMIT_TYPE
 
 	ISSUEINFO_STR_ID          = "id"
@@ -350,8 +351,7 @@ const (
 	ISSUEINFO_STR_PROJ        = "project"          // \
 	ISSUEINFO_STR_CODEREVIEW  = "Code-Review"      // /
 	ISSUEINFO_STR_BRANCH      = "branch"           // \
-	ISSUEINFO_STR_DISPNAME    = "displayName"      //
-	ISSUEINFO_STR_MANUALTEST  = "Manual-Testing"   // /
+	ISSUEINFO_STR_DISPNAME    = "displayName"      // /
 	// for code-review, verified and manual-testing
 	ISSUEINFO_STR_SUBMIT_TYPE = "submit_type" // \
 	ISSUEINFO_STR_APPROVALS   = "approvals"   //
@@ -374,7 +374,7 @@ var issueRevsTxt = issueInfos{
 
 var reviewInfoTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_VERIFIED,
-	ISSUEINFO_STR_CODEREVIEW, ISSUEINFO_STR_MANUALTEST,
+	ISSUEINFO_STR_CODEREVIEW, ISSUEINFO_STR_DISPNAME, /*placeholder for SCORE*/
 	ISSUEINFO_STR_APPROVALS}
 
 /*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
@@ -792,7 +792,7 @@ func gerritReviews2Scores(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	for _ /*j*/, inf1 := range inf {
 		for _, i := range []int{ISSUEINFO_IND_VERIFIED,
-			ISSUEINFO_IND_CODEREVIEW, ISSUEINFO_IND_MANUALTEST} {
+			ISSUEINFO_IND_CODEREVIEW, ISSUEINFO_IND_SCORE} {
 			if len(inf1[i]) > 0 {
 				if inf1[i] == " 0" {
 					// not parsable bo Atoi
@@ -825,17 +825,21 @@ func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 		svr.Magic, authInfo)
 }
 
-func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) ([]issueInfos, error) {
+func gerritCheckIDNGetIssues(svr *svrs, authInfo eztools.AuthInfo,
+	url string, issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_BRANCH]) < 1 ||
 		len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
+	return gerritGetIssues(svr.URL+url, svr.Magic, authInfo)
+}
+
+func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
 	const REST_API_STR = "changes/?q="
-	return gerritGetIssues(svr.URL+REST_API_STR+
+	return gerritCheckIDNGetIssues(svr, authInfo, REST_API_STR+
 		"status:merged+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
-		"+owner:"+issueInfo[ISSUEINFO_IND_ID],
-		svr.Magic, authInfo)
+		"+owner:"+issueInfo[ISSUEINFO_IND_ID], issueInfo)
 }
 
 func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
@@ -843,6 +847,14 @@ func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
 	eztools.ShowStrln("This may take quite a while...")
 	const REST_API_STR = "changes/"
 	return gerritGetIssues(svr.URL+REST_API_STR, svr.Magic, authInfo)
+}
+
+func gerritSbOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	const REST_API_STR = "changes/?q="
+	return gerritCheckIDNGetIssues(svr, authInfo, REST_API_STR+
+		"status:open+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
+		"+owner:"+issueInfo[ISSUEINFO_IND_ID], issueInfo)
 }
 
 func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
@@ -1028,20 +1040,24 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		return inf, eztools.ErrNoValidResults
 	}
 
-	// check whether Manual-Testing exists
+	type map2Marshal map[string]int
+	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2, ISSUEINFO_STR_VERIFIED: 1}
+	if len(svr.Score) > 0 {
+		map4Marshal[svr.Score] = 1
+	}
+	/*// check whether Manual-Testing exists
 	inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
 	if err != nil {
 		return inf, err
 	}
-	if len(inf) < 1 {
+	if len(inf) > 0 {
+		if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
+			map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
+		}
+		} else {
 		eztools.LogPrint("NO review info found!")
 		return inf, eztools.ErrNoValidResults
-	}
-	type map2Marshal map[string]int
-	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2, ISSUEINFO_STR_VERIFIED: 1}
-	if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
-		map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
-	}
+	}*/
 
 	const REST_API_STR = "changes/"
 	var jsonValue []byte
@@ -1064,6 +1080,27 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
 	// response only contain scores for a success, so it is not parsed
 	return nil, err
+}
+
+func gerritFuncLoopSbOpen(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos, fun func(*svrs, eztools.AuthInfo,
+		issueInfos) ([]issueInfos, error)) (res []issueInfos, err error) {
+	issues, err := gerritSbOpen(svr, authInfo, issueInfo)
+	if err != nil {
+		return
+	}
+	for _, issueInfo := range issues {
+		res, err = fun(svr, authInfo, issueInfo)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func gerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	return gerritFuncLoopSbOpen(svr, authInfo, issueInfo, gerritWaitNMerge)
 }
 
 func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
@@ -1127,17 +1164,20 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			debugVeri = false
 		}
 		if scores[ISSUEINFO_IND_CODEREVIEW] < 2 ||
-			scores[ISSUEINFO_IND_MANUALTEST] < 1 ||
+			(len(svr.Score) > 0 && scores[ISSUEINFO_IND_SCORE] < 1) ||
 			scores[ISSUEINFO_IND_VERIFIED] < 1 {
 			if scored {
-				err = errors.New("failed to score")
-				break
+				if scores[ISSUEINFO_IND_VERIFIED] > 0 {
+					err = errors.New("failed to score non-verified field")
+					break
+				}
+			} else {
+				_, err = gerritScore(svr, authInfo, inf[0])
+				if err != nil {
+					break
+				}
+				scored = true
 			}
-			_, err = gerritScore(svr, authInfo, inf[0])
-			if err != nil {
-				break
-			}
-			scored = true
 		}
 
 		time.Sleep(5 * time.Second)
@@ -1475,7 +1515,9 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			useInputOrPromptStr(inf,
 				ISSUEINFO_IND_HEAD, ISSUEINFO_STR_REV_CUR)
 			useInputOrPrompt(inf, ISSUEINFO_IND_BRANCH)
-		case "list open submits of someone":
+		case "list merged submits of someone",
+			"add socres, wait for it to be mergable and merge sb.'s submits",
+			"list sb.'s open submits":
 			useInputOrPromptStr(inf,
 				ISSUEINFO_IND_ID, ISSUEINFO_STR_ASSIGNEE)
 			useInputOrPrompt(inf, ISSUEINFO_IND_BRANCH)
@@ -1509,8 +1551,9 @@ func makeCat2Act() cat2Act {
 			{"close a case with general requirement as steps", jiraCloseGen},
 		},
 		CATEGORY_GERRIT: []action2Func{
-			{"list open submits of someone", gerritSbBraMerged},
+			{"list merged submits of someone", gerritSbBraMerged},
 			{"list my open submits", gerritMyOpen},
+			{"list sb.'s open submits", gerritSbOpen},
 			{"list all my open revisions/commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
 			{"show details of a submit", gerritDetail},
@@ -1520,6 +1563,7 @@ func makeCat2Act() cat2Act {
 			{"merge a submit", gerritMerge},
 			{"add scores to a submit", gerritScore},
 			{"add socres, wait for it to be mergable and merge a submit", gerritWaitNMerge},
+			{"add socres, wait for it to be mergable and merge sb.'s submits", gerritWaitNMergeSb},
 			{"abandon all my open submits", gerritAbandonMyOpen},
 			{"abandon a submit", gerritAbandon},
 			{"cherry pick all my open submits", gerritPickMyOpen},

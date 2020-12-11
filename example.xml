@@ -18,6 +18,7 @@
                 <pass type="digest">digest</pass>
                 <url>http://gerrit.com:8080/a/</url>
                 <magic>)]}'</magic>
+                <score>Manual-Testing</score>
         </server>
         <server type="Gerrit" name="BJ">
                 <pass type="plain">plain</pass>
