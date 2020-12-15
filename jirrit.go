@@ -1309,7 +1309,7 @@ func jiraTran1(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return err
 	}
-	eztools.ShowByteln(jsonStr)
+	//eztools.ShowByteln(jsonStr)
 	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+REST_API_STR+
 		id+"/transitions", authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
@@ -1378,7 +1378,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 				jsonStr = jsonStr + `
   }
 }`
-				eztools.ShowStrln(jsonStr)
+				//eztools.ShowStrln(jsonStr)
 				const REST_API_STR = "rest/api/latest/issue/"
 				bodyMap, err := restMap(eztools.METHOD_PUT,
 					svr.URL+REST_API_STR+
