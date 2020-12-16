@@ -112,59 +112,63 @@ func main() {
 			eztools.LogPrint("Failed to open log file " + cfg.Log)
 		}
 	}
-	for {
-		svr, fun, issueInfo := chooseSvrNAct(cats, cfg.Svrs,
-			issueInfos{
-				ISSUEINFO_IND_ID:     paramID,
-				ISSUEINFO_IND_HEAD:   paramHD,
-				ISSUEINFO_IND_PROJ:   paramP,
-				ISSUEINFO_IND_BRANCH: paramBra})
-		if svr == nil || fun == nil {
-			return
-		}
-		authInfo, err := cfg2AuthInfo(*svr, cfg)
-		if err != nil {
-			eztools.LogErrFatal(err)
-			return
-		}
-		issues, err := fun(svr, authInfo, issueInfo)
-		if err != nil {
-			eztools.LogErrFatal(err)
-		}
-		var op func(...interface{})
-		if eztools.Debugging && eztools.Verbose > 0 {
-			op = eztools.LogPrint
-		} else {
-			op = eztools.ShowSthln
-		}
-		if issues == nil {
-			op("No results.")
-		} else {
-			for i, issue := range issues {
-				op("Issue/Reviewer " +
-					strconv.Itoa(i+1))
-				op(ISSUEINFO_STR_ID + "=" +
-					issue[ISSUEINFO_IND_ID])
-				op(ISSUEINFO_STR_ASSIGNEE + "/" +
-					ISSUEINFO_STR_KEY + "/" +
-					ISSUEINFO_STR_NAME + "/" +
-					ISSUEINFO_STR_SUBMITTABLE + "=" +
-					issue[ISSUEINFO_IND_SUBMITTABLE])
-				op(ISSUEINFO_STR_HEAD + "/" +
-					ISSUEINFO_STR_SUMMARY + "/" +
-					ISSUEINFO_STR_REV_CUR + "/" +
-					ISSUEINFO_STR_VERIFIED + "=" +
-					issue[ISSUEINFO_IND_HEAD])
-				op(ISSUEINFO_STR_PROJ + "/" +
-					ISSUEINFO_STR_CODEREVIEW + "=" +
-					issue[ISSUEINFO_IND_PROJ])
-				op(ISSUEINFO_STR_BRANCH + "/" +
-					ISSUEINFO_STR_DISPNAME + /*"/" +
-					ISSUEINFO_STR_MANUALTEST + */"=" +
-					issue[ISSUEINFO_IND_BRANCH])
-				op(ISSUEINFO_STR_STATE + "/" +
-					ISSUEINFO_STR_SUBMIT_TYPE + "=" +
-					issue[ISSUEINFO_IND_STATE])
+	svr := chooseSvr(cats, cfg.Svrs)
+	if svr != nil {
+		choices := makeActs2Choose(*svr, cats[svr.Type])
+		for {
+			fun, issueInfo := chooseAct(svr.Type, choices, cats[svr.Type],
+				issueInfos{
+					ISSUEINFO_IND_ID:     paramID,
+					ISSUEINFO_IND_HEAD:   paramHD,
+					ISSUEINFO_IND_PROJ:   paramP,
+					ISSUEINFO_IND_BRANCH: paramBra})
+			if fun == nil {
+				break
+			}
+			authInfo, err := cfg2AuthInfo(*svr, cfg)
+			if err != nil {
+				eztools.LogErrFatal(err)
+				break
+			}
+			issues, err := fun(svr, authInfo, issueInfo)
+			if err != nil {
+				eztools.LogErrFatal(err)
+			}
+			var op func(...interface{})
+			if eztools.Debugging && eztools.Verbose > 0 {
+				op = eztools.LogPrint
+			} else {
+				op = eztools.ShowSthln
+			}
+			if issues == nil {
+				op("No results.")
+			} else {
+				for i, issue := range issues {
+					op("Issue/Reviewer " +
+						strconv.Itoa(i+1))
+					op(ISSUEINFO_STR_ID + "=" +
+						issue[ISSUEINFO_IND_ID])
+					op(ISSUEINFO_STR_ASSIGNEE + "/" +
+						ISSUEINFO_STR_KEY + "/" +
+						ISSUEINFO_STR_NAME + "/" +
+						ISSUEINFO_STR_SUBMITTABLE + "=" +
+						issue[ISSUEINFO_IND_SUBMITTABLE])
+					op(ISSUEINFO_STR_HEAD + "/" +
+						ISSUEINFO_STR_SUMMARY + "/" +
+						ISSUEINFO_STR_REV_CUR + "/" +
+						ISSUEINFO_STR_VERIFIED + "=" +
+						issue[ISSUEINFO_IND_HEAD])
+					op(ISSUEINFO_STR_PROJ + "/" +
+						ISSUEINFO_STR_CODEREVIEW + "=" +
+						issue[ISSUEINFO_IND_PROJ])
+					op(ISSUEINFO_STR_BRANCH + "/" +
+						ISSUEINFO_STR_DISPNAME + /*"/" +
+						ISSUEINFO_STR_MANUALTEST + */"=" +
+						issue[ISSUEINFO_IND_BRANCH])
+					op(ISSUEINFO_STR_STATE + "/" +
+						ISSUEINFO_STR_SUBMIT_TYPE + "=" +
+						issue[ISSUEINFO_IND_STATE])
+				}
 			}
 		}
 	}
@@ -226,8 +230,7 @@ func isValidSvr(cats cat2Act, svr *svrs) bool {
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
 
-func chooseSvrNAct(cats cat2Act, candidates []svrs,
-	issueInfo issueInfos) (*svrs, actionFunc, issueInfos) {
+func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 	var choices []string
 	for _, svr := range candidates {
 		if !isValidSvr(cats, &svr) {
@@ -238,27 +241,34 @@ func chooseSvrNAct(cats cat2Act, candidates []svrs,
 	eztools.ShowStrln(" Choose a server")
 	si := eztools.ChooseStrings(choices)
 	if si == eztools.InvalidID {
-		return nil, nil, issueInfo
+		return nil
 	}
 
-	svr := candidates[si]
+	return &candidates[si]
+}
+
+func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 	if svr.Type == CATEGORY_JIRA {
 		if len(svr.TstExp+svr.TstPre+svr.TstStep) < 1 {
-			cats[svr.Type] = cats[svr.Type][:len(cats[svr.Type])-2]
+			funcs = funcs[:len(funcs)-2]
 		}
 	}
-	choices = make([]string, len(cats[svr.Type]))
-	for i, choice := range cats[svr.Type] {
+	choices := make([]string, len(funcs))
+	for i, choice := range funcs {
 		choices[i] = choice.n
 	}
+	return choices
+}
+
+func chooseAct(svrType string, choices []string, funcs []action2Func,
+	issueInfo issueInfos) (actionFunc, issueInfos) {
 	eztools.ShowStrln(" Choose an action")
 	fi := eztools.ChooseStrings(choices)
 	if fi == eztools.InvalidID {
-		return nil, nil, issueInfo
+		return nil, issueInfo
 	}
-	inputIssueInfo4Act(svr.Type, cats[svr.Type][fi].n, &issueInfo)
-	return &candidates[si], cats[svr.Type][fi].f, issueInfo
-
+	inputIssueInfo4Act(svrType, funcs[fi].n, &issueInfo)
+	return funcs[fi].f, issueInfo
 }
 
 func restSth(method, url string, authInfo eztools.AuthInfo,
@@ -1073,7 +1083,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, nil
 		}
 	}
-	eztools.ShowStrln(string(jsonValue))
+	//eztools.ShowStrln(string(jsonValue))
 	_, err = restMap("POST", svr.URL+REST_API_STR+
 		infWtRev[ISSUEINFO_IND_ID]+"/revisions/"+
 		infWtRev[ISSUEINFO_IND_HEAD]+"/review",
@@ -1193,13 +1203,20 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_HEAD, "change to assignee")
-		cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_PROJ, "change to component")
+		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
+		eztools.ShowSthln(changed)
+		changed = cfmInputOrPromptStr(&issueInfo,
+			ISSUEINFO_IND_HEAD, "change to assignee") || changed
+		eztools.ShowSthln(changed)
+		changed = cfmInputOrPromptStr(&issueInfo,
+			ISSUEINFO_IND_PROJ, "change to component") || changed
+		eztools.ShowSthln(changed)
+		if !changed {
+			return nil, nil
+		}
 		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
-			len(issueInfo[ISSUEINFO_IND_HEAD]) < 1 {
+			/*(*/ len(issueInfo[ISSUEINFO_IND_HEAD]) < 1 { //&&
+			//len(issueInfo[ISSUEINFO_IND_PROJ]) < 1) {
 			return nil, eztools.ErrInvalidInput
 		}
 		const REST_API_STR = "rest/api/latest/issue/"
@@ -1250,7 +1267,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		if err != nil {
 			return nil, err
 		}
-		eztools.ShowByteln(jsonStr)
+		//eztools.ShowByteln(jsonStr)
 		bodyMap, err := restMap(eztools.METHOD_PUT,
 			svr.URL+REST_API_STR+issueInfo[ISSUEINFO_IND_ID],
 			authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -1356,7 +1373,9 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) ([]issueInfos, error) {
 	trans := [...]string{"Implementing", "Assign owner", "Resolved"}
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
+		if !cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID) {
+			return nil, nil
+		}
 		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
@@ -1449,24 +1468,27 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return jiraParseIssues(bodyMap), err
 }
 
-func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
+func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) (changed bool) {
 	if len(inf[ind]) < 1 {
 		inf[ind] = eztools.PromptStr(prompt)
-		return
+		return true
 	}
 	s := eztools.PromptStr(prompt + "=" + inf[ind])
 	if len(s) < 1 {
 		return
 	}
+	// input not a number
 	if _, err := strconv.Atoi(s); err != nil {
 		inf[ind] = s
-		return
+		return true
 	}
 	// input a number
 	if _, err := strconv.Atoi(inf[ind]); err == nil {
-		return
+		// it was a number, so no way to figure affix
+		inf[ind] = s
+		return true
 	}
-	// it was not a number
+	// smart affix
 	re := regexp.MustCompile(`^[^\d]+`)
 	pref := re.FindStringSubmatch(inf[ind])
 	if pref != nil {
@@ -1475,11 +1497,13 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
 		if eztools.Debugging {
 			eztools.ShowStrln("auto changed to " + inf[ind])
 		}
+		return true
 	}
+	return
 }
 
-func cfmInputOrPrompt(inf *issueInfos, ind int) {
-	cfmInputOrPromptStr(inf, ind, issueInfoTxt[ind])
+func cfmInputOrPrompt(inf *issueInfos, ind int) (changed bool) {
+	return cfmInputOrPromptStr(inf, ind, issueInfoTxt[ind])
 }
 
 func useInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
