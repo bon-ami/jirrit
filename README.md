@@ -41,7 +41,10 @@ Usually, these fields can be seen in an issue's detail.
   - transfer an issue
   - change an issue's state
   - show details of an issue
+  - list comments of a case
+  - add a comment to a case
   - list my open issues
+  - link a case to the other
   - change an issue's states from open all the way to resolved
   - resolve an issue, adding test condition="none", steps="default design" and expectation="none"
   - resolve an issue, adding test condition="none", steps="general requirement" and expectation="none"

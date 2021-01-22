@@ -32,17 +32,29 @@ type passwords struct {
 	Type     string   `xml:"type,attr"`
 	Pass     string   `xml:",chardata"`
 }
+
+/*type linktypes struct {
+	LinkType xml.Name `xml:"linktype"`
+	Value    string   `xml:"value,attr"`
+	String   string   `xml:",chardata"`
+}*/
+type fields struct {
+	Fld xml.Name `xml:"fields"`
+	//Desc    string   `xml:"desc"`
+	//LinkType []linktypes `xml:"linktype"`
+	TstPre  string `xml:"testpre"`
+	TstStep string `xml:"teststep"`
+	TstExp  string `xml:"testexp"`
+}
 type svrs struct {
-	Svr     xml.Name  `xml:"server"`
-	Type    string    `xml:"type,attr"`
-	Name    string    `xml:"name,attr"`
-	URL     string    `xml:"url"`
-	Pass    passwords `xml:"pass"`
-	Magic   string    `xml:"magic"`
-	Score   string    `xml:"score"`
-	TstPre  string    `xml:"testpre"`
-	TstStep string    `xml:"teststep"`
-	TstExp  string    `xml:"testexp"`
+	Svr   xml.Name  `xml:"server"`
+	Type  string    `xml:"type,attr"`
+	Name  string    `xml:"name,attr"`
+	URL   string    `xml:"url"`
+	Pass  passwords `xml:"pass"`
+	Magic string    `xml:"magic"`
+	Score string    `xml:"score"`
+	Flds  fields    `xml:"fields"`
 }
 
 type cfgs struct {
@@ -57,7 +69,7 @@ func main() {
 	var (
 		paramH, paramV, paramVV, paramVVV bool
 		paramID, paramBra, paramCfg, paramLog,
-		paramHD, paramP string
+		paramHD, paramP, paramS string
 	)
 	flag.BoolVar(&paramH, "h", false, "help message")
 	flag.BoolVar(&paramV, "v", false,
@@ -73,6 +85,8 @@ func main() {
 			"or revision id for cherrypicks")
 	flag.StringVar(&paramP, "p", "",
 		"new component when transferring issues")
+	flag.StringVar(&paramS, "s", "",
+		"linked issue when linking issues")
 	flag.StringVar(&paramCfg, "c", "", "config file")
 	flag.StringVar(&paramLog, "l", "", "log file")
 	flag.Parse()
@@ -121,7 +135,8 @@ func main() {
 					ISSUEINFO_IND_ID:     paramID,
 					ISSUEINFO_IND_HEAD:   paramHD,
 					ISSUEINFO_IND_PROJ:   paramP,
-					ISSUEINFO_IND_BRANCH: paramBra})
+					ISSUEINFO_IND_BRANCH: paramBra,
+					ISSUEINFO_IND_STATE:  paramS})
 			if fun == nil {
 				break
 			}
@@ -249,7 +264,7 @@ func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 
 func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 	if svr.Type == CATEGORY_JIRA {
-		if len(svr.TstExp+svr.TstPre+svr.TstStep) < 1 {
+		if len(svr.Flds.TstExp+svr.Flds.TstPre+svr.Flds.TstStep) < 0 {
 			funcs = funcs[:len(funcs)-2]
 		}
 	}
@@ -296,6 +311,15 @@ func restSth(method, url string, authInfo eztools.AuthInfo,
 	return
 }
 
+func showRspBody(err error, body interface{}) {
+	if err != nil {
+		if eztools.Debugging && eztools.Verbose > 1 {
+			eztools.ShowStrln("failure with body:")
+			eztools.ShowSthln(body)
+		}
+	}
+}
+
 func restSlc(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (bodySlc []interface{}, err error) {
 	body, err := restSth(method, url, authInfo, bodyReq, magic)
@@ -307,13 +331,14 @@ func restSlc(method, url string, authInfo eztools.AuthInfo,
 		eztools.LogPrint("REST response type error for slice " +
 			reflect.TypeOf(body).String())
 	}
+	//showRspBody(err, body)
 	return
 }
 
-func restMap(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (
+func restMapOrSth(method, url string, authInfo eztools.AuthInfo,
+	bodyReq io.Reader, magic string) (body interface{},
 	bodyMap map[string]interface{}, err error) {
-	body, err := restSth(method, url, authInfo, bodyReq, magic)
+	body, err = restSth(method, url, authInfo, bodyReq, magic)
 	if err != nil || body == nil {
 		return
 	}
@@ -322,10 +347,15 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 		eztools.LogPrint("REST response type error for map " +
 			reflect.TypeOf(body).String())
 	} else {
-		if err != nil {
-			eztools.ShowSthln(bodyMap)
-		}
+		showRspBody(err, body)
 	}
+	return
+}
+
+func restMap(method, url string, authInfo eztools.AuthInfo,
+	bodyReq io.Reader, magic string) (
+	bodyMap map[string]interface{}, err error) {
+	_, bodyMap, err = restMapOrSth(method, url, authInfo, bodyReq, magic)
 	return
 }
 
@@ -336,18 +366,23 @@ const (
 	ISSUEINFO_IND_HEAD
 	ISSUEINFO_IND_PROJ
 	ISSUEINFO_IND_BRANCH
-	// jira
-	ISSUEINFO_IND_DISPNAME = iota - 1
-	// common use
 	ISSUEINFO_IND_STATE
 	ISSUEINFO_IND_MAX
 
 	// gerrit state
-	ISSUEINFO_IND_SUBMITTABLE = iota - 1 - ISSUEINFO_IND_MAX
+	// placeholder for ID
+	ISSUEINFO_IND_SUBMITTABLE = iota - ISSUEINFO_IND_MAX
 	ISSUEINFO_IND_VERIFIED
 	ISSUEINFO_IND_CODEREVIEW
 	ISSUEINFO_IND_SCORE
 	ISSUEINFO_IND_SUBMIT_TYPE
+
+	// jira details
+	// placeholder for ID
+	ISSUEINFO_IND_DESC = iota + 1 - ISSUEINFO_IND_MAX*2
+	// no id for summary, jira
+	ISSUEINFO_IND_COMMENT = iota + 2 - ISSUEINFO_IND_MAX*2
+	ISSUEINFO_IND_DISPNAME
 
 	ISSUEINFO_STR_ID          = "id"
 	ISSUEINFO_STR_SUBMITTABLE = "submittable"      // \
@@ -356,6 +391,7 @@ const (
 	ISSUEINFO_STR_NAME        = "name"             // /
 	ISSUEINFO_STR_HEAD        = "subject"          // \
 	ISSUEINFO_STR_SUMMARY     = "summary"          //
+	ISSUEINFO_STR_DESC        = "description"      //
 	ISSUEINFO_STR_REV_CUR     = "current_revision" //
 	ISSUEINFO_STR_VERIFIED    = "Verified"         // /
 	ISSUEINFO_STR_PROJ        = "project"          // \
@@ -390,6 +426,9 @@ var reviewInfoTxt = issueInfos{
 /*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
 ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME,
 ISSUEINFO_STR_STATE}*/
+/*var jiraDetailTxt = issueInfos{
+ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
+ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
 
 // gerritParseIssuesOrReviews parses body from gerrit responses into
 // []issueInfos
@@ -398,7 +437,7 @@ param:
 	m	body
 	issues	results are appended to this
 	strs	keywords to parse
-	issue	partially parsed fileds, usually for looping only
+	issue	partially parsed fields, usually for looping only
 */
 func gerritParseIssuesOrReviews(m map[string]interface{},
 	issues []issueInfos, strs issueInfos,
@@ -543,9 +582,14 @@ func gerritGetRevs(url, magic string, authInfo eztools.AuthInfo) (
 		})
 }
 
-func jiraParse1Field(m map[string]interface{},
+func jiraParse1Field(svr *svrs, m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	for i, v := range m {
+		/*if len(svr.Flds.Desc) > 0 && i == svr.Flds.Desc {
+			changed = chkNSetIssueInfo(v, issueInfo,
+				ISSUEINFO_IND_DESC) || changed
+			continue
+		}*/
 		switch i {
 		case ISSUEINFO_STR_ASSIGNEE:
 			changed = chkNLoopStringMap(v, "",
@@ -562,12 +606,15 @@ func jiraParse1Field(m map[string]interface{},
 		case ISSUEINFO_STR_SUMMARY:
 			changed = chkNSetIssueInfo(v, issueInfo,
 				ISSUEINFO_IND_HEAD) || changed
+		case ISSUEINFO_STR_DESC:
+			changed = chkNSetIssueInfo(v, issueInfo,
+				ISSUEINFO_IND_DESC) || changed
 		}
 	}
 	return
 }
 
-func jiraParse1Issue(m map[string]interface{},
+func jiraParse1Issue(svr *svrs, m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	changed = loopStringMap(m, "fields",
 		ISSUEINFO_STR_KEY, &issueInfo[ISSUEINFO_IND_KEY],
@@ -580,7 +627,7 @@ func jiraParse1Issue(m map[string]interface{},
 					"map[string]interface{}")
 				return false
 			}
-			return jiraParse1Field(fields, issueInfo)
+			return jiraParse1Field(svr, fields, issueInfo)
 		}) || changed
 	return
 }
@@ -629,7 +676,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 	return
 }
 
-func jiraParseIssues(m map[string]interface{}) []issueInfos {
+func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowSthln(strs)
 	}*/
@@ -653,7 +700,7 @@ func jiraParseIssues(m map[string]interface{}) []issueInfos {
 				continue
 			}
 			var issueInfo issueInfos
-			if jiraParse1Issue(issue, &issueInfo) {
+			if jiraParse1Issue(svr, issue, &issueInfo) {
 				results = append(results, issueInfo)
 			}
 		}
@@ -1051,44 +1098,64 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	}
 
 	type map2Marshal map[string]int
-	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2, ISSUEINFO_STR_VERIFIED: 1}
+	map4MarshalOrig := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2}
 	if len(svr.Score) > 0 {
-		map4Marshal[svr.Score] = 1
+		map4MarshalOrig[svr.Score] = 1
 	}
-	/*// check whether Manual-Testing exists
-	inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
-	if err != nil {
-		return inf, err
-	}
-	if len(inf) > 0 {
-		if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
-			map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
-		}
-		} else {
-		eztools.LogPrint("NO review info found!")
-		return inf, eztools.ErrNoValidResults
-	}*/
-
+	map4Marshal := map4MarshalOrig
+	map4Marshal[ISSUEINFO_STR_VERIFIED] = 1
 	const REST_API_STR = "changes/"
-	var jsonValue []byte
-	jsonValue, err = json.Marshal(map[string]map2Marshal{
-		"labels": map4Marshal})
-	if err != nil {
-		eztools.LogErr(err)
-		return nil, err
-	}
-	if eztools.Debugging {
-		if !eztools.ChkCfmNPrompt("continue to +2/1 to "+
-			infWtRev[ISSUEINFO_IND_ID], "n") {
-			return nil, nil
+	for {
+		/*// check whether Manual-Testing exists
+		inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
+		if err != nil {
+			return inf, err
 		}
+		if len(inf) > 0 {
+			if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
+				map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
+			}
+			} else {
+			eztools.LogPrint("NO review info found!")
+			return inf, eztools.ErrNoValidResults
+		}*/
+
+		var jsonValue []byte
+		jsonValue, err = json.Marshal(map[string]map2Marshal{
+			"labels": map4Marshal})
+		if err != nil {
+			eztools.LogErr(err)
+			return nil, err
+		}
+		if eztools.Debugging {
+			if !eztools.ChkCfmNPrompt("continue to +2/1 to "+
+				infWtRev[ISSUEINFO_IND_ID], "n") {
+				return nil, nil
+			}
+		}
+		//eztools.ShowStrln(string(jsonValue))
+		body, err := restSth("POST", svr.URL+REST_API_STR+
+			infWtRev[ISSUEINFO_IND_ID]+"/revisions/"+
+			infWtRev[ISSUEINFO_IND_HEAD]+"/review",
+			authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
+		// response only contain scores for a success, so it is not parsed
+		if err == nil {
+			break
+		}
+		eztools.LogErrPrintWtInfo("failed to ", err)
+		if body != nil {
+			bodyBytes, ok := body.([]byte)
+			if ok {
+				if bytes.Contains(bodyBytes, []byte("Verified")) &&
+					bytes.Contains(bodyBytes, []byte("restricted")) {
+					map4Marshal = map4MarshalOrig
+					eztools.LogPrint("Retrying to scrore without verify.")
+					continue
+				}
+			}
+		}
+		break
 	}
-	//eztools.ShowStrln(string(jsonValue))
-	_, err = restMap("POST", svr.URL+REST_API_STR+
-		infWtRev[ISSUEINFO_IND_ID]+"/revisions/"+
-		infWtRev[ISSUEINFO_IND_HEAD]+"/review",
-		authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
-	// response only contain scores for a success, so it is not parsed
 	return nil, err
 }
 
@@ -1184,7 +1251,10 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			} else {
 				_, err = gerritScore(svr, authInfo, inf[0])
 				if err != nil {
-					break
+					//break
+					eztools.LogErrPrintWtInfo(
+						"failed to score and wait for it to be scored by elsewhere.",
+						err)
 				}
 				scored = true
 			}
@@ -1204,13 +1274,10 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
 		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		eztools.ShowSthln(changed)
 		changed = cfmInputOrPromptStr(&issueInfo,
 			ISSUEINFO_IND_HEAD, "change to assignee") || changed
-		eztools.ShowSthln(changed)
 		changed = cfmInputOrPromptStr(&issueInfo,
 			ISSUEINFO_IND_PROJ, "change to component") || changed
-		eztools.ShowSthln(changed)
 		if !changed {
 			return nil, nil
 		}
@@ -1371,11 +1438,13 @@ func custFld(jsonStr, fldKey, fldVal string, sth *bool) string {
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) ([]issueInfos, error) {
+	firstRun := true
 	trans := [...]string{"Implementing", "Assign owner", "Resolved"}
 	for {
-		if !cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID) {
+		if !cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID) && !firstRun {
 			return nil, nil
 		}
+		firstRun = false
 		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
@@ -1387,9 +1456,9 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
   "fields": {
 `
 			sth := false
-			jsonStr = custFld(jsonStr, svr.TstPre, "none", &sth)
-			jsonStr = custFld(jsonStr, svr.TstStep, qa, &sth)
-			jsonStr = custFld(jsonStr, svr.TstExp, "none", &sth)
+			jsonStr = custFld(jsonStr, svr.Flds.TstPre, "none", &sth)
+			jsonStr = custFld(jsonStr, svr.Flds.TstStep, qa, &sth)
+			jsonStr = custFld(jsonStr, svr.Flds.TstExp, "none", &sth)
 			if !sth {
 				eztools.LogPrint("NO Tst* fields " +
 					"defined for this server")
@@ -1436,6 +1505,156 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	}
 }
 
+func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	linkChoices := []struct {
+		name, inward, outward string
+	}{
+		{
+			inward:  "is blocked by",
+			name:    "Blocks",
+			outward: "blocks"}}
+	linkType := eztools.InvalidID
+	for {
+		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
+		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+			return nil, nil
+		}
+		if len(issueInfo[ISSUEINFO_IND_STATE]) < 1 {
+			issueInfo[ISSUEINFO_IND_STATE] = issueInfo[ISSUEINFO_IND_ID]
+		}
+		changed = cfmInputOrPromptStr(&issueInfo,
+			ISSUEINFO_IND_STATE, "id to relate to") || changed
+		if len(issueInfo[ISSUEINFO_IND_STATE]) < 1 ||
+			issueInfo[ISSUEINFO_IND_STATE] ==
+				issueInfo[ISSUEINFO_IND_ID] {
+			return nil, nil
+		}
+		i := eztools.ChooseStringsWtIDs(
+			func() int {
+				//return len(svr.Flds.LinkType)
+				return len(linkChoices)
+			},
+			func(i int) int {
+				return i
+			},
+			func(i int) string {
+				//return svr.Flds.LinkType[i].String
+				return linkChoices[i].name
+			}, "link type")
+		if i == eztools.InvalidID ||
+			(!changed &&
+				i == linkType &&
+				/* not the first run*/
+				linkType != eztools.InvalidID) {
+			return nil, nil
+		}
+		linkType = i
+		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
+			len(issueInfo[ISSUEINFO_IND_STATE]) < 1 {
+			return nil, eztools.ErrInvalidInput
+		}
+		type ils struct {
+			Add struct {
+				Type map[string]string `json:"type"`
+				II   map[string]string `json:"inwardIssue"`
+			} `json:"add"`
+		}
+		type jsonStru struct {
+			Update struct {
+				IL []ils `json:"issuelinks"`
+			} `json:"update"`
+		}
+		var (
+			jsonStr []byte
+			err     error
+			jstru   jsonStru
+			il      ils
+		)
+		il.Add.II = make(map[string]string)
+		il.Add.Type = make(map[string]string)
+		//il.Add.Type["id"] = svr.Flds.LinkType[linkType].Value
+		il.Add.Type["inward"] = linkChoices[linkType].inward
+		il.Add.Type["name"] = linkChoices[linkType].name
+		il.Add.Type["outward"] = linkChoices[linkType].outward
+		il.Add.II[ISSUEINFO_STR_KEY] = issueInfo[ISSUEINFO_IND_STATE]
+		jstru.Update.IL = append(jstru.Update.IL, il)
+		jsonStr, err = json.Marshal(jstru)
+		if err != nil {
+			return nil, err
+		}
+		eztools.ShowByteln(jsonStr)
+		const REST_API_STR = "rest/api/latest/issue/"
+		bodyMap, err := restMap(eztools.METHOD_PUT, svr.URL+REST_API_STR+
+			issueInfo[ISSUEINFO_IND_ID],
+			authInfo, bytes.NewReader(jsonStr), svr.Magic)
+		if err != nil {
+			return nil, err
+		}
+		if postREST != nil {
+			postREST([]interface{}{bodyMap})
+		}
+	}
+}
+
+func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	for {
+		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
+		changed = cfmInputOrPromptStr(&issueInfo,
+			ISSUEINFO_IND_COMMENT, "comment to add") || changed
+		if !changed {
+			return nil, nil
+		}
+		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
+			len(issueInfo[ISSUEINFO_IND_COMMENT]) < 1 {
+			return nil, eztools.ErrInvalidInput
+		}
+		type comment1 struct {
+			Comment1 string `json:"body"`
+		}
+		var (
+			jsonStr []byte
+			err     error
+			cmt     comment1
+		)
+		cmt.Comment1 = issueInfo[ISSUEINFO_IND_COMMENT]
+		jsonStr, err = json.Marshal(cmt)
+		if err != nil {
+			return nil, err
+		}
+		eztools.ShowByteln(jsonStr)
+		const REST_API_STR = "rest/api/latest/issue/"
+		bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+REST_API_STR+
+			issueInfo[ISSUEINFO_IND_ID]+"/comment",
+			authInfo, bytes.NewReader(jsonStr), svr.Magic)
+		if err != nil {
+			return nil, err
+		}
+		if postREST != nil {
+			postREST([]interface{}{bodyMap})
+		}
+	}
+}
+
+func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const REST_API_STR = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+REST_API_STR+
+		issueInfo[ISSUEINFO_IND_ID]+"/lcomment",
+		authInfo, nil, svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	return nil, err
+}
+
 func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
@@ -1450,7 +1669,7 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return jiraParseIssues(bodyMap), err
+	return jiraParseIssues(svr, bodyMap), err
 }
 
 func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
@@ -1465,29 +1684,56 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return jiraParseIssues(bodyMap), err
+	return jiraParseIssues(svr, bodyMap), err
 }
 
-func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) (changed bool) {
-	if len(inf[ind]) < 1 {
-		inf[ind] = eztools.PromptStr(prompt)
-		return true
-	}
-	s := eztools.PromptStr(prompt + "=" + inf[ind])
+func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
+	const linefeed = " (end with \\ to continue with more lines. empty to stop)"
+	s := eztools.PromptStr(prompt + linefeed)
 	if len(s) < 1 {
 		return
 	}
-	// input not a number
-	if _, err := strconv.Atoi(s); err != nil {
+	if s[len(s)-1] == '\\' {
+		inf[ind] += s[:len(s)-1] + "\n"
+		cfmInputOrPromptStrMultiLines(inf, ind, prompt)
+		return
+	}
+	inf[ind] += s
+}
+
+func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
+	const linefeed = " (end with \\ to input multi lines)"
+	var def string
+	silly := true // no smart affix available by default
+	if len(inf[ind]) > 0 {
+		if reflect.TypeOf(inf[ind]) != reflect.TypeOf(int(0)) {
+			silly = false // there is a reference for smart affix
+			eztools.ShowStrln("not int previously")
+		}
+		def = "=" + inf[ind]
+	}
+	s := eztools.PromptStr(prompt + linefeed + def)
+	if len(s) < 1 || s == inf[ind] {
+		return false
+	}
+	if !silly {
+		if _, err := strconv.Atoi(s); err != nil {
+			silly = true
+			eztools.ShowStrln("not int currently")
+			// we do not care what this number is
+		}
+	}
+	if silly {
+		// input not a number or no previous input to refer to
+		if s[len(s)-1] == '\\' {
+			inf[ind] = s[:len(s)-1] + "\n"
+			cfmInputOrPromptStrMultiLines(inf, ind, prompt)
+			return true
+		}
 		inf[ind] = s
 		return true
 	}
-	// input a number
-	if _, err := strconv.Atoi(inf[ind]); err == nil {
-		// it was a number, so no way to figure affix
-		inf[ind] = s
-		return true
-	}
+	eztools.ShowStrln("smart changing")
 	// smart affix
 	re := regexp.MustCompile(`^[^\d]+`)
 	pref := re.FindStringSubmatch(inf[ind])
@@ -1499,10 +1745,10 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) (changed bool)
 		}
 		return true
 	}
-	return
+	return true
 }
 
-func cfmInputOrPrompt(inf *issueInfos, ind int) (changed bool) {
+func cfmInputOrPrompt(inf *issueInfos, ind int) bool {
 	return cfmInputOrPromptStr(inf, ind, issueInfoTxt[ind])
 }
 
@@ -1521,7 +1767,8 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 	switch svrType {
 	case CATEGORY_JIRA:
 		switch action {
-		case "show details of a case":
+		case "show details of a case",
+			"list comments of a case":
 			useInputOrPrompt(inf, ISSUEINFO_IND_ID)
 		}
 	case CATEGORY_GERRIT:
@@ -1567,7 +1814,10 @@ func makeCat2Act() cat2Act {
 			{"transfer a case to someone", jiraTransfer},
 			{"move status of a case", jiraTransition},
 			{"show details of a case", jiraDetail},
+			{"list comments of a case", jiraComments},
+			{"add a comment to a case", jiraAddComment},
 			{"list my open cases", jiraMyOpen},
+			{"link a case to the other", jiraLink},
 			{"close a case to resolved from any known statues", jiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
