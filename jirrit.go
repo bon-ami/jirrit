@@ -84,7 +84,8 @@ func main() {
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
 	flag.StringVar(&paramP, "p", "",
-		"new component when transferring issues")
+		"new component when transferring issues, "+
+			"or test step comment for JIRA closure")
 	flag.StringVar(&paramS, "s", "",
 		"linked issue when linking issues")
 	flag.StringVar(&paramCfg, "c", "", "config file")
@@ -132,9 +133,10 @@ func main() {
 		for {
 			fun, issueInfo := chooseAct(svr.Type, choices, cats[svr.Type],
 				issueInfos{
-					ISSUEINFO_IND_ID:     paramID,
-					ISSUEINFO_IND_HEAD:   paramHD,
-					ISSUEINFO_IND_PROJ:   paramP,
+					ISSUEINFO_IND_ID:   paramID,
+					ISSUEINFO_IND_HEAD: paramHD,
+					ISSUEINFO_IND_PROJ: paramP,
+					//ISSUEINFO_IND_COMMENT: paramP,
 					ISSUEINFO_IND_BRANCH: paramBra,
 					ISSUEINFO_IND_STATE:  paramS})
 			if fun == nil {
@@ -1408,7 +1410,7 @@ func jiraTran1(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	return jiraCloseWtQA(svr, authInfo, issueInfo, "")
+	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[ISSUEINFO_IND_COMMENT])
 }
 
 func jiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
@@ -1436,10 +1438,69 @@ func custFld(jsonStr, fldKey, fldVal string, sth *bool) string {
 	return jsonStr
 }
 
+const typicalJiraSeparator = "-"
+
+// return values
+//	whether input is in exact x-0 format
+//	the non digit part
+//	the digit part
+func parseTypicalJiraNum(num string) (bool, string, int) {
+	re := regexp.MustCompile(`^[^\d]+[-][\d]+$`)
+	pref := re.FindStringSubmatch(num)
+	if pref != nil {
+		parts := strings.Split(pref[0], typicalJiraSeparator)
+		if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
+			i, _ := strconv.Atoi(parts[1])
+			return true, parts[0], i
+		}
+	}
+	return false, "", 0
+}
+
+func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
+	[]issueInfos, error)) ([]issueInfos, error) {
+	const separator = ","
+	switch strings.Count(issueInfo[ISSUEINFO_IND_ID], separator) {
+	case 0:
+		return fun(issueInfo)
+	case 1:
+		parts := strings.Split(issueInfo[ISSUEINFO_IND_ID], separator)
+		if len(parts) < 2 || len(parts[0]) < 1 || len(parts[1]) < 1 {
+			eztools.LogPrint("range format needs both parts aside with a \"" +
+				separator + "\"")
+			break
+		}
+		ok, prefix, lowerBound := parseTypicalJiraNum(parts[0])
+		if !ok {
+			eztools.LogPrint("the former part must be in the form of X-0")
+			break
+		}
+		upperBound, err := strconv.Atoi(parts[1])
+		if err != nil {
+			eztools.LogPrint("the latter part must be a number")
+			break
+		}
+		if lowerBound >= upperBound {
+			eztools.LogPrint("the number in the latter part must be greater than the one in the former part")
+			break
+		}
+		for i := lowerBound; i <= upperBound; i++ {
+			issueInfo[ISSUEINFO_IND_ID] = prefix + typicalJiraSeparator + strconv.Itoa(i)
+			_, err := fun(issueInfo)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	default:
+		eztools.LogPrint("range format supports only one comma")
+	}
+	return nil, eztools.ErrInvalidInput
+}
+
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) ([]issueInfos, error) {
 	firstRun := true
-	trans := [...]string{"Implementing", "Assign owner", "Resolved"}
 	for {
 		if !cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID) && !firstRun {
 			return nil, nil
@@ -1448,45 +1509,53 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
-		if len(qa) > 0 {
-			// since all fields are dynamic,
-			// construct the json manually
-			jsonStr :=
-				`{
+		_, err := loopIssues(issueInfo, func(issueInfo issueInfos) (
+			[]issueInfos, error) {
+			if len(qa) > 0 {
+				// since all fields are dynamic,
+				// construct the json manually
+				jsonStr :=
+					`{
   "fields": {
 `
-			sth := false
-			jsonStr = custFld(jsonStr, svr.Flds.TstPre, "none", &sth)
-			jsonStr = custFld(jsonStr, svr.Flds.TstStep, qa, &sth)
-			jsonStr = custFld(jsonStr, svr.Flds.TstExp, "none", &sth)
-			if !sth {
-				eztools.LogPrint("NO Tst* fields " +
-					"defined for this server")
-			} else {
-				jsonStr = jsonStr + `
+				sth := false
+				jsonStr = custFld(jsonStr, svr.Flds.TstPre, "none", &sth)
+				jsonStr = custFld(jsonStr, svr.Flds.TstStep, qa, &sth)
+				jsonStr = custFld(jsonStr, svr.Flds.TstExp, "none", &sth)
+				if !sth {
+					eztools.LogPrint("NO Tst* fields " +
+						"defined for this server")
+				} else {
+					jsonStr = jsonStr + `
   }
 }`
-				//eztools.ShowStrln(jsonStr)
-				const REST_API_STR = "rest/api/latest/issue/"
-				bodyMap, err := restMap(eztools.METHOD_PUT,
-					svr.URL+REST_API_STR+
-						issueInfo[ISSUEINFO_IND_ID],
-					authInfo, strings.NewReader(jsonStr),
-					svr.Magic)
-				if err != nil {
+					//eztools.ShowStrln(jsonStr)
+					const REST_API_STR = "rest/api/latest/issue/"
+					bodyMap, err := restMap(eztools.METHOD_PUT,
+						svr.URL+REST_API_STR+
+							issueInfo[ISSUEINFO_IND_ID],
+						authInfo, strings.NewReader(jsonStr),
+						svr.Magic)
+					if err != nil {
+						return nil, err
+					}
+					if postREST != nil {
+						postREST([]interface{}{bodyMap})
+					}
+				}
+			}
+			for _, tran := range [...]string{"Implementing",
+				"Assign owner", "Resolved"} {
+				if err := jiraTran1(svr, authInfo,
+					issueInfo[ISSUEINFO_IND_ID], tran); err != nil &&
+					err != eztools.ErrNoValidResults {
 					return nil, err
 				}
-				if postREST != nil {
-					postREST([]interface{}{bodyMap})
-				}
 			}
-		}
-		for _, tran := range trans {
-			if err := jiraTran1(svr, authInfo,
-				issueInfo[ISSUEINFO_IND_ID], tran); err != nil &&
-				err != eztools.ErrNoValidResults {
-				return nil, err
-			}
+			return nil, nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 }
@@ -1510,8 +1579,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 	linkChoices := []struct {
 		name, inward, outward string
 	}{
-		{
-			inward:  "is blocked by",
+		{inward: "is blocked by",
 			name:    "Blocks",
 			outward: "blocks"}}
 	linkType := eztools.InvalidID
@@ -1708,7 +1776,7 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 	if len(inf[ind]) > 0 {
 		if reflect.TypeOf(inf[ind]) != reflect.TypeOf(int(0)) {
 			silly = false // there is a reference for smart affix
-			eztools.ShowStrln("not int previously")
+			//eztools.ShowStrln("not int previously")
 		}
 		def = "=" + inf[ind]
 	}
@@ -1719,7 +1787,7 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 	if !silly {
 		if _, err := strconv.Atoi(s); err != nil {
 			silly = true
-			eztools.ShowStrln("not int currently")
+			//eztools.ShowStrln("not int currently")
 			// we do not care what this number is
 		}
 	}
@@ -1733,7 +1801,7 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 		inf[ind] = s
 		return true
 	}
-	eztools.ShowStrln("smart changing")
+	//eztools.ShowStrln("smart changing")
 	// smart affix
 	re := regexp.MustCompile(`^[^\d]+`)
 	pref := re.FindStringSubmatch(inf[ind])
@@ -1770,6 +1838,9 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 		case "show details of a case",
 			"list comments of a case":
 			useInputOrPrompt(inf, ISSUEINFO_IND_ID)
+		case "close a case to resolved from any known statues":
+			useInputOrPromptStr(inf, ISSUEINFO_IND_COMMENT,
+				"test step for closure")
 		}
 	case CATEGORY_GERRIT:
 		switch action {
