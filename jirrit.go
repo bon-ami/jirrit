@@ -1769,13 +1769,15 @@ func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
 	inf[ind] += s
 }
 
+// return value: whether anything new is input
 func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 	const linefeed = " (end with \\ to input multi lines)"
-	var def string
-	silly := true // no smart affix available by default
+	var def, base string
+	var smart bool // no smart affix available by default
 	if len(inf[ind]) > 0 {
-		if reflect.TypeOf(inf[ind]) != reflect.TypeOf(int(0)) {
-			silly = false // there is a reference for smart affix
+		var ok bool
+		if ok, base, _ = parseTypicalJiraNum(inf[ind]); ok {
+			smart = true // there is a reference for smart affix
 			//eztools.ShowStrln("not int previously")
 		}
 		def = "=" + inf[ind]
@@ -1784,14 +1786,14 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 	if len(s) < 1 || s == inf[ind] {
 		return false
 	}
-	if !silly {
+	if smart {
 		if _, err := strconv.Atoi(s); err != nil {
-			silly = true
+			smart = false
 			//eztools.ShowStrln("not int currently")
 			// we do not care what this number is
 		}
 	}
-	if silly {
+	if !smart {
 		// input not a number or no previous input to refer to
 		if s[len(s)-1] == '\\' {
 			inf[ind] = s[:len(s)-1] + "\n"
@@ -1803,16 +1805,10 @@ func cfmInputOrPromptStr(inf *issueInfos, ind int, prompt string) bool {
 	}
 	//eztools.ShowStrln("smart changing")
 	// smart affix
-	re := regexp.MustCompile(`^[^\d]+`)
-	pref := re.FindStringSubmatch(inf[ind])
-	if pref != nil {
-		// old non-number part + new number
-		inf[ind] = pref[0] + s
-		if eztools.Debugging {
-			eztools.ShowStrln("auto changed to " + inf[ind])
-		}
-		return true
-	}
+	inf[ind] = base + s
+	//if eztools.Debugging {
+	eztools.ShowStrln("auto changed to " + inf[ind])
+	//}
 	return true
 }
 
