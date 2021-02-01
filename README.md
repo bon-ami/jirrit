@@ -72,4 +72,4 @@ Usually, these fields can be seen in an issue's detail.
  - If previous field has a value, [Enter] without any characters will use that value.
  - If previous value is in the format of ".+\-[0-9]+", and the new input is just a number, it will be taken as the number replacing the previous number part.
  - In some cases, input support multiple lines. End an input with "\" to indicate it is a line of multiple ones and continue inputting.
- - In some cases, input ".+\-[0-9]+[,][0-9]+" to batch process all the ID's between, and including, the two numbers.
+ - In some cases, input ".+\-[0-9]+[,][0-9]+" to batch process all the ID's between, and including, the two numbers. Supported for: closure in JIRA; rebase, merge and abandon in Gerrit.

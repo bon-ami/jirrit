@@ -1051,11 +1051,13 @@ func gerritActOnMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 func gerritActOn1WtAnyID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues []issueInfos,
 	action string) ([]issueInfos, error) {
-	issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
-	if err != nil {
-		return nil, err
-	}
-	return gerritActOn1(svr, authInfo, issueInfo, nil, action)
+	return loopIssues(issueInfo, func(issueInfo issueInfos) ([]issueInfos, error) {
+		issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
+		if err != nil {
+			return nil, err
+		}
+		return gerritActOn1(svr, authInfo, issueInfo, nil, action)
+	})
 }
 
 // gerritActOn1 POST changes/ID/action
@@ -1451,12 +1453,16 @@ func parseTypicalJiraNum(num string) (bool, string, int) {
 		parts := strings.Split(pref[0], typicalJiraSeparator)
 		if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
 			i, _ := strconv.Atoi(parts[1])
-			return true, parts[0], i
+			return true, parts[0] + typicalJiraSeparator, i
 		}
 	}
 	return false, "", 0
 }
 
+// loopIssues runs a function on all numbers between, inclusively,
+// X-0 and X-1, or 0,1 from input in format of X-0,1 or 0,1
+// If it is not a range, the function's return values are returned.
+// Otherwise, no return values.
 func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
 	[]issueInfos, error)) ([]issueInfos, error) {
 	const separator = ","
@@ -1470,12 +1476,20 @@ func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
 				separator + "\"")
 			break
 		}
-		ok, prefix, lowerBound := parseTypicalJiraNum(parts[0])
-		if !ok {
-			eztools.LogPrint("the former part must be in the form of X-0")
-			break
+		var (
+			prefix                 string
+			lowerBound, upperBound int
+			err                    error
+		)
+		lowerBound, err = strconv.Atoi(parts[0])
+		if err != nil {
+			var ok bool
+			if ok, prefix, lowerBound = parseTypicalJiraNum(parts[0]); !ok {
+				eztools.LogPrint("the former part must be in the form of X-0")
+				break
+			}
 		}
-		upperBound, err := strconv.Atoi(parts[1])
+		upperBound, err = strconv.Atoi(parts[1])
 		if err != nil {
 			eztools.LogPrint("the latter part must be a number")
 			break
@@ -1485,7 +1499,7 @@ func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
 			break
 		}
 		for i := lowerBound; i <= upperBound; i++ {
-			issueInfo[ISSUEINFO_IND_ID] = prefix + typicalJiraSeparator + strconv.Itoa(i)
+			issueInfo[ISSUEINFO_IND_ID] = prefix + strconv.Itoa(i)
 			_, err := fun(issueInfo)
 			if err != nil {
 				return nil, err
