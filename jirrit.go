@@ -1102,11 +1102,10 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	}
 
 	type map2Marshal map[string]int
-	map4MarshalOrig := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2}
+	map4Marshal := map2Marshal{ISSUEINFO_STR_CODEREVIEW: 2}
 	if len(svr.Score) > 0 {
-		map4MarshalOrig[svr.Score] = 1
+		map4Marshal[svr.Score] = 1
 	}
-	map4Marshal := map4MarshalOrig
 	map4Marshal[ISSUEINFO_STR_VERIFIED] = 1
 	const REST_API_STR = "changes/"
 	for {
@@ -1131,13 +1130,13 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.LogErr(err)
 			return nil, err
 		}
+		//eztools.ShowStrln(string(jsonValue))
 		if eztools.Debugging {
 			if !eztools.ChkCfmNPrompt("continue to +2/1 to "+
 				infWtRev[ISSUEINFO_IND_ID], "n") {
 				return nil, nil
 			}
 		}
-		//eztools.ShowStrln(string(jsonValue))
 		body, err := restSth("POST", svr.URL+REST_API_STR+
 			infWtRev[ISSUEINFO_IND_ID]+"/revisions/"+
 			infWtRev[ISSUEINFO_IND_HEAD]+"/review",
@@ -1150,9 +1149,13 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		if body != nil {
 			bodyBytes, ok := body.([]byte)
 			if ok {
+				if map4Marshal[ISSUEINFO_STR_VERIFIED] == 0 {
+					eztools.LogPrint(bodyBytes)
+					break
+				}
 				if bytes.Contains(bodyBytes, []byte("Verified")) &&
 					bytes.Contains(bodyBytes, []byte("restricted")) {
-					map4Marshal = map4MarshalOrig
+					delete(map4Marshal, ISSUEINFO_STR_VERIFIED)
 					eztools.LogPrint("Retrying to scrore without verify.")
 					continue
 				}
