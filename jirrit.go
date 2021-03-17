@@ -16,7 +16,10 @@ import (
 	"time"
 
 	"github.com/bon-ami/eztools"
+	_ "github.com/go-sql-driver/mysql"
 )
+
+var ver string
 
 const (
 	module          = "jirrit"
@@ -116,17 +119,28 @@ func main() {
 	} else if len(cfg.Log) < 1 {
 		cfg.Log = module + ".log"
 	}
-	if eztools.Debugging {
-		logger, err := os.OpenFile(cfg.Log,
-			os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-		if err == nil {
-			if err = eztools.InitLogger(logger); err != nil {
-				eztools.LogErrPrint(err)
-			}
-		} else {
-			eztools.LogPrint("Failed to open log file " + cfg.Log)
+	//if eztools.Debugging {
+	logger, err := os.OpenFile(cfg.Log,
+		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err == nil {
+		if err = eztools.InitLogger(logger); err != nil {
+			eztools.LogErrPrint(err)
 		}
+	} else {
+		eztools.LogPrint("Failed to open log file " + cfg.Log)
 	}
+	//}
+
+	// self upgrade
+	db, err := eztools.Connect()
+	if err != nil {
+		eztools.LogErrFatal(err)
+	} else {
+		defer db.Close()
+	}
+	upch := make(chan bool)
+	go eztools.AppUpgrade(db, module, ver, nil, upch)
+
 	svr := chooseSvr(cats, cfg.Svrs)
 	if svr != nil {
 		choices := makeActs2Choose(*svr, cats[svr.Type])
@@ -188,6 +202,12 @@ func main() {
 				}
 			}
 		}
+	}
+
+	eztools.ShowStrln("waiting for update check...")
+	if serverGot := <-upch; serverGot {
+		eztools.ShowStrln("waiting for update check to end...")
+		<-upch
 	}
 }
 
@@ -1203,78 +1223,80 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		debugVeri = true
 	}
 	eztools.ShowStr("waiting for issue to be mergable.")
-	for err == nil {
-		// check submittable
-		inf, err = gerritDetail(svr, authInfo, issueInfo)
-		if err != nil {
-			break
-		}
-		if len(inf) < 1 {
-			err = eztools.ErrNoValidResults
-			break
-		}
-		if inf[0][ISSUEINFO_IND_SUBMITTABLE] == "true" {
-			break
-		}
-
-		if debugVeri {
-			// get submit_type
-			inf, err = gerritRev(svr, authInfo, issueInfo)
+	return loopIssues(issueInfo, func(issueInfo issueInfos) ([]issueInfos, error) {
+		for err == nil {
+			// check submittable
+			inf, err = gerritDetail(svr, authInfo, issueInfo)
 			if err != nil {
 				break
 			}
-			if len(inf) != 1 {
+			if len(inf) < 1 {
 				err = eztools.ErrNoValidResults
 				break
 			}
-			submit_type = inf[0][ISSUEINFO_IND_SUBMIT_TYPE]
-		}
+			if inf[0][ISSUEINFO_IND_SUBMITTABLE] == "true" {
+				break
+			}
 
-		// get scores
-		_ /*inf*/, scores, err = gerritReviews2Scores(svr, authInfo, issueInfo)
-		if err != nil {
-			break
-		}
-		/*if len(inf) < 1 {
-			err = eztools.ErrNoValidResults
-			break
-		}*/
-
-		if debugVeri {
-			eztools.Log("Verified=" + strconv.Itoa(scores[ISSUEINFO_IND_VERIFIED]))
-			// MERGE_IF_NECESSARY/FAST_FORWARD_ONLY
-			eztools.Log(ISSUEINFO_STR_SUBMIT_TYPE + "=" +
-				submit_type)
-			debugVeri = false
-		}
-		if scores[ISSUEINFO_IND_CODEREVIEW] < 2 ||
-			(len(svr.Score) > 0 && scores[ISSUEINFO_IND_SCORE] < 1) ||
-			scores[ISSUEINFO_IND_VERIFIED] < 1 {
-			if scored {
-				if scores[ISSUEINFO_IND_VERIFIED] > 0 {
-					err = errors.New("failed to score non-verified field")
+			if debugVeri {
+				// get submit_type
+				inf, err = gerritRev(svr, authInfo, issueInfo)
+				if err != nil {
 					break
 				}
-			} else {
-				_, err = gerritScore(svr, authInfo, inf[0])
-				if err != nil {
-					//break
-					eztools.LogErrPrintWtInfo(
-						"failed to score and wait for it to be scored by elsewhere.",
-						err)
+				if len(inf) != 1 {
+					err = eztools.ErrNoValidResults
+					break
 				}
-				scored = true
+				submit_type = inf[0][ISSUEINFO_IND_SUBMIT_TYPE]
 			}
-		}
 
-		time.Sleep(5 * time.Second)
-		eztools.ShowStr(".")
-	}
-	eztools.ShowStrln("")
-	if err != nil {
-		return nil, err
-	}
-	return gerritMerge(svr, authInfo, issueInfo)
+			// get scores
+			_ /*inf*/, scores, err = gerritReviews2Scores(svr, authInfo, issueInfo)
+			if err != nil {
+				break
+			}
+			/*if len(inf) < 1 {
+				err = eztools.ErrNoValidResults
+				break
+			}*/
+
+			if debugVeri {
+				eztools.Log("Verified=" + strconv.Itoa(scores[ISSUEINFO_IND_VERIFIED]))
+				// MERGE_IF_NECESSARY/FAST_FORWARD_ONLY
+				eztools.Log(ISSUEINFO_STR_SUBMIT_TYPE + "=" +
+					submit_type)
+				debugVeri = false
+			}
+			if scores[ISSUEINFO_IND_CODEREVIEW] < 2 ||
+				(len(svr.Score) > 0 && scores[ISSUEINFO_IND_SCORE] < 1) ||
+				scores[ISSUEINFO_IND_VERIFIED] < 1 {
+				if scored {
+					if scores[ISSUEINFO_IND_VERIFIED] > 0 {
+						err = errors.New("failed to score non-verified field")
+						break
+					}
+				} else {
+					_, err = gerritScore(svr, authInfo, inf[0])
+					if err != nil {
+						//break
+						eztools.LogErrPrintWtInfo(
+							"failed to score and wait for it to be scored by elsewhere.",
+							err)
+					}
+					scored = true
+				}
+			}
+
+			time.Sleep(5 * time.Second)
+			eztools.ShowStr(".")
+		}
+		eztools.ShowStrln("")
+		if err != nil {
+			return nil, err
+		}
+		return gerritMerge(svr, authInfo, issueInfo)
+	})
 }
 
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
