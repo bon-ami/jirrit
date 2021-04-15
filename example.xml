@@ -2,7 +2,7 @@
 <jirrit>
         <user>Allen</user>
         <!-- <log>jirrit.log</log> -->
-                <!-- this password is already BASE64'ed.
+        <!-- this password is already BASE64'ed.
                 same as basic with real password -->
         <pass type="basic">Allen</pass>
         <server type="JIRA" name="BJ">
@@ -11,19 +11,20 @@
         <server type="JIRA" name="CN">
                 <url>http://jira.com/</url>
                 <fields>
+                        <rejectrsn>customfield_10502</rejectrsn>
                         <testpre>customfield_10900</testpre>
                         <teststep>customfield_10901</teststep>
                         <testexp>customfield_10902</testexp>
                 </fields>
         </server>
         <server type="Gerrit" name="common">
-                <pass type="digest">digest</pass>
+                <pass type="digest">Allen</pass>
                 <url>http://gerrit.com:8080/a/</url>
                 <magic>)]}'</magic>
                 <score>Manual-Testing</score>
         </server>
         <server type="Gerrit" name="BJ">
-                <pass type="plain">plain</pass>
+                <pass type="plain">Allen</pass>
                 <url>http://gerrit.bj:8080/a/</url>
                 <magic>)]}'</magic>
         </server>

@@ -55,6 +55,9 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 		issue = new(issueInfos)
 	}
 	for i := 0; i < ISSUEINFO_IND_MAX; i++ {
+		if len(strs[i]) < 1 {
+			continue
+		}
 		// string array to loop?
 		mp, ok := m[strs[i]].(map[string]interface{})
 		if ok {
@@ -168,8 +171,8 @@ func gerritQuery1(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	const REST_API_STR = "changes/?q="
-	return gerritGetDetails(svr.URL+REST_API_STR+
+	const RestAPIStr = "changes/?q="
+	return gerritGetDetails(svr.URL+RestAPIStr+
 		issueInfo[ISSUEINFO_IND_ID]+opt,
 		svr.Magic, authInfo)
 }
@@ -207,9 +210,9 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	const REST_API_STR = "changes/?q="
+	const RestAPIStr = "changes/?q="
 	// +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
-	return gerritGetRevs(svr.URL+REST_API_STR+
+	return gerritGetRevs(svr.URL+RestAPIStr+
 		issueInfo[ISSUEINFO_IND_ID]+"&o=ALL_REVISIONS",
 		svr.Magic, authInfo)
 }
@@ -259,50 +262,55 @@ func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	const REST_API_STR = "changes/"
-	return gerritGetReviews(svr.URL+REST_API_STR+
+	const RestAPIStr = "changes/"
+	return gerritGetReviews(svr.URL+RestAPIStr+
 		issueInfo[ISSUEINFO_IND_ID]+"/reviewers/",
 		svr.Magic, authInfo)
 }
 
-func gerritCheckIDNGetIssues(svr *svrs, authInfo eztools.AuthInfo,
-	url string, issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_BRANCH]) < 1 ||
-		len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
+	status string, issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	return gerritGetIssues(svr.URL+url, svr.Magic, authInfo)
+	var urlAffix string
+	strs := [...][2]string{
+		{"status:", status},
+		{"branch:", issueInfo[ISSUEINFO_IND_BRANCH]},
+		{"owner:", issueInfo[ISSUEINFO_IND_ID]}}
+	for _, v := range strs {
+		if len(v[1]) > 0 {
+			if len(urlAffix) > 0 {
+				urlAffix += "+"
+			}
+			urlAffix += v[0] + v[1]
+		}
+	}
+	const RestAPIStr = "changes/?q="
+	return gerritGetIssues(svr.URL+RestAPIStr+urlAffix, svr.Magic, authInfo)
 }
 
-func gerritSbBraMerged(svr *svrs, authInfo eztools.AuthInfo,
+func gerritSbMerged(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	const REST_API_STR = "changes/?q="
-	return gerritCheckIDNGetIssues(svr, authInfo, REST_API_STR+
-		"status:merged+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
-		"+owner:"+issueInfo[ISSUEINFO_IND_ID], issueInfo)
+	return gerritGetIssuesWtOwner(svr, authInfo, "merged", issueInfo)
 }
 
 func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	eztools.ShowStrln("This may take quite a while...")
-	const REST_API_STR = "changes/"
-	return gerritGetIssues(svr.URL+REST_API_STR, svr.Magic, authInfo)
+	const RestAPIStr = "changes/"
+	return gerritGetIssues(svr.URL+RestAPIStr, svr.Magic, authInfo)
 }
 
 func gerritSbOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	const REST_API_STR = "changes/?q="
-	return gerritCheckIDNGetIssues(svr, authInfo, REST_API_STR+
-		"status:open+branch:"+issueInfo[ISSUEINFO_IND_BRANCH]+
-		"+owner:"+issueInfo[ISSUEINFO_IND_ID], issueInfo)
+	return gerritGetIssuesWtOwner(svr, authInfo, "open", issueInfo)
 }
 
 func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	const REST_API_STR = "changes/?q="
-	return gerritGetIssues(svr.URL+REST_API_STR+
-		/*url.QueryEscape*/ ("status:open+owner:"+authInfo.User),
-		svr.Magic, authInfo)
+	issueInfo[ISSUEINFO_IND_ID] = authInfo.User
+	return gerritGetIssuesWtOwner(svr, authInfo, "open", issueInfo)
 }
 
 func gerritRebase(svr *svrs, authInfo eztools.AuthInfo,
@@ -312,7 +320,27 @@ func gerritRebase(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/submit")
+	return loopIssues(issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
+		issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
+		if err != nil {
+			return issueInfo, err
+		}
+		// check mergable only, without submittable
+		inf, err := gerritDetail(svr, authInfo, issueInfo)
+		if err != nil {
+			return issueInfo, err
+		}
+		if len(inf) < 1 {
+			err = eztools.ErrNoValidResults
+			return issueInfo, err
+		}
+		if inf[0][ISSUEINFO_IND_SUBMITTABLE] == "true" {
+			_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
+			// TODO: check returned slice
+			return issueInfo, err
+		}
+		return issueInfo, eztools.ErrNoValidResults
+	})
 }
 
 func gerritAbandon(svr *svrs, authInfo eztools.AuthInfo,
@@ -349,12 +377,12 @@ func gerritPick1(svr *svrs, authInfo eztools.AuthInfo,
 			" from " + issueInfo[ISSUEINFO_IND_ID] +
 			" to " + issueInfo[ISSUEINFO_IND_BRANCH])
 	}
-	const REST_API_STR = "changes/"
+	const RestAPIStr = "changes/"
 	jsonValue, _ := json.Marshal(map[string]string{
 		//"message": "testing", // if this is a must, I have to read original submit message
 		"destination": issueInfo[ISSUEINFO_IND_BRANCH]})
 	bodyMap, err := restMap("POST", svr.URL+
-		REST_API_STR+issueInfo[ISSUEINFO_IND_ID]+
+		RestAPIStr+issueInfo[ISSUEINFO_IND_ID]+
 		"/revisions/"+issueInfo[ISSUEINFO_IND_HEAD]+
 		"/cherrypick",
 		authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
@@ -432,17 +460,21 @@ func gerritActOnMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 func gerritActOn1WtAnyID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues []issueInfos,
 	action string) ([]issueInfos, error) {
-	return loopIssues(issueInfo, func(issueInfo issueInfos) ([]issueInfos, error) {
+	return loopIssues(issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
 		issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
 		if err != nil {
-			return nil, err
+			return issueInfo, err
 		}
-		return gerritActOn1(svr, authInfo, issueInfo, nil, action)
+		_, err = gerritActOn1(svr, authInfo, issueInfo, nil, action)
+		// TODO: check returned slice
+		return issueInfo, err
 	})
 }
 
 // gerritActOn1 POST changes/ID/action
 // param: issueInfo[ISSUEINFO_IND_ID] unique ID
+// TODO: should returned slice mean anything when input slice is nil?
+//	Currently all discarded
 func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues []issueInfos,
 	action string) ([]issueInfos, error) {
@@ -455,9 +487,9 @@ func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, nil
 		}
 	}
-	const REST_API_STR = "changes/"
+	const RestAPIStr = "changes/"
 	bodyMap, err := restMap("POST", svr.URL+
-		REST_API_STR+issueInfo[ISSUEINFO_IND_ID]+action,
+		RestAPIStr+issueInfo[ISSUEINFO_IND_ID]+action,
 		authInfo, nil, svr.Magic)
 	return gerritParseIssuesOrReviews(bodyMap, issues, issueInfoTxt, nil),
 		err
@@ -488,7 +520,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		map4Marshal[svr.Score] = 1
 	}
 	map4Marshal[ISSUEINFO_STR_VERIFIED] = 1
-	const REST_API_STR = "changes/"
+	const RestAPIStr = "changes/"
 	for {
 		/*// check whether Manual-Testing exists
 		inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
@@ -518,7 +550,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 				return nil, nil
 			}
 		}
-		body, err := restSth("POST", svr.URL+REST_API_STR+
+		body, err := restSth("POST", svr.URL+RestAPIStr+
 			infWtRev[ISSUEINFO_IND_ID]+"/revisions/"+
 			infWtRev[ISSUEINFO_IND_HEAD]+"/review",
 			authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
@@ -578,15 +610,14 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		inf                          []issueInfos
 		scores                       scoreInfos
 		debugVeri, scored, elsewhere bool
-		submit_type                  string
+		submitType                   string
 	)
 	if eztools.Debugging && eztools.Verbose > 1 {
 		debugVeri = true
 	}
-	eztools.ShowStr("waiting for issue to be mergable.")
-	return loopIssues(issueInfo, func(issueInfo issueInfos) ([]issueInfos, error) {
+	eztools.ShowStr("waiting for issue to be submittable.")
+	return loopIssues(issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
 		for err == nil {
-			// check submittable
 			inf, err = gerritDetail(svr, authInfo, issueInfo)
 			if err != nil {
 				break
@@ -609,7 +640,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 					err = eztools.ErrNoValidResults
 					break
 				}
-				submit_type = inf[0][ISSUEINFO_IND_SUBMIT_TYPE]
+				submitType = inf[0][ISSUEINFO_IND_SUBMIT_TYPE]
 			}
 
 			// get scores
@@ -626,7 +657,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				eztools.Log("Verified=" + strconv.Itoa(scores[ISSUEINFO_IND_VERIFIED]))
 				// MERGE_IF_NECESSARY/FAST_FORWARD_ONLY
 				eztools.Log(ISSUEINFO_STR_SUBMIT_TYPE + "=" +
-					submit_type)
+					submitType)
 				debugVeri = false
 			}
 			if scores[ISSUEINFO_IND_CODEREVIEW] < 2 ||
@@ -653,8 +684,10 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		eztools.ShowStrln("")
 		if err != nil {
-			return nil, err
+			return issueInfo, err
 		}
-		return gerritMerge(svr, authInfo, issueInfo)
+		_, err = gerritMerge(svr, authInfo, issueInfo)
+		// TODO: check returned slice
+		return issueInfo, err
 	})
 }

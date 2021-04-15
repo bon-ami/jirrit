@@ -42,9 +42,10 @@ type fields struct {
 	Fld xml.Name `xml:"fields"`
 	//Desc    string   `xml:"desc"`
 	//LinkType []linktypes `xml:"linktype"`
-	TstPre  string `xml:"testpre"`
-	TstStep string `xml:"teststep"`
-	TstExp  string `xml:"testexp"`
+	RejectRsn string `xml:"rejectrsn"`
+	TstPre    string `xml:"testpre"`
+	TstStep   string `xml:"teststep"`
+	TstExp    string `xml:"testexp"`
 }
 type svrs struct {
 	Svr   xml.Name  `xml:"server"`
@@ -143,8 +144,11 @@ func main() {
 	upch := make(chan bool)
 	go eztools.AppUpgrade(db, module, ver, nil, upch)
 
-	svr := chooseSvr(cats, cfg.Svrs)
-	if svr != nil {
+	for {
+		svr := chooseSvr(cats, cfg.Svrs)
+		if svr == nil {
+			break
+		}
 		choices := makeActs2Choose(*svr, cats[svr.Type])
 		for {
 			fun, issueInfo := chooseAct(svr.Type, choices, cats[svr.Type],
@@ -201,6 +205,8 @@ func main() {
 					op(ISSUEINFO_STR_STATE + "/" +
 						ISSUEINFO_STR_SUBMIT_TYPE + "=" +
 						issue[ISSUEINFO_IND_STATE])
+					op(ISSUEINFO_STR_MERGEABLE + "=" +
+						issue[ISSUEINFO_IND_MERGEABLE])
 				}
 			}
 		}
@@ -288,7 +294,9 @@ func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 
 func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 	if svr.Type == CATEGORY_JIRA {
-		if len(svr.Flds.TstExp+svr.Flds.TstPre+svr.Flds.TstStep) < 0 {
+		if len(svr.Flds.TstExp+svr.Flds.TstPre+svr.Flds.TstStep) < 1 {
+			// the last two are to be hidden from choices,
+			// if lack of configuration of Tst*
 			funcs = funcs[:len(funcs)-2]
 		}
 	}
@@ -383,6 +391,58 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 	return
 }
 
+/* get all values from
+sth. {
+	name: value
+	[
+	sth. {
+		name: value
+	}
+	]
+}
+*/
+func getValuesFromMaps(name string, field interface{}) string {
+	//eztools.ShowSthln(field)
+	fieldMap, ok := field.(map[string]interface{})
+	if !ok {
+		eztools.Log(reflect.TypeOf(field).String() +
+			" got instead of map[string]interface{}")
+		return ""
+	}
+	type filterFunc func([]string, map[string]interface{}) []string
+	var fF filterFunc
+	values := make([]string, 0)
+	fF = func(s []string, m map[string]interface{}) []string {
+		for i, v := range m {
+			if i == name {
+				child, ok := v.(string)
+				if !ok {
+					eztools.Log(reflect.TypeOf(v).String() +
+						" got instead of string")
+					continue
+				}
+				s = append(s, child)
+				continue
+			}
+			child, ok := v.([]interface{})
+			if ok {
+				for _, v := range child {
+					child, ok := v.(map[string]interface{})
+					if ok {
+						s = fF(s, child)
+					}
+				}
+			}
+		}
+		return s
+	}
+	values = fF(values, fieldMap)
+	if choice := eztools.ChooseStrings(values); choice != eztools.InvalidID {
+		return values[choice]
+	}
+	return ""
+}
+
 const (
 	// common use
 	ISSUEINFO_IND_ID = iota
@@ -391,6 +451,7 @@ const (
 	ISSUEINFO_IND_PROJ
 	ISSUEINFO_IND_BRANCH
 	ISSUEINFO_IND_STATE
+	ISSUEINFO_IND_EXT // placeholder
 	ISSUEINFO_IND_MAX
 
 	// gerrit state
@@ -398,8 +459,9 @@ const (
 	ISSUEINFO_IND_SUBMITTABLE = iota - ISSUEINFO_IND_MAX
 	ISSUEINFO_IND_VERIFIED
 	ISSUEINFO_IND_CODEREVIEW
-	ISSUEINFO_IND_SCORE
+	ISSUEINFO_IND_SCORE // upper bound of scoreInfos
 	ISSUEINFO_IND_SUBMIT_TYPE
+	ISSUEINFO_IND_MERGEABLE
 
 	// jira details
 	// placeholder for ID
@@ -426,26 +488,28 @@ const (
 	ISSUEINFO_STR_SUBMIT_TYPE = "submit_type" // \
 	ISSUEINFO_STR_APPROVALS   = "approvals"   //
 	ISSUEINFO_STR_STATE       = "status"      // /
+	// gerrit details
+	ISSUEINFO_STR_MERGEABLE = "mergeable"
 )
 
 type issueInfos [ISSUEINFO_IND_MAX]string
-type scoreInfos [ISSUEINFO_IND_SUBMIT_TYPE]int
+type scoreInfos [ISSUEINFO_IND_SCORE + 1]int
 
 var issueInfoTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY, ISSUEINFO_STR_HEAD,
-	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
+	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE, ""}
 var issueDetailsTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_SUBMITTABLE, ISSUEINFO_STR_HEAD,
-	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE}
+	ISSUEINFO_STR_PROJ, ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_STATE, ISSUEINFO_STR_MERGEABLE}
 var issueRevsTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_REV_CUR,
 	ISSUEINFO_STR_PROJ, /*placeholder*/
-	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_SUBMIT_TYPE}
+	ISSUEINFO_STR_BRANCH, ISSUEINFO_STR_SUBMIT_TYPE, ""}
 
 var reviewInfoTxt = issueInfos{
 	ISSUEINFO_STR_ID, ISSUEINFO_STR_NAME, ISSUEINFO_STR_VERIFIED,
 	ISSUEINFO_STR_CODEREVIEW, ISSUEINFO_STR_DISPNAME, /*placeholder for SCORE*/
-	ISSUEINFO_STR_APPROVALS}
+	ISSUEINFO_STR_APPROVALS, ""}
 
 /*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
 ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME,
@@ -520,18 +584,19 @@ func loopStringMap(m map[string]interface{},
 	return ret
 }
 
-func custFld(jsonStr, fldKey, fldVal string, sth *bool) string {
+func custFld(jsonStr, fldKey, fldVal string) string {
 	if len(fldKey) > 0 {
-		if *sth {
+		if len(jsonStr) > 0 {
 			jsonStr += `,
 `
 		}
-		*sth = true
 		return jsonStr + `        "` +
 			fldKey + `": "` + fldVal + `"`
 	}
 	return jsonStr
 }
+
+const typicalJiraSeparator = "-"
 
 // return values
 //	whether input is in exact x-0 format
@@ -554,24 +619,34 @@ func parseTypicalJiraNum(num string) (bool, string, string) {
 // If it is not a range, the function's return values are returned.
 // Otherwise, no return values.
 func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
-	[]issueInfos, error)) ([]issueInfos, error) {
+	issueInfos, error)) (issueInfoOut []issueInfos, err error) {
 	const separator = ","
+	printID := func() {
+		if err == nil {
+			eztools.LogPrint("Done with " + issueInfo[ISSUEINFO_IND_ID])
+		}
+	}
 	switch strings.Count(issueInfo[ISSUEINFO_IND_ID], separator) {
 	case 0:
-		return fun(issueInfo)
+		issueInfo, err := fun(issueInfo)
+		printID()
+		return []issueInfos{issueInfo}, err
 	case 2:
 		parts := strings.Split(issueInfo[ISSUEINFO_IND_ID], separator)
 		if len(parts) != 2 || len(parts[0]) < 1 || len(parts[2]) < 1 {
+			if len(parts) == 3 {
+				// x,y,z instead of range
+				break
+			}
 			eztools.LogPrint("range format needs both parts aside with two \"" +
 				separator + "\"" + " or multiple parts, deliminated by \"" +
 				separator + "\"")
-			break
+			return nil, eztools.ErrInvalidInput
 		}
 		if len(parts[1]) < 0 {
 			var (
 				prefix, lowerBoundStr  string
 				lowerBound, upperBound int
-				err                    error
 			)
 			lowerBound, err = strconv.Atoi(parts[0])
 			if err != nil {
@@ -597,19 +672,22 @@ func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
 			}
 			for i := lowerBound; i <= upperBound; i++ {
 				issueInfo[ISSUEINFO_IND_ID] = prefix + strconv.Itoa(i)
-				_, err := fun(issueInfo)
+				//eztools.ShowStrln("looping " + issueInfo[ISSUEINFO_IND_ID])
+				issueInfo, err = fun(issueInfo)
 				if err != nil {
-					return nil, err
+					return
 				}
+				issueInfoOut = append(issueInfoOut, issueInfo)
+				printID()
 			}
-			return nil, nil
+			return
 		}
 	}
+	// only one separator
 	parts := strings.Split(issueInfo[ISSUEINFO_IND_ID], separator)
 	var (
-		prefix    string
-		currentNo string
-		ok        bool
+		prefix, prefixNew, currentNo string
+		ok                           bool
 	)
 	if ok, prefix, currentNo = parseTypicalJiraNum(parts[0]); !ok {
 		currentNo = parts[0]
@@ -617,18 +695,26 @@ func loopIssues(issueInfo issueInfos, fun func(issueInfos) (
 	i := 1
 	for {
 		issueInfo[ISSUEINFO_IND_ID] = prefix + currentNo
-		_, err := fun(issueInfo)
+		//eztools.ShowStrln("looping " + issueInfo[ISSUEINFO_IND_ID])
+		issueInfo, err = fun(issueInfo)
 		if err != nil {
-			return nil, err
+			return
 		}
+		issueInfoOut = append(issueInfoOut, issueInfo)
+		printID()
 		if i < len(parts) {
-			currentNo = parts[i]
+			if ok, prefixNew, currentNo = parseTypicalJiraNum(parts[i]); !ok {
+				// reuse old prefix
+				currentNo = parts[i]
+			} else {
+				prefix = prefixNew
+			}
 			i++
 		} else {
 			break
 		}
 	}
-	return nil, nil
+	return
 }
 
 func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
@@ -722,6 +808,7 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"abandon a submit",
 			"show revision/commit of a submit",
 			"add scores to a submit",
+			"reject a case from any known statues",
 			"merge a submit",
 			"add socres, wait for it to be mergable and merge a submit":
 			useInputOrPrompt(inf, ISSUEINFO_IND_ID)
@@ -752,7 +839,7 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 }
 
 func makeCat2Act() cat2Act {
-	c := cat2Act{
+	return cat2Act{
 		CATEGORY_JIRA: []action2Func{
 			{"transfer a case to someone", jiraTransfer},
 			{"move status of a case", jiraTransition},
@@ -761,6 +848,7 @@ func makeCat2Act() cat2Act {
 			{"add a comment to a case", jiraAddComment},
 			{"list my open cases", jiraMyOpen},
 			{"link a case to the other", jiraLink},
+			{"reject a case from any known statues", jiraReject},
 			{"close a case to resolved from any known statues", jiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
@@ -768,7 +856,7 @@ func makeCat2Act() cat2Act {
 			{"close a case with general requirement as steps", jiraCloseGen},
 		},
 		CATEGORY_GERRIT: []action2Func{
-			{"list merged submits of someone", gerritSbBraMerged},
+			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
 			{"list sb.'s open submits", gerritSbOpen},
 			{"list all my open revisions/commits", gerritRevs},
@@ -786,5 +874,4 @@ func makeCat2Act() cat2Act {
 			{"cherry pick all my open submits", gerritPickMyOpen},
 			{"cherry pick a submit", gerritPick},
 		}}
-	return c
 }
