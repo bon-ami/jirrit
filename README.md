@@ -13,13 +13,13 @@
  - `-c string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-l string` provide a log file. It defaults to jirrit.log under current dir.
 
-## Config xml
+## Config xml fff
 
-  As shown in example.xml, root name is jirrit.
+  As shown in example.xml, root name is **jirrit**.<BR>
   An overall config of user name and password is shown.
   Server types are Jira and Gerrit.
   Names need to be unique within each type.
-  url is needed for every server. pass can be provided, if not same as overall config.
+  **url** is needed for every server. **pass** can be provided, if not same as overall config.
 
   Three kinds of passwords can be configured.
   - basic is the plain text password.
@@ -28,6 +28,7 @@
 
   For Jira servers, there may be more to config for issue closure with some fields filled.
 Usually, these fields can be seen in an issue's detail.
+  - rejectrsn is the field name for reject reasons.
   - testpre is the field name for test condition.
   - teststep is the field name for test steps.
   - testexp is the field name for test expectation.
@@ -38,38 +39,40 @@ Usually, these fields can be seen in an issue's detail.
 ## Actions
 
 - Jira
-  - transfer an issue
-  - change an issue's state
-  - show details of an issue
+  - transfer a case to someone
+  - move status of a case
+  - show details of a case
   - list comments of a case
   - add a comment to a case
-  - list my open issues
+  - list my open cases
   - link a case to the other
-  - change an issue's states from open all the way to resolved
-  - resolve an issue, adding test condition="none", steps="default design" and expectation="none"
-  - resolve an issue, adding test condition="none", steps="general requirement" and expectation="none"
+  - reject a case from any known statues
+  - close a case to resolved from any known statues (change it to resolved)
+  - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
+  - close a case with general requirement as steps (change it to resolved, adding test condition="none", steps="general requirement" and expectation="none")
+
 - Gerrit
-  - list merged commits by branch and assignee
-  - list my open commits
-  - list an assignee's open commits
-  - list all open commits
-  - show details of an commit by commit ID or change ID
-  - show current revision of a commit
-  - show current revision of all my open commits
-  - show reviewing scores of a commit
-  - rebase a commit
-  - merge a commit
-  - wait for a commit to be mergable and merge it, adding scores when needed
-  - for all open commits of a branch by an assignee, wait them to be mergable and merge them, adding scores when needed
-  - Code-Review +2, Verified +1, (and Manual-Testing, or other field as configured, +1) to a commit
-  - abandon all my open commits
-  - abandon a commit
-  - cherry pick all my open commits
-  - cherry pick a commit 
+  - list merged submits of someone
+  - list my open submits
+  - list sb.'s open submits
+  - list all my open revisions/commits
+  - list all open submits
+  - show details of a submit (by commit ID or change ID)
+  - show reviewers of a submit
+  - show revision/commit of a submit
+  - rebase a submit
+  - merge a submit
+  - add scores to a submit (Code-Review +2, Verified +1, (and Manual-Testing, or other field as configured, +1))
+  - add socres, wait for it to be mergable and merge a submit
+  - add socres, wait for it to be mergable and merge sb.'s submits
+  - abandon all my open submits
+  - abandon a submit
+  - cherry pick all my open submits
+  - cherry pick a submit
 
 ## Input grammar
 
- - If previous field has a value, [Enter] without any characters will use that value.
- - If previous value is in the format of ".+\-[0-9]+", and the new input is just a number, it will be taken as the number replacing the previous number part.
+ - For most prompts, [Enter] without default value as shown is taken as an invalid input and return to previous menu.
+ - If previous value is in the format of ".+\-[0-9]+", or X-0, to be easier to read, and the new input is just a number, it will be taken as the number replacing the previous number part.
  - In some cases, input support multiple lines. End an input with "\" to indicate it is a line of multiple ones and continue inputting.
- - In some cases, input ".+\-[0-9]+[,][0-9]+" to batch process all the ID's between, and including, the two numbers. Supported for: closure in JIRA; rebase, merge and abandon in Gerrit.
+ - In some cases, input ".+\-[0-9]+[,][,][0-9]+", or "X-0,,1", or "0,,1", to be easier to read, to batch process all the ID's between, and including, the two numbers. Input "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.) Supported for: closure in JIRA; rebase, merge and abandon in Gerrit.
