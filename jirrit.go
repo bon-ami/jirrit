@@ -135,14 +135,8 @@ func main() {
 	//}
 
 	// self upgrade
-	db, err := eztools.Connect()
-	if err != nil {
-		eztools.LogErrFatal(err)
-	} else {
-		defer db.Close()
-	}
 	upch := make(chan bool)
-	go eztools.AppUpgrade(db, module, ver, nil, upch)
+	go chkUpdate(upch)
 
 	for {
 		svr := chooseSvr(cats, cfg.Svrs)
@@ -213,10 +207,21 @@ func main() {
 	}
 
 	eztools.ShowStrln("waiting for update check...")
-	if serverGot := <-upch; serverGot {
+	if <-upch {
 		eztools.ShowStrln("waiting for update check to end...")
 		<-upch
 	}
+}
+
+func chkUpdate(upch chan bool) {
+	db, err := eztools.Connect()
+	if err != nil {
+		upch <- false
+		eztools.LogErr(err)
+	} else {
+		defer db.Close()
+	}
+	eztools.AppUpgrade(db, module, ver, nil, upch)
 }
 
 func cfg2AuthInfo(svr svrs, cfg cfgs) (authInfo eztools.AuthInfo, err error) {
