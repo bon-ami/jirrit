@@ -19,24 +19,24 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 			continue
 		}*/
 		switch i {
-		case ISSUEINFO_STR_ASSIGNEE:
+		case IssueinfoStrAssignee:
 			changed = chkNLoopStringMap(v, "",
-				ISSUEINFO_STR_DISPNAME,
-				&issueInfo[ISSUEINFO_IND_DISPNAME]) || changed
-		case ISSUEINFO_STR_PROJ:
+				IssueinfoStrDispname,
+				&issueInfo[IssueinfoIndDispname]) || changed
+		case IssueinfoStrProj:
 			changed = chkNLoopStringMap(v, "",
-				ISSUEINFO_STR_KEY,
-				&issueInfo[ISSUEINFO_IND_PROJ]) || changed
-		case ISSUEINFO_STR_STATE:
+				IssueinfoStrKey,
+				&issueInfo[IssueinfoIndProj]) || changed
+		case IssueinfoStrState:
 			changed = chkNLoopStringMap(v, "",
-				ISSUEINFO_STR_NAME,
-				&issueInfo[ISSUEINFO_IND_STATE]) || changed
-		case ISSUEINFO_STR_SUMMARY:
+				IssueinfoStrName,
+				&issueInfo[IssueinfoIndState]) || changed
+		case IssueinfoStrSummary:
 			changed = chkNSetIssueInfo(v, issueInfo,
-				ISSUEINFO_IND_HEAD) || changed
-		case ISSUEINFO_STR_DESC:
+				IssueinfoIndHead) || changed
+		case IssueinfoStrDesc:
 			changed = chkNSetIssueInfo(v, issueInfo,
-				ISSUEINFO_IND_DESC) || changed
+				IssueinfoIndDesc) || changed
 		}
 	}
 	return
@@ -45,7 +45,7 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 func jiraParse1Issue(svr *svrs, m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	changed = loopStringMap(m, "fields",
-		ISSUEINFO_STR_KEY, &issueInfo[ISSUEINFO_IND_KEY],
+		IssueinfoStrKey, &issueInfo[IssueinfoIndKey],
 		func(i string, v interface{}) bool {
 			// id, self ignored
 			fields, ok := v.(map[string]interface{})
@@ -102,10 +102,10 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 		return true
 	}
 	loopStringMap(m, "transitions", "", nil, f)
-	if eztools.Debugging && eztools.Verbose > 2 {
+	/*if eztools.Debugging && eztools.Verbose > 2 {
 		eztools.ShowSthln(tranNames)
 		eztools.ShowSthln(tranIDs)
-	}
+	}*/
 	return
 }
 
@@ -149,16 +149,16 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		changed = cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_HEAD, "change to assignee") || changed
-		changed = cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_PROJ, "change to component") || changed
+		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndHead, "change to assignee") || changed
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndComment, "change to component") || changed
 		if !changed {
 			return nil, nil
 		}
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
-			/*(*/ len(issueInfo[ISSUEINFO_IND_HEAD]) < 1 { //&&
+		if len(issueInfo[IssueinfoIndID]) < 1 ||
+			/*(*/ len(issueInfo[IssueinfoIndHead]) < 1 { //&&
 			//len(issueInfo[ISSUEINFO_IND_PROJ]) < 1) {
 			return nil, eztools.ErrInvalidInput
 		}
@@ -189,21 +189,21 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 			err     error
 			s       sets
 		)
-		if len(issueInfo[ISSUEINFO_IND_PROJ]) > 0 {
+		if len(issueInfo[IssueinfoIndComment]) > 0 {
 			var (
 				upCA updateCA
 				is   insets
 				ss   setss
 			)
-			is.Name = issueInfo[ISSUEINFO_IND_PROJ]
+			is.Name = issueInfo[IssueinfoIndComment]
 			ss.Set = append(ss.Set, is)
 			upCA.Update.Components = []setss{ss}
-			s.Set.Name = issueInfo[ISSUEINFO_IND_HEAD]
+			s.Set.Name = issueInfo[IssueinfoIndHead]
 			upCA.Update.Assignee = []sets{s}
 			jsonStr, err = json.Marshal(upCA)
 		} else {
 			var upA updateA
-			s.Set.Name = issueInfo[ISSUEINFO_IND_HEAD]
+			s.Set.Name = issueInfo[IssueinfoIndHead]
 			upA.Update.Assignee = []sets{s}
 			jsonStr, err = json.Marshal(upA)
 		}
@@ -212,7 +212,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		//eztools.ShowByteln(jsonStr)
 		bodyMap, err := restMap(eztools.METHOD_PUT,
-			svr.URL+RestAPIStr+issueInfo[ISSUEINFO_IND_ID],
+			svr.URL+RestAPIStr+issueInfo[IssueinfoIndID],
 			authInfo, bytes.NewReader(jsonStr), svr.Magic)
 		if err != nil {
 			return nil, err
@@ -297,14 +297,14 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo *issueInfos) error) ([]issueInfos, error) {
 	firstRun := true
 	for {
-		if !cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID) && !firstRun {
+		if !cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID) && !firstRun {
 			return nil, nil
 		}
 		firstRun = false
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		if len(issueInfo[IssueinfoIndID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
-		_, err := loopIssues(issueInfo, func(issueInfo issueInfos) (
+		_, err := loopIssues(svr, issueInfo, func(issueInfo issueInfos) (
 			issueInfos, error) {
 			if fun != nil {
 				if err := fun(svr, authInfo, &issueInfo); err != nil {
@@ -322,7 +322,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 				}
 				if len(tranNames) < 1 || len(tranIDs) < 1 {
 					tranNames, tranIDs, err = jiraGetTrans(svr, authInfo,
-						issueInfo[ISSUEINFO_IND_ID], tran)
+						issueInfo[IssueinfoIndID], tran)
 					if err != nil {
 						return issueInfo, err
 					}
@@ -338,7 +338,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 				tranNames = nil
 				tranIDs = nil
 				err = jiraTranExec(svr, authInfo,
-					issueInfo[ISSUEINFO_IND_ID], tranID)
+					issueInfo[IssueinfoIndID], tranID)
 				if err != nil {
 					return issueInfo, err
 				}
@@ -366,7 +366,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_PUT,
 		svr.URL+RestAPIStr+
-			issueInfo[ISSUEINFO_IND_ID],
+			issueInfo[IssueinfoIndID],
 		authInfo, strings.NewReader(jsonStr),
 		svr.Magic)
 	if err != nil {
@@ -410,36 +410,36 @@ func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (inte
 func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo *issueInfos) (jsonStr string) {
 	if len(svr.Flds.RejectRsn) > 0 {
-		if len(issueInfo[ISSUEINFO_IND_DESC]) < 1 {
+		if len(issueInfo[IssueinfoIndDesc]) < 1 {
 			// get all possible reasons
-			field, err := jiraEditMeta(svr, authInfo, issueInfo[ISSUEINFO_IND_ID],
+			field, err := jiraEditMeta(svr, authInfo, issueInfo[IssueinfoIndID],
 				svr.Flds.RejectRsn)
 			if err != nil {
 				eztools.LogErr(err)
 			} else {
-				issueInfo[ISSUEINFO_IND_DESC] = getValuesFromMaps("value", field)
+				issueInfo[IssueinfoIndDesc] = getValuesFromMaps("value", field)
 			}
-			if len(issueInfo[ISSUEINFO_IND_DESC]) < 1 {
+			if len(issueInfo[IssueinfoIndDesc]) < 1 {
 				eztools.Log("NO choices found for " + svr.Flds.RejectRsn)
-				cfmInputOrPromptStr(issueInfo,
-					ISSUEINFO_IND_DESC, "reject reason")
+				cfmInputOrPromptStr(svr, issueInfo,
+					IssueinfoIndDesc, "reject reason")
 			}
 		}
-		if len(issueInfo[ISSUEINFO_IND_DESC]) > 0 {
+		if len(issueInfo[IssueinfoIndDesc]) > 0 {
 			for i, v := range map[string]string{
-				"value": issueInfo[ISSUEINFO_IND_DESC]} {
+				"value": issueInfo[IssueinfoIndDesc]} {
 				jsonStr = custFld(jsonStr, i, v)
 			}
 			if len(jsonStr) < 1 {
 				eztools.LogPrint("NO RejectRsn field " +
 					"defined for this server")
-				issueInfo[ISSUEINFO_IND_DESC] = ""
+				issueInfo[IssueinfoIndDesc] = ""
 			} else {
 				jsonStr = `        "` + svr.Flds.RejectRsn + `": {` + jsonStr + `}`
 			}
 		}
 	} else {
-		issueInfo[ISSUEINFO_IND_DESC] = ""
+		issueInfo[IssueinfoIndDesc] = ""
 	}
 	return
 }
@@ -449,14 +449,14 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	Steps := []string{"Back to process",
 		"Resolved", "SCM integrating", "Verify failed", "Reopen",
 		"Implementing", "Reject"}
-	cfmInputOrPromptStr(&issueInfo,
-		ISSUEINFO_IND_COMMENT, "comment to add")
+	cfmInputOrPromptStr(svr, &issueInfo,
+		IssueinfoIndComment, "comment to add")
 	var jsonStr string
 	firstRun := true
 	return jiraFuncNTran(svr, authInfo, issueInfo, Steps,
 		func(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo *issueInfos) error {
-			if len(issueInfo[ISSUEINFO_IND_COMMENT]) > 0 {
+			if len(issueInfo[IssueinfoIndComment]) > 0 {
 				_, err := jiraAddComment1(svr, authInfo, *issueInfo)
 				if err != nil {
 					eztools.LogErrPrint(err)
@@ -510,7 +510,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[ISSUEINFO_IND_COMMENT])
+	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[IssueinfoIndComment])
 }
 
 func jiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
@@ -528,12 +528,12 @@ func jiraCloseGen(svr *svrs, authInfo eztools.AuthInfo,
 func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		if len(issueInfo[IssueinfoIndID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 		names, ids, err := jiraGetTrans(svr, authInfo,
-			issueInfo[ISSUEINFO_IND_ID], "")
+			issueInfo[IssueinfoIndID], "")
 		if err != nil {
 			return nil, err
 		}
@@ -542,7 +542,7 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 			continue
 		}
 		err = jiraTranExec(svr, authInfo,
-			issueInfo[ISSUEINFO_IND_ID], tranID)
+			issueInfo[IssueinfoIndID], tranID)
 		if err != nil {
 			return nil, err
 		}
@@ -559,18 +559,18 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 			outward: "blocks"}}
 	linkType := eztools.InvalidID
 	for {
-		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		if len(issueInfo[IssueinfoIndID]) < 1 {
 			return nil, nil
 		}
-		if len(issueInfo[ISSUEINFO_IND_STATE]) < 1 {
-			issueInfo[ISSUEINFO_IND_STATE] = issueInfo[ISSUEINFO_IND_ID]
+		if len(issueInfo[IssueinfoIndState]) < 1 {
+			issueInfo[IssueinfoIndState] = issueInfo[IssueinfoIndID]
 		}
-		changed = cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_STATE, "id to relate to") || changed
-		if len(issueInfo[ISSUEINFO_IND_STATE]) < 1 ||
-			issueInfo[ISSUEINFO_IND_STATE] ==
-				issueInfo[ISSUEINFO_IND_ID] {
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndState, "id to relate to") || changed
+		if len(issueInfo[IssueinfoIndState]) < 1 ||
+			issueInfo[IssueinfoIndState] ==
+				issueInfo[IssueinfoIndID] {
 			return nil, nil
 		}
 		i := eztools.ChooseStringsWtIDs(
@@ -593,8 +593,8 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, nil
 		}
 		linkType = i
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
-			len(issueInfo[ISSUEINFO_IND_STATE]) < 1 {
+		if len(issueInfo[IssueinfoIndID]) < 1 ||
+			len(issueInfo[IssueinfoIndState]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 		type ils struct {
@@ -620,7 +620,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		il.Add.Type["inward"] = linkChoices[linkType].inward
 		il.Add.Type["name"] = linkChoices[linkType].name
 		il.Add.Type["outward"] = linkChoices[linkType].outward
-		il.Add.II[ISSUEINFO_STR_KEY] = issueInfo[ISSUEINFO_IND_STATE]
+		il.Add.II[IssueinfoStrKey] = issueInfo[IssueinfoIndState]
 		jstru.Update.IL = append(jstru.Update.IL, il)
 		jsonStr, err = json.Marshal(jstru)
 		if err != nil {
@@ -629,7 +629,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		//eztools.ShowByteln(jsonStr)
 		const RestAPIStr = "rest/api/latest/issue/"
 		bodyMap, err := restMap(eztools.METHOD_PUT, svr.URL+RestAPIStr+
-			issueInfo[ISSUEINFO_IND_ID],
+			issueInfo[IssueinfoIndID],
 			authInfo, bytes.NewReader(jsonStr), svr.Magic)
 		if err != nil {
 			return nil, err
@@ -643,14 +643,14 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	for {
-		changed := cfmInputOrPrompt(&issueInfo, ISSUEINFO_IND_ID)
-		changed = cfmInputOrPromptStr(&issueInfo,
-			ISSUEINFO_IND_COMMENT, "comment to add") || changed
+		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndComment, "comment to add") || changed
 		if !changed {
 			return nil, nil
 		}
-		if len(issueInfo[ISSUEINFO_IND_ID]) < 1 ||
-			len(issueInfo[ISSUEINFO_IND_COMMENT]) < 1 {
+		if len(issueInfo[IssueinfoIndID]) < 1 ||
+			len(issueInfo[IssueinfoIndComment]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 		if _, err := jiraAddComment1(svr, authInfo, issueInfo); err != nil {
@@ -669,7 +669,7 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 		err     error
 		cmt     comment1
 	)
-	cmt.Comment1 = issueInfo[ISSUEINFO_IND_COMMENT]
+	cmt.Comment1 = issueInfo[IssueinfoIndComment]
 	jsonStr, err = json.Marshal(cmt)
 	if err != nil {
 		return nil, err
@@ -677,7 +677,7 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 	//eztools.ShowByteln(jsonStr)
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
-		issueInfo[ISSUEINFO_IND_ID]+"/comment",
+		issueInfo[IssueinfoIndID]+"/comment",
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
 		return nil, err
@@ -690,12 +690,31 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
-		issueInfo[ISSUEINFO_IND_ID]+"/lcomment",
+		issueInfo[IssueinfoIndID]+"/comment",
+		authInfo, nil, svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	return nil, err
+}
+
+// TODO: input param not used
+func jiraSearchCommentsByProjNUser(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndComment]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"/comment",
 		authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -708,12 +727,12 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[ISSUEINFO_IND_ID]) < 1 {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
-		issueInfo[ISSUEINFO_IND_ID], authInfo, nil, svr.Magic)
+		issueInfo[IssueinfoIndID], authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
 	}

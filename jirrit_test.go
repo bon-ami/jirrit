@@ -22,10 +22,10 @@ func runFunc(fun action2Func, svr *svrs, cfg cfgs) (string, bool) {
 		return fun.n + " failed", false
 	}
 	for _, issue := range issues {
-		eztools.ShowStrln("Issuse ID=" + issue[ISSUEINFO_IND_ID])
-		eztools.ShowStrln("Issuse HEAD=" + issue[ISSUEINFO_IND_HEAD])
-		eztools.ShowStrln("Issuse PROJ=" + issue[ISSUEINFO_IND_PROJ])
-		eztools.ShowStrln("Issuse BRANCH=" + issue[ISSUEINFO_IND_BRANCH])
+		eztools.ShowStrln("Issuse ID=" + issue[IssueinfoIndID])
+		eztools.ShowStrln("Issuse HEAD=" + issue[IssueinfoIndHead])
+		eztools.ShowStrln("Issuse PROJ=" + issue[IssueinfoIndProj])
+		eztools.ShowStrln("Issuse BRANCH=" + issue[IssueinfoIndBranch])
 	}
 	return "", true
 }
@@ -73,19 +73,19 @@ func test1(t *testing.T, cat, fun string) {
 }
 
 func TestJira(t *testing.T) {
-	test1(t, CATEGORY_JIRA, "")
+	test1(t, CategoryJira, "")
 }
 
 func TestGerrit(t *testing.T) {
-	test1(t, CATEGORY_GERRIT, "")
+	test1(t, CategoryGerrit, "")
 }
 
 func TestGerritAllOpen(t *testing.T) {
-	test1(t, CATEGORY_GERRIT, "all open")
+	test1(t, CategoryGerrit, "all open")
 }
 
 func TestGerritMyOpen(t *testing.T) {
-	test1(t, CATEGORY_GERRIT, "my open")
+	test1(t, CategoryGerrit, "my open")
 }
 
 func TestMain(t *testing.T) {
