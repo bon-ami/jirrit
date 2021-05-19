@@ -154,7 +154,6 @@ func main() {
 		if svr == nil {
 			break
 		}
-		eztools.ShowSthln(svr)
 		choices := makeActs2Choose(*svr, cats[svr.Type])
 		for {
 			fun, issueInfo := chooseAct(svr.Type, choices, cats[svr.Type],
