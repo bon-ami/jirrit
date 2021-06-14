@@ -13,6 +13,9 @@ import (
 func jiraParse1Field(svr *svrs, m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	for i, v := range m {
+		if v == nil {
+			continue
+		}
 		/*if len(svr.Flds.Desc) > 0 && i == svr.Flds.Desc {
 			changed = chkNSetIssueInfo(v, issueInfo,
 				ISSUEINFO_IND_DESC) || changed
@@ -277,6 +280,9 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return err
 	}
+	if eztools.Debugging && eztools.Verbose > 1 {
+		eztools.Log("Processing " + id)
+	}
 	//eztools.ShowByteln(jsonStr)
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
@@ -306,6 +312,9 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		_, err := loopIssues(svr, issueInfo, func(issueInfo issueInfos) (
 			issueInfos, error) {
+			if eztools.Debugging && eztools.Verbose > 1 {
+				eztools.Log("Processing " + issueInfo[IssueinfoIndID])
+			}
 			if fun != nil {
 				if err := fun(svr, authInfo, &issueInfo); err != nil {
 					return issueInfo, err
@@ -362,6 +371,9 @@ func jiraConstructFields(in string) string {
 func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo *issueInfos, jsonInner string) error {
 	jsonStr := jiraConstructFields(jsonInner)
+	if eztools.Debugging && eztools.Verbose > 1 {
+		eztools.Log("Processing " + issueInfo[IssueinfoIndID])
+	}
 	//eztools.ShowStrln(jsonStr)
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_PUT,

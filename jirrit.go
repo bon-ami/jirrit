@@ -19,6 +19,7 @@ import (
 var (
 	ver, cfgFile string
 	cfg          cfgs
+	uiSilent     bool
 )
 
 const (
@@ -78,7 +79,8 @@ type cfgs struct {
 func main() {
 	var (
 		paramH, paramV, paramVV, paramVVV bool
-		paramID, paramBra, paramCfg, paramLog,
+		paramR, paramA,
+		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
 	)
 	flag.BoolVar(&paramH, "h", false, "help message")
@@ -87,9 +89,11 @@ func main() {
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
 	flag.BoolVar(&paramVVV, "vvv", false,
 		"verbose messages with network I/O")
-	flag.StringVar(&paramID, "i", "",
+	flag.StringVar(&paramR, "r", "", "server name, to be together with -a")
+	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
+	flag.StringVar(&paramI, "i", "",
 		"ID of issue, change, commit or assignee")
-	flag.StringVar(&paramBra, "b", "", "branch")
+	flag.StringVar(&paramB, "b", "", "branch")
 	flag.StringVar(&paramHD, "hd", "",
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
@@ -109,7 +113,16 @@ func main() {
 		eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
 		eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
 		eztools.ShowStrln(" 3. ID range, such as 0,,2 or X-0,2")
+		eztools.ShowStrln("")
 		flag.Usage()
+		eztools.ShowStrln("")
+		eztools.ShowStrln("action strings, to be used with server name, \"r\", only, and that will eliminate interactions in UI:")
+		for cat, i := range makeCat2Act() {
+			eztools.ShowStrln("\t\t" + cat)
+			for _, j := range i {
+				eztools.ShowStrln("\t" + j.n)
+			}
+		}
 		return
 	}
 	eztools.Debugging = paramV || paramVV || paramVVV
@@ -149,23 +162,73 @@ func main() {
 	upch := make(chan bool)
 	go chkUpdate(upch)
 
-	for {
-		svr := chooseSvr(cats, cfg.Svrs)
-		if svr == nil {
-			break
-		}
-		choices := makeActs2Choose(*svr, cats[svr.Type])
-		for {
-			fun, issueInfo := chooseAct(svr.Type, choices, cats[svr.Type],
-				issueInfos{
-					IssueinfoIndID:      paramID,
-					IssueinfoIndHead:    paramHD,
-					IssueinfoIndProj:    paramP,
-					IssueinfoIndBranch:  paramBra,
-					IssueinfoIndState:   paramS,
-					IssueinfoIndComment: paramC})
-			if fun == nil {
+	var (
+		svr       *svrs
+		fun       actionFunc
+		issueInfo issueInfos
+		choices   []string
+		op        func(...interface{})
+	)
+	if eztools.Debugging && eztools.Verbose > 0 {
+		op = eztools.LogPrint
+	} else {
+		op = eztools.ShowSthln
+	}
+	if len(paramR) > 0 {
+		for i, v := range cfg.Svrs {
+			if paramR == v.Name {
+				svr = &cfg.Svrs[i]
 				break
+			}
+		}
+		if svr == nil {
+			eztools.LogPrint("Unknown server " + paramR)
+		} else {
+			if len(paramA) > 0 {
+				for _, v := range cats[svr.Type] {
+					if paramA == v.n {
+						uiSilent = true
+						fun = v.f
+						issueInfo = issueInfos{
+							IssueinfoIndID:      paramI,
+							IssueinfoIndHead:    paramHD,
+							IssueinfoIndProj:    paramP,
+							IssueinfoIndBranch:  paramB,
+							IssueinfoIndState:   paramS,
+							IssueinfoIndComment: paramC}
+						eztools.Log("runtime params: server=" +
+							svr.Name + ", action=" + v.n +
+							", info array:")
+						eztools.Log(issueInfo)
+						break
+					}
+				}
+			}
+		}
+	}
+	for ; ; svr = nil {
+		if svr == nil {
+			svr = chooseSvr(cats, cfg.Svrs)
+			if svr == nil {
+				break
+			}
+		}
+		if fun == nil {
+			choices = makeActs2Choose(*svr, cats[svr.Type])
+		}
+		for ; ; fun = nil {
+			if fun == nil {
+				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
+					issueInfos{
+						IssueinfoIndID:      paramI,
+						IssueinfoIndHead:    paramHD,
+						IssueinfoIndProj:    paramP,
+						IssueinfoIndBranch:  paramB,
+						IssueinfoIndState:   paramS,
+						IssueinfoIndComment: paramC})
+				if fun == nil {
+					break
+				}
 			}
 			authInfo, err := cfg2AuthInfo(*svr, cfg)
 			if err != nil {
@@ -175,12 +238,6 @@ func main() {
 			issues, err := fun(svr, authInfo, issueInfo)
 			if err != nil {
 				eztools.LogErrFatal(err)
-			}
-			var op func(...interface{})
-			if eztools.Debugging && eztools.Verbose > 0 {
-				op = eztools.LogPrint
-			} else {
-				op = eztools.ShowSthln
 			}
 			if issues == nil {
 				op("No results.")
@@ -213,6 +270,12 @@ func main() {
 						issue[IssueinfoIndMergeable])
 				}
 			}
+			if choices == nil {
+				break
+			}
+		}
+		if choices == nil {
+			break
 		}
 	}
 
@@ -578,6 +641,22 @@ const (
 type issueInfos [IssueinfoIndMax]string
 type scoreInfos [IssueinfoIndScore + 1]int
 
+func (issueInfo *issueInfos) String() string {
+	var res string
+	for _, v := range issueInfo {
+		switch len(res) {
+		case 0:
+			res += "[ "
+		default:
+			res += ", "
+
+		}
+		res += "\"" + v + "\""
+	}
+	res += " ]"
+	return res
+}
+
 var issueInfoTxt = issueInfos{
 	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrHead,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, ""}
@@ -602,6 +681,10 @@ ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
 ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
 
 func chkNSetIssueInfo(v interface{}, issueInfo *issueInfos, i int) bool {
+	if v == nil {
+		eztools.Log("nil got, not string")
+		return false
+	}
 	str, ok := v.(string)
 	if !ok {
 		eztools.LogPrint(reflect.TypeOf(v).String() +
@@ -737,15 +820,14 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		return []issueInfos{issueInfo}, err
 	case 2: // x,,y or x,y,z
 		parts := strings.Split(issueInfo[IssueinfoIndID], separator)
+		//eztools.Log(parts)
 		if len(parts) != 2 || len(parts[0]) < 1 || len(parts[2]) < 1 {
-			if len(parts) == 3 {
-				// x,y,z instead of range
-				break
+			if len(parts) != 3 {
+				eztools.LogPrint("range format needs both parts aside with two \"" +
+					separator + "\"" + " or multiple parts, deliminated by \"" +
+					separator + "\"")
+				return nil, eztools.ErrInvalidInput
 			}
-			eztools.LogPrint("range format needs both parts aside with two \"" +
-				separator + "\"" + " or multiple parts, deliminated by \"" +
-				separator + "\"")
-			return nil, eztools.ErrInvalidInput
 		}
 		if len(parts[1]) < 1 { // x,,y
 			var (
@@ -765,7 +847,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 					return
 				}
 			}
-			upperBound, err = strconv.Atoi(parts[1])
+			upperBound, err = strconv.Atoi(parts[2])
 			if err != nil {
 				eztools.LogPrint("the latter part must be a number")
 				return
@@ -776,15 +858,18 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 			}
 			for i := lowerBound; i <= upperBound; i++ {
 				issueInfo[IssueinfoIndID] = prefix + strconv.Itoa(i)
-				//eztools.ShowStrln("looping " + issueInfo[ISSUEINFO_IND_ID])
+				//eztools.ShowStrln("looping " + issueInfo[IssueinfoIndID])
 				issueInfo, err = fun(issueInfo)
-				if err != nil {
+				/*if err != nil {
 					return
-				}
+				}*/ // let it work for the next
 				issueInfoOut = append(issueInfoOut, issueInfo)
 				printID()
 			}
 			return
+		} else {
+			// x,y,z instead of range
+			break
 		}
 	}
 	// x,y[,...]
@@ -799,11 +884,11 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	i := 1
 	for {
 		issueInfo[IssueinfoIndID] = prefix + currentNo
-		//eztools.ShowStrln("looping " + issueInfo[ISSUEINFO_IND_ID])
+		//eztools.ShowStrln("looping " + issueInfo[IssueinfoIndID])
 		issueInfo, err = fun(issueInfo)
-		if err != nil {
+		/*if err != nil {
 			return
-		}
+		}*/ // let it work for the next
 		issueInfoOut = append(issueInfoOut, issueInfo)
 		printID()
 		if i < len(parts) {
@@ -837,6 +922,9 @@ func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
 
 // return value: whether anything new is input
 func cfmInputOrPromptStr(svr *svrs, inf *issueInfos, ind int, prompt string) bool {
+	if uiSilent {
+		return false
+	}
 	const linefeed = " (end with \\ to input multi lines)"
 	var def, base string
 	var smart bool // no smart affix available by default

@@ -365,7 +365,7 @@ func gerritPick1(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoIndHead]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	if eztools.Debugging {
+	if eztools.Debugging && !uiSilent {
 		if !eztools.ChkCfmNPrompt("continue to cherrypick "+
 			issueInfo[IssueinfoIndHead]+
 			" from "+issueInfo[IssueinfoIndID]+
@@ -481,7 +481,7 @@ func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoIndID]) < 1 {
 		return issues, eztools.ErrInvalidInput
 	}
-	if eztools.Debugging {
+	if eztools.Debugging && !uiSilent {
 		if !eztools.ChkCfmNPrompt(action+" "+
 			issueInfo[IssueinfoIndID], "n") {
 			return nil, nil
@@ -544,7 +544,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, err
 		}
 		//eztools.ShowStrln(string(jsonValue))
-		if eztools.Debugging {
+		if eztools.Debugging && !uiSilent {
 			if !eztools.ChkCfmNPrompt("continue to +2/1 to "+
 				infWtRev[IssueinfoIndID], "n") {
 				return nil, nil
