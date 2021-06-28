@@ -1003,8 +1003,7 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"show revision/commit of a submit",
 			"add scores to a submit",
 			"reject a case from any known statues",
-			"merge a submit",
-			"add socres, wait for it to be mergable and merge a submit":
+			"merge a submit":
 			useInputOrPrompt(inf, IssueinfoIndID)
 		case "cherry pick all my open":
 			useInputOrPromptStr(inf,
