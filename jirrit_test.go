@@ -34,8 +34,8 @@ func test1(t *testing.T, cat, fun string) {
 	_, err := eztools.XMLsReadDefaultNoCreate("", module, &cfg)
 
 	if err != nil {
-		t.Error("test.xml fails")
-		t.FailNow()
+		eztools.ShowStrln("no config file found")
+		return
 	}
 	setPostREST(func(bodySlc []interface{}) {
 		if debugging < 3 {
