@@ -1,9 +1,9 @@
-module gitee.com/bon-ami/jirrit
+module gitlab.com/bon-ami/jirrit
 
 go 1.14
 
 require (
-	gitlab.com/bon-ami/eztools v1.1.1-f81dfb876d7706c691147154375a57328b95b0b7
+	gitee.com/bon-ami/eztools v1.1.2
 	github.com/go-asn1-ber/asn1-ber v1.5.3 // indirect
 	github.com/go-ldap/ldap/v3 v3.3.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0

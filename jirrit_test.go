@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"gitlab.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools"
 )
 
 const debugging = 0

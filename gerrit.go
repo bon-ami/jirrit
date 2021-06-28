@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"gitlab.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools"
 )
 
 func gerritGetIssuesOrReviews(method, url, magic string,

@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"gitlab.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools"
 )
 
 func jiraParse1Field(svr *svrs, m map[string]interface{},
