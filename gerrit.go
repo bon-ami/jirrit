@@ -603,7 +603,26 @@ func gerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
 func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	if len(issueInfo[IssueinfoIndID]) < 1 {
-		return nil, eztools.ErrInvalidInput
+		// list ready commits
+		inf, err := gerritMyOpen(svr, authInfo, issueInfo)
+		if err == nil {
+			var choices []string
+			for _, v := range inf {
+				choices = append(choices,
+					v[IssueinfoIndHead]+" <-> "+
+						v[IssueinfoIndBranch])
+			}
+			i := eztools.ChooseStrings(choices)
+			if i != eztools.InvalidID {
+				issueInfo[IssueinfoIndID] = inf[i][IssueinfoIndID]
+			}
+		}
+	}
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		useInputOrPrompt(&issueInfo, IssueinfoIndID)
+		if len(issueInfo[IssueinfoIndID]) < 1 {
+			return nil, eztools.ErrInvalidInput
+		}
 	}
 	var (
 		err                          error
