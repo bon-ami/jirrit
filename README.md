@@ -52,6 +52,10 @@ Usually, these fields can be seen in an issue's detail.
   - close a case to resolved from any known statues (change it to resolved)
   - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
   - close a case with general requirement as steps (change it to resolved, adding test condition="none", steps="general requirement" and expectation="none")
+  - list watchers of a case
+  - check whether watching a case
+  - watch a case
+  - unwatch a case
 
 - Gerrit
   - list merged submits of someone

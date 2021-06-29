@@ -260,13 +260,13 @@ func main() {
 					op(IssueinfoStrProj + "/" +
 						IssueinfoStrCodereview + "=" +
 						issue[IssueinfoIndProj])
-					op(IssueinfoStrBranch + "=" +
+					op(IssueinfoStrBranch + "/" +
+						IssueinfoStrDispname + "=" +
 						issue[IssueinfoIndBranch])
 					op(IssueinfoStrState + "/" +
 						IssueinfoStrSubmitType + "=" +
 						issue[IssueinfoIndState])
-					op(IssueinfoStrMergeable +
-						IssueinfoStrDispname + "=" +
+					op(IssueinfoStrMergeable + "=" +
 						issue[IssueinfoIndMergeable])
 				}
 			}
@@ -279,9 +279,13 @@ func main() {
 		}
 	}
 
-	eztools.ShowStrln("waiting for update check...")
+	if eztools.Debugging {
+		eztools.ShowStrln("waiting for update check...")
+	}
 	if <-upch {
-		eztools.ShowStrln("waiting for update check to end...")
+		if eztools.Debugging {
+			eztools.ShowStrln("waiting for update check to end...")
+		}
 		<-upch
 	}
 }
@@ -1048,6 +1052,10 @@ func makeCat2Act() cat2Act {
 			// if lack of configuration of Tst*
 			{"close a case with default design as steps", jiraCloseDef},
 			{"close a case with general requirement as steps", jiraCloseGen},
+			{"list watchers of a case", jiraWatcherList},
+			{"check whether watching a case", jiraWatcherCheck},
+			{"watch a case", jiraWatcherAdd},
+			{"unwatch a case", jiraWatcherDel},
 		},
 		CategoryGerrit: []action2Func{
 			{"list merged submits of someone", gerritSbMerged},

@@ -1,7 +1,11 @@
 gitee.com/bon-ami/eztools v1.1.2 h1:ZmWw5WC2w6N0lECBDAlPy4oH21rAijVct/roloUrSLI=
 gitee.com/bon-ami/eztools v1.1.2/go.mod h1:MI8DCSOHv7ttxBTrsJeyRhRYY37YAMu5nkROA6zJJyk=
+gitee.com/bon-ami/eztools v1.1.3 h1:bJt+9ootm2uLozB7AbJ1NtAq7g0iQb8mTK8mII76ZAo=
+gitee.com/bon-ami/eztools v1.1.3/go.mod h1:MI8DCSOHv7ttxBTrsJeyRhRYY37YAMu5nkROA6zJJyk=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c h1:/IBSNwUN8+eKzUzbJPqhK839ygXJ82sde8x3ogr6R28=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c/go.mod h1:chxPXzSsl7ZWRAuOIE23GDNzjWuZquvFlgA8xmpunjU=
+github.com/bon-ami/eztools v1.1.1 h1:IIPAb9O3RGpqaQlhEctsQgl2AankY6K9wHa10kaJyoE=
+github.com/bon-ami/eztools v1.1.1/go.mod h1:j+MytmZ+AAxBaadyoCLpNhgDq+p8EVPgVkpSkCu+VZw=
 github.com/go-asn1-ber/asn1-ber v1.5.1 h1:pDbRAunXzIUXfx4CB2QJFv5IuPiuoW+sWvr/Us009o8=
 github.com/go-asn1-ber/asn1-ber v1.5.1/go.mod h1:hEBeB/ic+5LoWskz+yKT7vGhhPYkProFKoKdwZRWMe0=
 github.com/go-asn1-ber/asn1-ber v1.5.3 h1:u7utq56RUFiynqUzgVMFDymapcOtQ/MZkh3H4QYkxag=

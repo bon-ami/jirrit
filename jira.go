@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"gitee.com/bon-ami/eztools"
@@ -671,25 +672,22 @@ func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
 	}
 }
 
-func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) ([]issueInfos, error) {
-	type comment1 struct {
-		Comment1 string `json:"body"`
-	}
+func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
+	stru interface{}, id string) ([]issueInfos, error) {
 	var (
 		jsonStr []byte
 		err     error
-		cmt     comment1
 	)
-	cmt.Comment1 = issueInfo[IssueinfoIndComment]
-	jsonStr, err = json.Marshal(cmt)
+	jsonStr, err = json.Marshal(stru)
 	if err != nil {
 		return nil, err
 	}
-	//eztools.ShowByteln(jsonStr)
+	if eztools.Debugging && eztools.Verbose > 2 {
+		eztools.ShowByteln(jsonStr)
+	}
 	const RestAPIStr = "rest/api/latest/issue/"
 	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+"/comment",
+		id+"/"+urlSuffix,
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
 		return nil, err
@@ -698,6 +696,18 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 		postREST([]interface{}{bodyMap})
 	}
 	return nil, nil
+}
+
+func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	type comment1 struct {
+		Comment1 string `json:"body"`
+	}
+	var (
+		cmt comment1
+	)
+	cmt.Comment1 = issueInfo[IssueinfoIndComment]
+	return jiraPostSth(svr, "comment", authInfo, cmt, issueInfo[IssueinfoIndID])
 }
 
 func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
@@ -767,4 +777,112 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 		postREST([]interface{}{bodyMap})
 	}
 	return jiraParseIssues(svr, bodyMap), err
+}
+
+func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"/watchers", authInfo, nil, svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	var res []issueInfos
+	loopStringMap(bodyMap, "watchers", "", nil,
+		func(_ string, watchersI interface{}) bool {
+			watchersS, ok := watchersI.([]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(watchersS).String() +
+					" got instead of " +
+					"[]interface{}")
+				return false
+			}
+			for _, watcherI := range watchersS {
+				var dispName, name string
+				watcher1, ok := watcherI.(map[string]interface{})
+				if !ok {
+					eztools.LogPrint(reflect.TypeOf(watcherI).String() +
+						" got instead of " +
+						"map[string]interface{}")
+					return false
+				}
+				loopStringMap(watcher1, "", "name", &name, nil)
+				loopStringMap(watcher1, "", "displayName", &dispName, nil)
+				res = append(res, issueInfos{
+					IssueinfoIndDispname: dispName,
+					IssueinfoIndID:       name})
+			}
+			return true
+		})
+	return res, nil
+}
+
+func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"/watchers", authInfo, nil, svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	var res []issueInfos
+	watchingI := bodyMap["isWatching"]
+	watching, ok := watchingI.(bool)
+	if !ok {
+		eztools.LogPrint(reflect.TypeOf(watchingI).String() +
+			" got instead of " +
+			"bool")
+		return nil, err
+	}
+	res = append(res, issueInfos{
+		IssueinfoIndState: strconv.FormatBool(watching)})
+	return res, nil
+}
+
+func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"/watchers",
+		authInfo, strings.NewReader("\""+cfg.User+"\""), svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	return nil, nil
+}
+
+func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "rest/api/latest/issue/"
+	bodyMap, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"/watchers?username="+cfg.User,
+		authInfo, nil, svr.Magic)
+	if err != nil {
+		return nil, err
+	}
+	if postREST != nil {
+		postREST([]interface{}{bodyMap})
+	}
+	return nil, err
 }
