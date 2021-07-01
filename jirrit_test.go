@@ -9,7 +9,7 @@ import (
 
 const debugging = 0
 
-func runFunc(fun action2Func, svr *svrs, cfg cfgs) (string, bool) {
+func runFunc(fun action2Func, svr *svrs, cfg jirrit) (string, bool) {
 	authInfo, err := cfg2AuthInfo(*svr, cfg)
 	if err != nil {
 		return "NO password configured for " + svr.Name, false
@@ -96,4 +96,23 @@ func testJiraMyOpen(t *testing.T) {
 
 func testGerritMyOpen(t *testing.T) {
 	test1(t, CategoryGerrit, "list my open submits")
+}
+
+func TestSave(t *testing.T) {
+	var err error
+	cfgFile, err = eztools.XMLsReadDefaultNoCreate("", module, &cfg)
+
+	if err != nil {
+		eztools.ShowStrln("no config file found")
+		return
+	}
+	for i, svr := range cfg.Svrs {
+		prjOld := svr.Proj
+		prjNew := prjOld + "TST"
+		res := saveProj(&cfg.Svrs[i], prjNew)
+		if res && len(prjOld) > 0 {
+			saveProj(&cfg.Svrs[i], prjOld)
+		}
+		break
+	}
 }

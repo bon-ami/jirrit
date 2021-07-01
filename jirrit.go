@@ -18,7 +18,7 @@ import (
 
 var (
 	ver, cfgFile string
-	cfg          cfgs
+	cfg          jirrit
 	uiSilent     bool
 )
 
@@ -68,8 +68,8 @@ type svrs struct {
 	Proj  string    `xml:"project"`
 }
 
-type cfgs struct {
-	Root xml.Name  `xml:"jirrit"`
+type jirrit struct {
+	//Root xml.Name  `xml:"jirrit"`
 	Log  string    `xml:"log"`
 	User string    `xml:"user"`
 	Pass passwords `xml:"pass"`
@@ -309,7 +309,7 @@ func saveProj(svr *svrs, proj string) bool {
 	if !ret {
 		return false
 	}
-	if err := eztools.XMLWriteNoCreate(cfgFile, cfg); err != nil {
+	if err := eztools.XMLWriteNoCreate(cfgFile, cfg, "\t"); err != nil {
 		eztools.LogErrPrint(err)
 	}
 	return true
@@ -326,7 +326,7 @@ func chkUpdate(upch chan bool) {
 	eztools.AppUpgrade(db, module, ver, nil, upch)
 }
 
-func cfg2AuthInfo(svr svrs, cfg cfgs) (authInfo eztools.AuthInfo, err error) {
+func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 	pass := svr.Pass
 	if len(pass.Pass) < 1 {
 		pass = cfg.Pass
@@ -990,7 +990,7 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 	case CategoryJira:
 		switch action {
 		case "show details of a case",
-			"list comments of a case":
+			"list comments of a case",
 			"list watchers of a case",
 			"check whether watching a case",
 			"watch a case",
