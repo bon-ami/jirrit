@@ -991,6 +991,10 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 		switch action {
 		case "show details of a case",
 			"list comments of a case":
+			"list watchers of a case",
+			"check whether watching a case",
+			"watch a case",
+			"unwatch a case":
 			useInputOrPrompt(inf, IssueinfoIndID)
 		case "close a case to resolved from any known statues":
 			useInputOrPromptStr(inf, IssueinfoIndComment,
