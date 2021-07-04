@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/xml"
 	"errors"
 	"flag"
 	"io"
@@ -37,27 +36,20 @@ const (
 )
 
 type passwords struct {
-	Password xml.Name `xml:"pass"`
-	Type     string   `xml:"type,attr"`
-	Pass     string   `xml:",chardata"`
+	Cmt  string `xml:",comment"`
+	Type string `xml:"type,attr"`
+	Pass string `xml:",chardata"`
 }
 
-/*type linktypes struct {
-	LinkType xml.Name `xml:"linktype"`
-	Value    string   `xml:"value,attr"`
-	String   string   `xml:",chardata"`
-}*/
 type fields struct {
-	Fld xml.Name `xml:"fields"`
-	//Desc    string   `xml:"desc"`
-	//LinkType []linktypes `xml:"linktype"`
+	Cmt       string `xml:",comment"`
 	RejectRsn string `xml:"rejectrsn"`
 	TstPre    string `xml:"testpre"`
 	TstStep   string `xml:"teststep"`
 	TstExp    string `xml:"testexp"`
 }
 type svrs struct {
-	Svr   xml.Name  `xml:"server"`
+	Cmt   string    `xml:",comment"`
 	Type  string    `xml:"type,attr"`
 	Name  string    `xml:"name,attr"`
 	URL   string    `xml:"url"`
@@ -69,7 +61,7 @@ type svrs struct {
 }
 
 type jirrit struct {
-	//Root xml.Name  `xml:"jirrit"`
+	Cmt  string    `xml:",comment"`
 	Log  string    `xml:"log"`
 	User string    `xml:"user"`
 	Pass passwords `xml:"pass"`

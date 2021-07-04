@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jirrit>
+        <!-- Empty values are default. When saved by jirrit,
+        this config file will be re-structured with valid elements only.
+        All comments under one level of elements will be grouped together.
+        <log>jirrit.log</log> -->
         <user>Allen</user>
-        <!-- <log>jirrit.log</log> -->
-        <!-- this password is already BASE64'ed.
-                same as basic with real password -->
-        <pass type="basic">Allen</pass>
+        <pass type="basic">
+                <!-- A basic password is BASE64'ed from a plain one.
+                A digest password is from Gerrit settings. --></pass>
         <server type="JIRA" name="BJ">
                 <url>http://jira.com:8080/</url>
         </server>
