@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -33,6 +34,8 @@ const (
 	PassPlain = "plain"
 	// PassDigest password type in xml
 	PassDigest = "digest"
+	// intGerritMerge is interval between each status check to merge a submit, in seconds
+	intGerritMerge = 15
 )
 
 type passwords struct {
@@ -49,10 +52,12 @@ type fields struct {
 	TstExp    string `xml:"testexp"`
 }
 type svrs struct {
-	Cmt   string    `xml:",comment"`
-	Type  string    `xml:"type,attr"`
-	Name  string    `xml:"name,attr"`
-	URL   string    `xml:"url"`
+	Cmt  string `xml:",comment"`
+	Type string `xml:"type,attr"`
+	Name string `xml:"name,attr"`
+	URL  string `xml:"url"`
+	// IP is informational only
+	IP    string    `xml:"ip"`
 	Pass  passwords `xml:"pass"`
 	Magic string    `xml:"magic"`
 	Score string    `xml:"score"`
@@ -70,7 +75,8 @@ type jirrit struct {
 
 func main() {
 	var (
-		paramH, paramV, paramVV, paramVVV bool
+		paramH, paramV, paramVV, paramVVV,
+		paramGetSvrCfg, paramSetSvrCfg bool
 		paramR, paramA,
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
@@ -81,6 +87,10 @@ func main() {
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
 	flag.BoolVar(&paramVVV, "vvv", false,
 		"verbose messages with network I/O")
+	flag.BoolVar(&paramGetSvrCfg, "getsvrcfg", false,
+		"get server list from config")
+	flag.BoolVar(&paramSetSvrCfg, "setsvrcfg", false,
+		"set servers as config")
 	flag.StringVar(&paramR, "r", "", "server name, to be together with -a")
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
 	flag.StringVar(&paramI, "i", "",
@@ -131,11 +141,19 @@ func main() {
 	cfgFile, err = eztools.XMLsReadDefaultNoCreate(paramCfg, module, &cfg)
 	if err != nil {
 		eztools.LogErrFatal(err)
-		return
+		var changed bool
+		if cfg.Svrs, changed = addSvr(cfg.Svrs); !changed {
+			return
+		}
+		home, _ := os.UserHomeDir()
+		cfgFile = filepath.Join(home, module+".xml")
+		if !saveCfg() {
+			return
+		}
 	}
 	if len(paramLog) > 0 {
 		cfg.Log = paramLog
-	} else if len(cfg.Log) < 1 {
+	} else if len(cfg.Log) < 1 && eztools.Debugging {
 		cfg.Log = module + ".log"
 	}
 	//if eztools.Debugging {
@@ -149,6 +167,18 @@ func main() {
 		eztools.LogPrint("Failed to open log file " + cfg.Log)
 	}
 	//}
+	if paramGetSvrCfg {
+		for _, svr := range cfg.Svrs {
+			eztools.LogPrint("type:" + svr.Type + ", name:" +
+				svr.Name + ", url:" + svr.URL +
+				", ip:" + svr.IP)
+		}
+		return
+	}
+	if paramSetSvrCfg {
+		cfg.Svrs, _ = addSvr(cfg.Svrs)
+		return
+	}
 
 	// self upgrade
 	upch := make(chan bool)
@@ -282,28 +312,94 @@ func main() {
 	}
 }
 
+func addSvr(svrIn []svrs) (svrOut []svrs, ret bool) {
+	svrTypes := []string{CategoryJira, CategoryGerrit}
+	passTypes := []string{PassBasic, PassPlain, PassDigest}
+	const MAGIC = ")]}'"
+	var name, url, ip string
+	svrOut = svrIn
+	eztools.ShowStrln("Only manatory fields for servers will be asked.")
+	for {
+		typeInd := eztools.ChooseStrings(svrTypes)
+		if typeInd == eztools.InvalidID {
+			break
+		}
+		svrType := svrTypes[typeInd]
+		for _, i := range []string{"name", "url", "ip"} {
+			value := eztools.PromptStr(i)
+			for _, svr1 := range cfg.Svrs {
+				var value2Compare string
+				//TODO: can we get a definite member outside the loop?
+				switch i {
+				case "name":
+					value2Compare = svr1.Name
+				case "url":
+					value2Compare = svr1.URL
+				case "ip":
+					if len(value) < 1 {
+						continue
+					}
+					value2Compare = svr1.IP
+				}
+				if value2Compare == value {
+					eztools.ShowSthln("server already exists")
+					return
+				}
+			}
+			switch i {
+			case "name":
+				name = value
+			case "url":
+				url = value
+			case "ip":
+				ip = value
+			}
+		}
+		typeInd = eztools.ChooseStrings(passTypes)
+		if typeInd == eztools.InvalidID {
+			break
+		}
+		passType := svrTypes[typeInd]
+		passTxt := eztools.PromptStr("password")
+		var magic string
+		if svrType == CategoryGerrit {
+			magic = eztools.PromptStr("magic([Y/y=" +
+				MAGIC + "])")
+			switch magic {
+			case "y", "Y":
+				magic = MAGIC
+			}
+		} else {
+			magic = eztools.PromptStr("magic")
+		}
+		svrOut = append(svrOut, svrs{Type: svrType,
+			Name: name, URL: url, IP: ip, Magic: magic,
+			Pass: passwords{Type: passType, Pass: passTxt}})
+	}
+	return
+}
+
 func saveProj(svr *svrs, proj string) bool {
 	if svr == nil && len(proj) < 1 {
 		return false
 	}
 	var ret bool
-	//for i := range cfg.Svrs {
-	/*eztools.ShowStrln("saveProj checking " + cfg.Svrs[i].Name + " to " + svr.Name)
-	if cfg.Svrs[i] == svr {
-		if cfg.Svrs[i].Proj != proj {*/
 	if svr.Proj != proj {
 		svr.Proj = proj
 		ret = true
 	}
-	/*break
-	}*/
-	//}
 	if !ret {
 		return false
 	}
+	return saveCfg()
+}
+
+func saveCfg() bool {
 	if err := eztools.XMLWriteNoCreate(cfgFile, cfg, "\t"); err != nil {
 		eztools.LogErrPrint(err)
+		return false
 	}
+	eztools.ShowStrln(cfgFile + " saved.")
 	return true
 }
 

@@ -65,12 +65,10 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 			continue
 		}
 		// try to match one field
-		if len(strs[i]) < 1 || m[strs[i]] == nil {
+		if m[strs[i]] == nil {
 			if eztools.Debugging && eztools.Verbose > 2 {
-				if len(strs[i]) > 0 {
-					eztools.ShowStrln("unmatching " +
-						strs[i])
-				}
+				eztools.ShowStrln("unmatching " +
+					strs[i])
 			}
 			continue
 		}
@@ -85,8 +83,10 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 			continue
 		}
 		// not a string
-		if i == IssueinfoIndSubmittable &&
-			strs[i] == IssueinfoStrSubmittable {
+		if (i == IssueinfoIndSubmittable &&
+			strs[i] == IssueinfoStrSubmittable) ||
+			(i == IssueinfoIndMergeable &&
+				strs[i] == IssueinfoStrMergeable) {
 			// bool is different
 			bo, ok := m[strs[i]].(bool)
 			if !ok {
@@ -109,8 +109,7 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 				}
 				if eztools.Debugging && eztools.Verbose > 2 {
 					eztools.ShowStrln("matched " +
-						IssueinfoStrSubmittable +
-						"=" + issue[i])
+						strs[i] + "=" + issue[i])
 				}
 			}
 			continue
@@ -334,7 +333,9 @@ func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 			err = eztools.ErrNoValidResults
 			return issueInfo, err
 		}
-		if inf[0][IssueinfoIndSubmittable] == "true" {
+		if inf[0][IssueinfoIndSubmittable] != "false" &&
+			inf[0][IssueinfoIndMergeable] != "false" {
+			// either empty(=not supported or already merged) or true will do
 			_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
 			// TODO: check returned slice
 			return issueInfo, err
@@ -698,7 +699,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				}
 			}
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(intGerritMerge * time.Second)
 			eztools.ShowStr(".")
 		}
 		eztools.ShowStrln("")
