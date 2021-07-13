@@ -51,6 +51,12 @@ type fields struct {
 	TstStep   string `xml:"teststep"`
 	TstExp    string `xml:"testexp"`
 }
+
+type states struct {
+	Type string `xml:"type,attr"`
+	Text string `xml:",chardata"`
+}
+
 type svrs struct {
 	Cmt  string `xml:",comment"`
 	Type string `xml:"type,attr"`
@@ -60,6 +66,7 @@ type svrs struct {
 	IP    string    `xml:"ip"`
 	Pass  passwords `xml:"pass"`
 	Magic string    `xml:"magic"`
+	State []states  `xml:"state"`
 	Score string    `xml:"score"`
 	Flds  fields    `xml:"fields"`
 	Proj  string    `xml:"project"`
@@ -156,17 +163,18 @@ func main() {
 	} else if len(cfg.Log) < 1 && eztools.Debugging {
 		cfg.Log = module + ".log"
 	}
-	//if eztools.Debugging {
-	logger, err := os.OpenFile(cfg.Log,
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err == nil {
-		if err = eztools.InitLogger(logger); err != nil {
-			eztools.LogErrPrint(err)
+	if len(cfg.Log) > 0 {
+		logger, err := os.OpenFile(cfg.Log,
+			os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err == nil {
+			if err = eztools.InitLogger(logger); err != nil {
+				eztools.LogErrPrint(err)
+			}
+		} else {
+			eztools.LogPrint("Failed to open log file " + cfg.Log)
 		}
-	} else {
-		eztools.LogPrint("Failed to open log file " + cfg.Log)
 	}
-	//}
+
 	if paramGetSvrCfg {
 		for _, svr := range cfg.Svrs {
 			eztools.LogPrint("type:" + svr.Type + ", name:" +
@@ -176,6 +184,10 @@ func main() {
 		return
 	}
 	if paramSetSvrCfg {
+		if uiSilent {
+			defer noInteractionAllowed()
+			return
+		}
 		cfg.Svrs, _ = addSvr(cfg.Svrs)
 		return
 	}
@@ -191,11 +203,11 @@ func main() {
 		choices   []string
 		op        func(...interface{})
 	)
-	if eztools.Debugging && eztools.Verbose > 0 {
-		op = eztools.LogPrint
-	} else {
-		op = eztools.ShowSthln
-	}
+	//if eztools.Debugging && eztools.Verbose > 0 {
+	op = eztools.LogPrint
+	//} else {
+	//op = eztools.ShowSthln
+	//}
 	if len(paramR) > 0 {
 		for i, v := range cfg.Svrs {
 			if paramR == v.Name {
@@ -224,6 +236,10 @@ func main() {
 						eztools.Log(issueInfo)
 						break
 					}
+				}
+				if fun == nil {
+					eztools.LogPrint("\"" + paramA +
+						"\" NOT recognized as a command")
 				}
 			}
 		}
@@ -310,6 +326,10 @@ func main() {
 		}
 		<-upch
 	}
+}
+
+func noInteractionAllowed() {
+	eztools.LogPrint("NO interaction allowed in silent mode to provide information!")
 }
 
 func addSvr(svrIn []svrs) (svrOut []svrs, ret bool) {
@@ -407,6 +427,9 @@ func chkUpdate(upch chan bool) {
 	db, err := eztools.Connect()
 	if err != nil {
 		upch <- false
+		if err == eztools.ErrNoValidResults {
+			eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
+		}
 		eztools.LogErr(err)
 	} else {
 		defer db.Close()
@@ -478,6 +501,13 @@ func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 		}
 		choices = append(choices, svr.Type+" - "+svr.Name)
 	}
+	if len(choices) == 1 {
+		return &candidates[0]
+	}
+	if uiSilent {
+		defer noInteractionAllowed()
+		return nil
+	}
 	eztools.ShowStrln(" Choose a server")
 	si := eztools.ChooseStrings(choices)
 	if si == eztools.InvalidID {
@@ -504,10 +534,17 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 
 func chooseAct(svrType string, choices []string, funcs []action2Func,
 	issueInfo issueInfos) (actionFunc, issueInfos) {
-	eztools.ShowStrln(" Choose an action")
-	fi := eztools.ChooseStrings(choices)
-	if fi == eztools.InvalidID {
+	var fi int
+	if uiSilent && len(choices) > 1 {
+		defer noInteractionAllowed()
 		return nil, issueInfo
+	}
+	if len(choices) > 1 {
+		eztools.ShowStrln(" Choose an action")
+		fi = eztools.ChooseStrings(choices)
+		if fi == eztools.InvalidID {
+			return nil, issueInfo
+		}
 	}
 	inputIssueInfo4Act(svrType, funcs[fi].n, &issueInfo)
 	return funcs[fi].f, issueInfo
@@ -632,6 +669,13 @@ func getValuesFromMaps(name string, field interface{}) string {
 		return s
 	}
 	values = fF(values, fieldMap)
+	if len(values) == 1 {
+		return values[0]
+	}
+	if uiSilent {
+		defer noInteractionAllowed()
+		return ""
+	}
 	if choice := eztools.ChooseStrings(values); choice != eztools.InvalidID {
 		return values[choice]
 	}
@@ -812,6 +856,7 @@ func loopStringMap(m map[string]interface{},
 	mustStr, keyStr string, keyVal *string,
 	fun func(string, interface{}) bool) (ret bool) {
 	for i, v := range m {
+		//eztools.ShowStrln("looping " + i)
 		if len(keyStr) > 0 {
 			if i == keyStr {
 				id, ok := v.(string)
@@ -827,6 +872,7 @@ func loopStringMap(m map[string]interface{},
 					if fun == nil {
 						break
 					}
+					//eztools.ShowStrln("id=" + id)
 				}
 				continue
 			}
@@ -999,6 +1045,10 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 }
 
 func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
+	if uiSilent {
+		defer noInteractionAllowed()
+		return
+	}
 	const linefeed = " (end with \\ to continue with more lines. empty to stop)"
 	s := eztools.PromptStr(prompt + linefeed)
 	if len(s) < 1 {
@@ -1064,6 +1114,10 @@ func cfmInputOrPrompt(svr *svrs, inf *issueInfos, ind int) bool {
 
 func useInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
 	if len(inf[ind]) > 0 {
+		return
+	}
+	if uiSilent {
+		defer noInteractionAllowed()
 		return
 	}
 	inf[ind] = eztools.PromptStr(prompt)

@@ -48,10 +48,12 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 
 func jiraParse1Issue(svr *svrs, m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
+	var id string
 	changed = loopStringMap(m, "fields",
-		IssueinfoStrKey, &issueInfo[IssueinfoIndKey],
+		IssueinfoStrKey, &id,
 		func(i string, v interface{}) bool {
 			// id, self ignored
+			//eztools.ShowStrln("1issue " + i)
 			fields, ok := v.(map[string]interface{})
 			if !ok {
 				eztools.LogPrint(reflect.TypeOf(v).String() +
@@ -61,6 +63,7 @@ func jiraParse1Issue(svr *svrs, m map[string]interface{},
 			}
 			return jiraParse1Field(svr, fields, issueInfo)
 		}) || changed
+	issueInfo[IssueinfoIndID] = id
 	return
 }
 
@@ -120,6 +123,7 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 	results := make([]issueInfos, 0)
 	f := func(i string, v interface{}) bool {
 		// https://docs.atlassian.com/software/jira/docs/api/REST/8.12.0/#api/2/search-search
+		//eztools.ShowStrln("func " + i)
 		issues, ok := v.([]interface{})
 		if !ok {
 			eztools.LogPrint(reflect.TypeOf(v).String() +
@@ -137,9 +141,10 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 				continue
 			}
 			var issueInfo issueInfos
-			if jiraParse1Issue(svr, issue, &issueInfo) {
-				results = append(results, issueInfo)
-			}
+			/*if*/ jiraParse1Issue(svr, issue, &issueInfo) // {
+			//eztools.ShowSthln(issueInfo)
+			results = append(results, issueInfo)
+			//}
 		}
 		return true
 	}
@@ -253,6 +258,10 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 				}
 			}
 		} else {
+			if uiSilent {
+				defer noInteractionAllowed()
+				return "", eztools.ErrInvalidInput
+			}
 			eztools.ShowStrln(
 				"There are following transitions available.")
 			i := eztools.ChooseStrings(tranNames)
@@ -586,6 +595,10 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 				issueInfo[IssueinfoIndID] {
 			return nil, nil
 		}
+		if uiSilent {
+			defer noInteractionAllowed()
+			return nil, eztools.ErrInvalidInput
+		}
 		i := eztools.ChooseStringsWtIDs(
 			func() int {
 				//return len(svr.Flds.LinkType)
@@ -761,14 +774,24 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return jiraParseIssues(svr, bodyMap), err
+	jiraParse1Issue(svr, bodyMap, &issueInfo)
+	return []issueInfos{issueInfo}, nil
+	//return jiraParseIssues(svr, bodyMap), err
 }
 
 func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	const RestAPIStr = "rest/api/latest/search?jql="
+	var states string
+	for _, v := range svr.State {
+		if v.Type == "not open" {
+			if len(v.Text) > 0 {
+				states += "&status!=" + v.Text
+			}
+		}
+	}
 	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
-		url.QueryEscape("assignee=")+authInfo.User,
+		url.QueryEscape("assignee="+authInfo.User+states),
 		authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@
                 A digest password is from Gerrit settings. --></pass>
         <server type="JIRA" name="BJ">
                 <url>http://jira.com:8080/</url>
+                <state type="not open">Closed</state>
         </server>
         <server type="JIRA" name="CN">
                 <url>http://jira.com/</url>
@@ -23,6 +24,7 @@
         <server type="Gerrit" name="common">
                 <pass type="digest">Allen</pass>
                 <url>http://gerrit.com:8080/a/</url>
+                <ip>1.1.1.1</ip>
                 <magic>)]}'</magic>
                 <score>Manual-Testing</score>
         </server>

@@ -608,6 +608,10 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		inf, err := gerritMyOpen(svr, authInfo, issueInfo)
 		if err == nil {
 			var choices []string
+			if uiSilent {
+				defer noInteractionAllowed()
+				return nil, eztools.ErrInvalidInput
+			}
 			for _, v := range inf {
 				choices = append(choices,
 					v[IssueinfoIndHead]+" <-> "+
@@ -635,7 +639,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	if eztools.Debugging && eztools.Verbose > 1 {
 		debugVeri = true
 	}
-	eztools.ShowStr("waiting for issue to be submittable.")
+	eztools.ShowStr("waiting for issue to be submittable/mergeable.")
 	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
 		for err == nil {
 			inf, err = gerritDetail(svr, authInfo, issueInfo)
@@ -646,7 +650,14 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				err = eztools.ErrNoValidResults
 				break
 			}
-			if inf[0][IssueinfoIndSubmittable] == "true" {
+			if inf[0][IssueinfoIndMergeable] == "false" {
+				// conflict
+				err = eztools.ErrOutOfBound
+				break
+			}
+			if inf[0][IssueinfoIndSubmittable] != "false" {
+				// true or empty
+				// the only successful break of loop
 				break
 			}
 
@@ -704,9 +715,13 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		eztools.ShowStrln("")
 		if err != nil {
+			if err == eztools.ErrOutOfBound {
+				eztools.LogPrint("Conflict to merge?")
+			}
 			return issueInfo, err
 		}
-		_, err = gerritMerge(svr, authInfo, issueInfo)
+		// _, err = gerritMerge(svr, authInfo, issueInfo) not used because of redundant steps of checking
+		_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
 		// TODO: check returned slice
 		return issueInfo, err
 	})
