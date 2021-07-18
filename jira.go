@@ -24,17 +24,20 @@ func jiraParse1Field(m map[string]interface{},
 		}*/
 		switch i {
 		case IssueinfoStrAssignee:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrDispname,
-				&issueInfo[IssueinfoIndDispname]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrDispname})
+			issueInfo[IssueinfoIndDispname] = val[0]
+			changed = ch || changed
 		case IssueinfoStrProj:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrKey,
-				&issueInfo[IssueinfoIndProj]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrKey})
+			issueInfo[IssueinfoIndProj] = val[0]
+			changed = ch || changed
 		case IssueinfoStrState:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrName,
-				&issueInfo[IssueinfoIndState]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrName})
+			issueInfo[IssueinfoIndState] = val[0]
+			changed = ch || changed
 		case IssueinfoStrSummary:
 			changed = chkNSetIssueInfo(v, issueInfo,
 				IssueinfoIndHead) || changed
@@ -48,9 +51,9 @@ func jiraParse1Field(m map[string]interface{},
 
 func jiraParse1Issue(m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
-	var id string
-	changed = loopStringMap(m, "fields",
-		IssueinfoStrKey, &id,
+	var id []string
+	id, changed = loopStringMap(m, "fields",
+		[]string{IssueinfoStrKey},
 		func(i string, v interface{}) bool {
 			// id, self ignored
 			//eztools.ShowStrln("1issue " + i)
@@ -62,8 +65,8 @@ func jiraParse1Issue(m map[string]interface{},
 				return false
 			}
 			return jiraParse1Field(fields, issueInfo)
-		}) || changed
-	issueInfo[IssueinfoIndID] = id
+		})
+	issueInfo[IssueinfoIndID] = id[0]
 	return
 }
 
@@ -108,7 +111,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 		}
 		return true
 	}
-	loopStringMap(m, "transitions", "", nil, f)
+	loopStringMap(m, "transitions", nil, f)
 	/*if eztools.Debugging && eztools.Verbose > 2 {
 		eztools.ShowSthln(tranNames)
 		eztools.ShowSthln(tranIDs)
@@ -148,26 +151,20 @@ func jiraParseIssues(m map[string]interface{}) []issueInfos {
 		}
 		return true
 	}
-	loopStringMap(m, "issues", "", nil, f)
+	loopStringMap(m, "issues", nil, f)
 	if len(results) < 1 {
 		return nil
 	}
 	return results
 }
 
-func jiraParseAuthor(m map[string]interface{}) (id string) {
-	loopStringMap(m, "", IssueinfoStrKey, &id, nil)
-	return id
-}
-
 func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 	var (
-		body, author string
-		issues       []issueInfos
+		author string
+		issues []issueInfos
 	)
 	loopStringMap(m, IssueinfoStrComments,
-		"", nil,
-		func(i string, v interface{}) bool {
+		nil, func(i string, v interface{}) bool {
 			cmts, ok := v.([]interface{})
 			if !ok {
 				eztools.LogPrint(reflect.TypeOf(v).String() +
@@ -183,22 +180,21 @@ func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 						"map[string]interface{}")
 					continue
 				}
-				loopStringMap(cmt, "author",
-					"body", &body,
+				inf, _ := loopStringMap(cmt, "author",
+					[]string{"body", "updated"},
 					func(i string, v interface{}) bool {
-						fields, ok := v.(map[string]interface{})
-						if !ok {
-							eztools.LogPrint(reflect.TypeOf(v).String() +
-								" got instead of " +
-								"map[string]interface{}")
+						id, _ := chkNLoopStringMap(v,
+							"", []string{IssueinfoStrKey})
+						if id == nil {
 							return false
 						}
-						author = jiraParseAuthor(fields)
+						author = id[0]
 						return false
 					})
-				if len(body) > 0 || len(author) > 0 {
+				if len(inf[0]) > 0 {
 					issues = append(issues, issueInfos{
-						IssueinfoIndComment: body,
+						IssueinfoIndComment: inf[0],
+						IssueinfoIndBranch:  inf[1],
 						IssueinfoIndKey:     author})
 				}
 			}
@@ -869,7 +865,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 		postREST([]interface{}{bodyMap})
 	}
 	var res []issueInfos
-	loopStringMap(bodyMap, "watchers", "", nil,
+	loopStringMap(bodyMap, "watchers", nil,
 		func(_ string, watchersI interface{}) bool {
 			watchersS, ok := watchersI.([]interface{})
 			if !ok {
@@ -879,19 +875,14 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 				return false
 			}
 			for _, watcherI := range watchersS {
-				var dispName, name string
-				watcher1, ok := watcherI.(map[string]interface{})
-				if !ok {
-					eztools.LogPrint(reflect.TypeOf(watcherI).String() +
-						" got instead of " +
-						"map[string]interface{}")
+				inf, _ := chkNLoopStringMap(watcherI, "",
+					[]string{"name", "displayName"})
+				if inf == nil {
 					return false
 				}
-				loopStringMap(watcher1, "", "name", &name, nil)
-				loopStringMap(watcher1, "", "displayName", &dispName, nil)
 				res = append(res, issueInfos{
-					IssueinfoIndDispname: dispName,
-					IssueinfoIndID:       name})
+					IssueinfoIndDispname: inf[1],
+					IssueinfoIndID:       inf[0]})
 			}
 			return true
 		})

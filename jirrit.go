@@ -289,7 +289,7 @@ func main() {
 				op("No results.")
 			} else {
 				for i, issue := range issues {
-					op("Issue/Reviewer " +
+					op("Issue/Reviewer/Comment " +
 						strconv.Itoa(i+1))
 					op(IssueinfoStrID + "=" +
 						issue[IssueinfoIndID])
@@ -844,14 +844,14 @@ func chkNSetIssueInfo(v interface{}, issueInfo *issueInfos, i int) bool {
 
 // check map type before looping it
 func chkNLoopStringMap(m interface{},
-	mustStr, keyStr string, keyVal *string) bool {
+	mustStr string, keyStr []string) ([]string, bool) {
 	sub, ok := m.(map[string]interface{})
 	if !ok {
 		eztools.LogPrint(reflect.TypeOf(m).String() +
 			" got instead of map[string]interface{}")
-		return false
+		return nil, false
 	}
-	return loopStringMap(sub, mustStr, keyStr, keyVal, nil)
+	return loopStringMap(sub, mustStr, keyStr, nil)
 }
 
 /*
@@ -864,27 +864,37 @@ Both return values of fun and this means whether
 	any item ever processed successfully.
 */
 func loopStringMap(m map[string]interface{},
-	mustStr, keyStr string, keyVal *string,
-	fun func(string, interface{}) bool) (ret bool) {
+	mustStr string, keyStr []string,
+	fun func(string, interface{}) bool) (keyVal []string, ret bool) {
+	if len(keyStr) > 0 {
+		keyVal = make([]string, len(keyStr))
+	} else {
+		keyVal = nil
+	}
 	for i, v := range m {
 		//eztools.ShowStrln("looping " + i)
 		if len(keyStr) > 0 {
-			if i == keyStr {
-				id, ok := v.(string)
-				if !ok {
-					eztools.LogPrint(
-						reflect.TypeOf(v).String() +
-							" got instead of string")
-					continue
-				}
-				ret = true
-				if keyVal != nil {
-					*keyVal = id
+			matched := false
+			for j, key1 := range keyStr {
+				if i == key1 {
+					matched = true
+					id, ok := v.(string)
+					if !ok {
+						eztools.LogPrint(
+							reflect.TypeOf(v).String() +
+								" got instead of string")
+						break
+					}
+					ret = true
+					keyVal[j] = id
 					if fun == nil {
 						break
 					}
 					//eztools.ShowStrln("id=" + id)
+					break
 				}
+			}
+			if matched {
 				continue
 			}
 		}
@@ -896,7 +906,7 @@ func loopStringMap(m map[string]interface{},
 			ret = fun(i, v) || ret
 		}
 	}
-	return ret
+	return keyVal, ret
 }
 
 func custFld(jsonStr, fldKey, fldVal string) string {
