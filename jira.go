@@ -11,7 +11,7 @@ import (
 	"gitee.com/bon-ami/eztools"
 )
 
-func jiraParse1Field(svr *svrs, m map[string]interface{},
+func jiraParse1Field(m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	for i, v := range m {
 		if v == nil {
@@ -24,17 +24,20 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 		}*/
 		switch i {
 		case IssueinfoStrAssignee:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrDispname,
-				&issueInfo[IssueinfoIndDispname]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrDispname})
+			issueInfo[IssueinfoIndDispname] = val[0]
+			changed = ch || changed
 		case IssueinfoStrProj:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrKey,
-				&issueInfo[IssueinfoIndProj]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrKey})
+			issueInfo[IssueinfoIndProj] = val[0]
+			changed = ch || changed
 		case IssueinfoStrState:
-			changed = chkNLoopStringMap(v, "",
-				IssueinfoStrName,
-				&issueInfo[IssueinfoIndState]) || changed
+			val, ch := chkNLoopStringMap(v, "",
+				[]string{IssueinfoStrName})
+			issueInfo[IssueinfoIndState] = val[0]
+			changed = ch || changed
 		case IssueinfoStrSummary:
 			changed = chkNSetIssueInfo(v, issueInfo,
 				IssueinfoIndHead) || changed
@@ -46,11 +49,11 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 	return
 }
 
-func jiraParse1Issue(svr *svrs, m map[string]interface{},
+func jiraParse1Issue(m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
-	var id string
-	changed = loopStringMap(m, "fields",
-		IssueinfoStrKey, &id,
+	var id []string
+	id, changed = loopStringMap(m, "fields",
+		[]string{IssueinfoStrKey},
 		func(i string, v interface{}) bool {
 			// id, self ignored
 			//eztools.ShowStrln("1issue " + i)
@@ -61,9 +64,9 @@ func jiraParse1Issue(svr *svrs, m map[string]interface{},
 					"map[string]interface{}")
 				return false
 			}
-			return jiraParse1Field(svr, fields, issueInfo)
-		}) || changed
-	issueInfo[IssueinfoIndID] = id
+			return jiraParse1Field(fields, issueInfo)
+		})
+	issueInfo[IssueinfoIndID] = id[0]
 	return
 }
 
@@ -108,7 +111,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 		}
 		return true
 	}
-	loopStringMap(m, "transitions", "", nil, f)
+	loopStringMap(m, "transitions", nil, f)
 	/*if eztools.Debugging && eztools.Verbose > 2 {
 		eztools.ShowSthln(tranNames)
 		eztools.ShowSthln(tranIDs)
@@ -116,7 +119,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 	return
 }
 
-func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
+func jiraParseIssues(m map[string]interface{}) []issueInfos {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowSthln(strs)
 	}*/
@@ -141,18 +144,63 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 				continue
 			}
 			var issueInfo issueInfos
-			/*if*/ jiraParse1Issue(svr, issue, &issueInfo) // {
+			/*if*/ jiraParse1Issue(issue, &issueInfo) // {
 			//eztools.ShowSthln(issueInfo)
 			results = append(results, issueInfo)
 			//}
 		}
 		return true
 	}
-	loopStringMap(m, "issues", "", nil, f)
+	loopStringMap(m, "issues", nil, f)
 	if len(results) < 1 {
 		return nil
 	}
 	return results
+}
+
+func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
+	var (
+		author string
+		issues []issueInfos
+	)
+	loopStringMap(m, IssueinfoStrComments,
+		nil, func(i string, v interface{}) bool {
+			cmts, ok := v.([]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(v).String() +
+					" got instead of " +
+					"[]interface{}")
+				return false
+			}
+			for _, s := range cmts {
+				cmt, ok := s.(map[string]interface{})
+				if !ok {
+					eztools.LogPrint(reflect.TypeOf(s).String() +
+						" got instead of " +
+						"map[string]interface{}")
+					continue
+				}
+				inf, _ := loopStringMap(cmt, "author",
+					[]string{"body", "updated"},
+					func(i string, v interface{}) bool {
+						id, _ := chkNLoopStringMap(v,
+							"", []string{IssueinfoStrKey})
+						if id == nil {
+							return false
+						}
+						author = id[0]
+						return false
+					})
+				if len(inf[0]) > 0 {
+					issues = append(issues, issueInfos{
+						IssueinfoIndComment: inf[0],
+						IssueinfoIndBranch:  inf[1],
+						IssueinfoIndKey:     author})
+				}
+			}
+			return false
+		})
+	return issues, nil
 }
 
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
@@ -738,7 +786,7 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return nil, err
+	return jiraParseCmts(bodyMap)
 }
 
 // TODO: input param not used
@@ -774,7 +822,7 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	jiraParse1Issue(svr, bodyMap, &issueInfo)
+	jiraParse1Issue(bodyMap, &issueInfo)
 	return []issueInfos{issueInfo}, nil
 	//return jiraParseIssues(svr, bodyMap), err
 }
@@ -799,7 +847,7 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return jiraParseIssues(svr, bodyMap), err
+	return jiraParseIssues(bodyMap), err
 }
 
 func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
@@ -817,7 +865,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 		postREST([]interface{}{bodyMap})
 	}
 	var res []issueInfos
-	loopStringMap(bodyMap, "watchers", "", nil,
+	loopStringMap(bodyMap, "watchers", nil,
 		func(_ string, watchersI interface{}) bool {
 			watchersS, ok := watchersI.([]interface{})
 			if !ok {
@@ -827,19 +875,14 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 				return false
 			}
 			for _, watcherI := range watchersS {
-				var dispName, name string
-				watcher1, ok := watcherI.(map[string]interface{})
-				if !ok {
-					eztools.LogPrint(reflect.TypeOf(watcherI).String() +
-						" got instead of " +
-						"map[string]interface{}")
+				inf, _ := chkNLoopStringMap(watcherI, "",
+					[]string{"name", "displayName"})
+				if inf == nil {
 					return false
 				}
-				loopStringMap(watcher1, "", "name", &name, nil)
-				loopStringMap(watcher1, "", "displayName", &dispName, nil)
 				res = append(res, issueInfos{
-					IssueinfoIndDispname: dispName,
-					IssueinfoIndID:       name})
+					IssueinfoIndDispname: inf[1],
+					IssueinfoIndID:       inf[0]})
 			}
 			return true
 		})

@@ -237,6 +237,12 @@ func main() {
 	//} else {
 	//op = eztools.ShowSthln
 	//}
+	switch len(cfg.Svrs) {
+	case 0:
+		eztools.LogFatal("NO server configured!")
+	case 1:
+		svr = &cfg.Svrs[0]
+	}
 	if len(paramR) > 0 {
 		for i, v := range cfg.Svrs {
 			if paramR == v.Name {
@@ -246,34 +252,36 @@ func main() {
 		}
 		if svr == nil {
 			eztools.LogPrint("Unknown server " + paramR)
-		} else {
-			if len(paramA) > 0 {
-				for _, v := range cats[svr.Type] {
-					if paramA == v.n {
-						uiSilent = true
-						fun = v.f
-						issueInfo = issueInfos{
-							IssueinfoIndID:      paramI,
-							IssueinfoIndHead:    paramHD,
-							IssueinfoIndProj:    paramP,
-							IssueinfoIndBranch:  paramB,
-							IssueinfoIndState:   paramS,
-							IssueinfoIndComment: paramC}
-						eztools.Log("runtime params: server=" +
-							svr.Name + ", action=" + v.n +
-							", info array:")
-						eztools.Log(issueInfo)
-						break
-					}
+		}
+	}
+	if svr != nil {
+		if len(paramA) > 0 {
+			for _, v := range cats[svr.Type] {
+				if paramA == v.n {
+					uiSilent = true
+					fun = v.f
+					issueInfo = issueInfos{
+						IssueinfoIndID:      paramI,
+						IssueinfoIndHead:    paramHD,
+						IssueinfoIndProj:    paramP,
+						IssueinfoIndBranch:  paramB,
+						IssueinfoIndState:   paramS,
+						IssueinfoIndComment: paramC}
+					eztools.Log("runtime params: server=" +
+						svr.Name + ", action=" + v.n +
+						", info array:")
+					eztools.Log(issueInfo)
+					break
 				}
-				if fun == nil {
-					eztools.LogPrint("\"" + paramA +
-						"\" NOT recognized as a command")
-				}
+			}
+			if fun == nil {
+				eztools.LogPrint("\"" + paramA +
+
+					"\" NOT recognized as a command")
 			}
 		}
 	}
-	for ; ; svr = nil {
+	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
 			if svr == nil {
@@ -283,7 +291,7 @@ func main() {
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
-		for ; ; fun = nil {
+		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
 				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
 					issueInfos{
@@ -310,7 +318,7 @@ func main() {
 				op("No results.")
 			} else {
 				for i, issue := range issues {
-					op("Issue/Reviewer " +
+					op("Issue/Reviewer/Comment " +
 						strconv.Itoa(i+1))
 					op(IssueinfoStrID + "=" +
 						issue[IssueinfoIndID])
@@ -333,15 +341,16 @@ func main() {
 					op(IssueinfoStrState + "/" +
 						IssueinfoStrSubmitType + "=" +
 						issue[IssueinfoIndState])
-					op(IssueinfoStrMergeable + "=" +
+					op(IssueinfoStrMergeable + "/" +
+						IssueinfoStrComments + "=" +
 						issue[IssueinfoIndMergeable])
 				}
 			}
-			if choices == nil {
+			if choices == nil { // no loop
 				break
 			}
 		}
-		if choices == nil {
+		if choices == nil || len(cfg.Svrs) < 2 { // no loop
 			break
 		}
 	}
@@ -828,6 +837,8 @@ const (
 
 	// IssueinfoStrMergeable mergable string for issueInfos
 	IssueinfoStrMergeable = "mergeable"
+	// IssueinfoStrComments comment string for issueInfos
+	IssueinfoStrComments = "comments"
 )
 
 type issueInfos [IssueinfoIndMax]string
@@ -889,14 +900,14 @@ func chkNSetIssueInfo(v interface{}, issueInfo *issueInfos, i int) bool {
 
 // check map type before looping it
 func chkNLoopStringMap(m interface{},
-	mustStr, keyStr string, keyVal *string) bool {
+	mustStr string, keyStr []string) ([]string, bool) {
 	sub, ok := m.(map[string]interface{})
 	if !ok {
 		eztools.LogPrint(reflect.TypeOf(m).String() +
 			" got instead of map[string]interface{}")
-		return false
+		return nil, false
 	}
-	return loopStringMap(sub, mustStr, keyStr, keyVal, nil)
+	return loopStringMap(sub, mustStr, keyStr, nil)
 }
 
 /*
@@ -909,27 +920,37 @@ Both return values of fun and this means whether
 	any item ever processed successfully.
 */
 func loopStringMap(m map[string]interface{},
-	mustStr, keyStr string, keyVal *string,
-	fun func(string, interface{}) bool) (ret bool) {
+	mustStr string, keyStr []string,
+	fun func(string, interface{}) bool) (keyVal []string, ret bool) {
+	if len(keyStr) > 0 {
+		keyVal = make([]string, len(keyStr))
+	} else {
+		keyVal = nil
+	}
 	for i, v := range m {
 		//eztools.ShowStrln("looping " + i)
 		if len(keyStr) > 0 {
-			if i == keyStr {
-				id, ok := v.(string)
-				if !ok {
-					eztools.LogPrint(
-						reflect.TypeOf(v).String() +
-							" got instead of string")
-					continue
-				}
-				ret = true
-				if keyVal != nil {
-					*keyVal = id
+			matched := false
+			for j, key1 := range keyStr {
+				if i == key1 {
+					matched = true
+					id, ok := v.(string)
+					if !ok {
+						eztools.LogPrint(
+							reflect.TypeOf(v).String() +
+								" got instead of string")
+						break
+					}
+					ret = true
+					keyVal[j] = id
 					if fun == nil {
 						break
 					}
 					//eztools.ShowStrln("id=" + id)
+					break
 				}
+			}
+			if matched {
 				continue
 			}
 		}
@@ -941,7 +962,7 @@ func loopStringMap(m map[string]interface{},
 			ret = fun(i, v) || ret
 		}
 	}
-	return ret
+	return keyVal, ret
 }
 
 func custFld(jsonStr, fldKey, fldVal string) string {
