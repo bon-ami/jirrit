@@ -11,7 +11,7 @@ import (
 	"gitee.com/bon-ami/eztools"
 )
 
-func jiraParse1Field(svr *svrs, m map[string]interface{},
+func jiraParse1Field(m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	for i, v := range m {
 		if v == nil {
@@ -46,7 +46,7 @@ func jiraParse1Field(svr *svrs, m map[string]interface{},
 	return
 }
 
-func jiraParse1Issue(svr *svrs, m map[string]interface{},
+func jiraParse1Issue(m map[string]interface{},
 	issueInfo *issueInfos) (changed bool) {
 	var id string
 	changed = loopStringMap(m, "fields",
@@ -61,7 +61,7 @@ func jiraParse1Issue(svr *svrs, m map[string]interface{},
 					"map[string]interface{}")
 				return false
 			}
-			return jiraParse1Field(svr, fields, issueInfo)
+			return jiraParse1Field(fields, issueInfo)
 		}) || changed
 	issueInfo[IssueinfoIndID] = id
 	return
@@ -116,7 +116,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 	return
 }
 
-func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
+func jiraParseIssues(m map[string]interface{}) []issueInfos {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowSthln(strs)
 	}*/
@@ -141,7 +141,7 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 				continue
 			}
 			var issueInfo issueInfos
-			/*if*/ jiraParse1Issue(svr, issue, &issueInfo) // {
+			/*if*/ jiraParse1Issue(issue, &issueInfo) // {
 			//eztools.ShowSthln(issueInfo)
 			results = append(results, issueInfo)
 			//}
@@ -153,6 +153,58 @@ func jiraParseIssues(svr *svrs, m map[string]interface{}) []issueInfos {
 		return nil
 	}
 	return results
+}
+
+func jiraParseAuthor(m map[string]interface{}) (id string) {
+	loopStringMap(m, "", IssueinfoStrKey, &id, nil)
+	return id
+}
+
+func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
+	var (
+		body, author string
+		issues       []issueInfos
+	)
+	loopStringMap(m, IssueinfoStrComments,
+		"", nil,
+		func(i string, v interface{}) bool {
+			cmts, ok := v.([]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(v).String() +
+					" got instead of " +
+					"[]interface{}")
+				return false
+			}
+			for _, s := range cmts {
+				cmt, ok := s.(map[string]interface{})
+				if !ok {
+					eztools.LogPrint(reflect.TypeOf(s).String() +
+						" got instead of " +
+						"map[string]interface{}")
+					continue
+				}
+				loopStringMap(cmt, "author",
+					"body", &body,
+					func(i string, v interface{}) bool {
+						fields, ok := v.(map[string]interface{})
+						if !ok {
+							eztools.LogPrint(reflect.TypeOf(v).String() +
+								" got instead of " +
+								"map[string]interface{}")
+							return false
+						}
+						author = jiraParseAuthor(fields)
+						return false
+					})
+				if len(body) > 0 || len(author) > 0 {
+					issues = append(issues, issueInfos{
+						IssueinfoIndComment: body,
+						IssueinfoIndKey:     author})
+				}
+			}
+			return false
+		})
+	return issues, nil
 }
 
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
@@ -738,7 +790,7 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return nil, err
+	return jiraParseCmts(bodyMap)
 }
 
 // TODO: input param not used
@@ -774,7 +826,7 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	jiraParse1Issue(svr, bodyMap, &issueInfo)
+	jiraParse1Issue(bodyMap, &issueInfo)
 	return []issueInfos{issueInfo}, nil
 	//return jiraParseIssues(svr, bodyMap), err
 }
@@ -799,7 +851,7 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return jiraParseIssues(svr, bodyMap), err
+	return jiraParseIssues(bodyMap), err
 }
 
 func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,

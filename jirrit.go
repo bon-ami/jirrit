@@ -208,6 +208,12 @@ func main() {
 	//} else {
 	//op = eztools.ShowSthln
 	//}
+	switch len(cfg.Svrs) {
+	case 0:
+		eztools.LogFatal("NO server configured!")
+	case 1:
+		svr = &cfg.Svrs[0]
+	}
 	if len(paramR) > 0 {
 		for i, v := range cfg.Svrs {
 			if paramR == v.Name {
@@ -217,34 +223,36 @@ func main() {
 		}
 		if svr == nil {
 			eztools.LogPrint("Unknown server " + paramR)
-		} else {
-			if len(paramA) > 0 {
-				for _, v := range cats[svr.Type] {
-					if paramA == v.n {
-						uiSilent = true
-						fun = v.f
-						issueInfo = issueInfos{
-							IssueinfoIndID:      paramI,
-							IssueinfoIndHead:    paramHD,
-							IssueinfoIndProj:    paramP,
-							IssueinfoIndBranch:  paramB,
-							IssueinfoIndState:   paramS,
-							IssueinfoIndComment: paramC}
-						eztools.Log("runtime params: server=" +
-							svr.Name + ", action=" + v.n +
-							", info array:")
-						eztools.Log(issueInfo)
-						break
-					}
+		}
+	}
+	if svr != nil {
+		if len(paramA) > 0 {
+			for _, v := range cats[svr.Type] {
+				if paramA == v.n {
+					uiSilent = true
+					fun = v.f
+					issueInfo = issueInfos{
+						IssueinfoIndID:      paramI,
+						IssueinfoIndHead:    paramHD,
+						IssueinfoIndProj:    paramP,
+						IssueinfoIndBranch:  paramB,
+						IssueinfoIndState:   paramS,
+						IssueinfoIndComment: paramC}
+					eztools.Log("runtime params: server=" +
+						svr.Name + ", action=" + v.n +
+						", info array:")
+					eztools.Log(issueInfo)
+					break
 				}
-				if fun == nil {
-					eztools.LogPrint("\"" + paramA +
-						"\" NOT recognized as a command")
-				}
+			}
+			if fun == nil {
+				eztools.LogPrint("\"" + paramA +
+
+					"\" NOT recognized as a command")
 			}
 		}
 	}
-	for ; ; svr = nil {
+	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
 			if svr == nil {
@@ -254,7 +262,7 @@ func main() {
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
-		for ; ; fun = nil {
+		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
 				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
 					issueInfos{
@@ -304,15 +312,16 @@ func main() {
 					op(IssueinfoStrState + "/" +
 						IssueinfoStrSubmitType + "=" +
 						issue[IssueinfoIndState])
-					op(IssueinfoStrMergeable + "=" +
+					op(IssueinfoStrMergeable + "/" +
+						IssueinfoStrComments + "=" +
 						issue[IssueinfoIndMergeable])
 				}
 			}
-			if choices == nil {
+			if choices == nil { // no loop
 				break
 			}
 		}
-		if choices == nil {
+		if choices == nil || len(cfg.Svrs) < 2 { // no loop
 			break
 		}
 	}
@@ -772,6 +781,8 @@ const (
 
 	// IssueinfoStrMergeable mergable string for issueInfos
 	IssueinfoStrMergeable = "mergeable"
+	// IssueinfoStrComments comment string for issueInfos
+	IssueinfoStrComments = "comments"
 )
 
 type issueInfos [IssueinfoIndMax]string
