@@ -11,8 +11,15 @@
  - `-hd string` provide an new assignee for issue transfer.
  - `-p string` provide a project.
  - `-c string` provide a component or a comment.
+ - `-s string` provide ID of a linked issue
  - `-cfg string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-log string` provide a log file. It defaults to jirrit.log under current dir.
+ - `-getsvrcfg` prints configured servers
+ - `-setsvrcfg` asks to configure servers
+ - `-r string` provide a server's name
+ - `-a string` provide an action's name
+
+`-r` and `-a` are meant to be used together to avoid user input.
 
 ## Config xml
 
@@ -21,6 +28,7 @@
   Server types are **JIRA** and **Gerrit**.<BR>
   Names need to be unique within each type.<BR>
   **url** is needed for every server. **pass** can be provided, if not same as overall config.
+  **ip** is optional for a server for refernce only.
 
   Three kinds of passwords can be configured.
   - **basic** is the plain text password.
@@ -34,6 +42,7 @@ Usually, these fields can be seen in an issue's detail.
   - **testpre** is the field name for test condition.
   - **teststep** is the field name for test steps.
   - **testexp** is the field name for test expectation.
+  - **state** are state names. Supported attributes: **not open**.
 
   For Gerrit servers, there may be more to config for scores.
   - **score** contains the field name other than Code-Review and Verified, that needs +1. In my case, it is `Manual-Testing`.

@@ -70,6 +70,7 @@ type svrs struct {
 	Score string    `xml:"score"`
 	Flds  fields    `xml:"fields"`
 	Proj  string    `xml:"project"`
+	Watch string    `xml:"watch"`
 }
 
 type jirrit struct {
@@ -81,10 +82,11 @@ type jirrit struct {
 }
 
 func main() {
+	const ParamDef = "_"
 	var (
 		paramH, paramV, paramVV, paramVVV,
 		paramGetSvrCfg, paramSetSvrCfg bool
-		paramR, paramA,
+		paramR, paramA, paramW,
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
 	)
@@ -100,6 +102,8 @@ func main() {
 		"set servers as config")
 	flag.StringVar(&paramR, "r", "", "server name, to be together with -a")
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
+	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
+		"to be together with -r. current setting shown, if empty value.")
 	flag.StringVar(&paramI, "i", "",
 		"ID of issue, change, commit or assignee")
 	flag.StringVar(&paramB, "b", "", "branch")
@@ -191,13 +195,38 @@ func main() {
 		cfg.Svrs, _ = addSvr(cfg.Svrs)
 		return
 	}
+	var svr *svrs
+	if paramW != ParamDef {
+		switch len(paramW) {
+		case 0:
+			for _, svr := range cfg.Svrs {
+				if len(svr.Watch) > 0 {
+					eztools.LogPrint("type:" + svr.Type + ", name:" +
+						svr.Name + ", watch:" + svr.Watch)
+				}
+			}
+		default:
+			switch len(paramR) {
+			case 0:
+				svr = chooseSvrByType(cfg.Svrs, CategoryJira)
+			default:
+				svr = matchSvr(cfg.Svrs, paramR)
+			}
+			if svr == nil {
+				eztools.LogFatal("NO server matched!")
+				return
+			}
+			svr.Watch = paramW
+			saveCfg()
+		}
+		return
+	}
 
 	// self upgrade
 	upch := make(chan bool)
 	go chkUpdate(upch)
 
 	var (
-		svr       *svrs
 		fun       actionFunc
 		issueInfo issueInfos
 		choices   []string
@@ -326,6 +355,33 @@ func main() {
 		}
 		<-upch
 	}
+}
+
+func chooseSvrByType(svr []svrs, tp string) *svrs {
+	var (
+		indx  []int
+		names []string
+	)
+	for i, s := range svr {
+		if s.Type == tp {
+			names = append(names, s.Name)
+			indx = append(indx, i)
+		}
+	}
+	i := eztools.ChooseStrings(names)
+	if i == eztools.InvalidID {
+		return nil
+	}
+	return &svr[indx[i]]
+}
+
+func matchSvr(svr []svrs, name string) *svrs {
+	for i, s := range svr {
+		if s.Name == name {
+			return &svr[i]
+		}
+	}
+	return nil
 }
 
 func noInteractionAllowed() {
