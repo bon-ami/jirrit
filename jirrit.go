@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	ver, cfgFile string
-	cfg          jirrit
-	uiSilent     bool
+	ver, cfgFile         string
+	cfg                  jirrit
+	uiSilent             bool
+	step                 int
+	dispResultOutputFunc func(...interface{})
 )
 
 const (
@@ -85,8 +87,8 @@ func main() {
 	const ParamDef = "_"
 	var (
 		paramH, paramV, paramVV, paramVVV,
-		paramGetSvrCfg, paramSetSvrCfg bool
-		paramR, paramA, paramW,
+		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
+		paramR, paramA, paramW, paramK,
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
 	)
@@ -96,6 +98,7 @@ func main() {
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
 	flag.BoolVar(&paramVVV, "vvv", false,
 		"verbose messages with network I/O")
+	flag.BoolVar(&paramReverse, "reverse", false, "reverse output")
 	flag.BoolVar(&paramGetSvrCfg, "getsvrcfg", false,
 		"get server list from config")
 	flag.BoolVar(&paramSetSvrCfg, "setsvrcfg", false,
@@ -104,6 +107,7 @@ func main() {
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
 	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
+	flag.StringVar(&paramK, "k", "", "key or description")
 	flag.StringVar(&paramI, "i", "",
 		"ID of issue, change, commit or assignee")
 	flag.StringVar(&paramB, "b", "", "branch")
@@ -114,7 +118,7 @@ func main() {
 		"project for JIRA issues")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
-			"or test step comment for JIRA closure")
+			"or (test step) comment for JIRA (closure)")
 	flag.StringVar(&paramS, "s", "",
 		"linked issue when linking issues")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
@@ -180,6 +184,7 @@ func main() {
 	}
 
 	if paramGetSvrCfg {
+		eztools.LogPrint("user:" + cfg.User)
 		for _, svr := range cfg.Svrs {
 			eztools.LogPrint("type:" + svr.Type + ", name:" +
 				svr.Name + ", url:" + svr.URL +
@@ -191,6 +196,17 @@ func main() {
 		if uiSilent {
 			defer noInteractionAllowed()
 			return
+		}
+		var unDef string
+		if len(cfg.User) > 0 {
+			unDef = "[Enter=" + cfg.User + "]"
+		}
+		un := eztools.PromptStr("username=" + unDef)
+		if len(un) < 1 && len(unDef) > 0 {
+			un = cfg.User
+		}
+		if len(un) > 0 {
+			cfg.User = un
 		}
 		cfg.Svrs, _ = addSvr(cfg.Svrs)
 		return
@@ -216,6 +232,12 @@ func main() {
 				eztools.LogFatal("NO server matched!")
 				return
 			}
+			// reset previous watch
+			for _, svr1 := range cfg.Svrs {
+				if len(svr1.Watch) > 0 && svr1.Name != svr.Name {
+					svr1.Watch = ""
+				}
+			}
 			svr.Watch = paramW
 			saveCfg()
 		}
@@ -230,10 +252,9 @@ func main() {
 		fun       actionFunc
 		issueInfo issueInfos
 		choices   []string
-		op        func(...interface{})
 	)
 	//if eztools.Debugging && eztools.Verbose > 0 {
-	op = eztools.LogPrint
+	dispResultOutputFunc = eztools.LogPrint
 	//} else {
 	//op = eztools.ShowSthln
 	//}
@@ -262,6 +283,7 @@ func main() {
 					fun = v.f
 					issueInfo = issueInfos{
 						IssueinfoIndID:      paramI,
+						IssueinfoIndKey:     paramK,
 						IssueinfoIndHead:    paramHD,
 						IssueinfoIndProj:    paramP,
 						IssueinfoIndBranch:  paramB,
@@ -281,12 +303,20 @@ func main() {
 			}
 		}
 	}
+	if paramReverse {
+		step = -1
+	} else {
+		step = 1
+	}
 	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
 			if svr == nil {
 				break
 			}
+		}
+		if len(svr.Proj) > 0 {
+			eztools.ShowSthln("default project/ID prefix: " + svr.Proj)
 		}
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
@@ -296,6 +326,7 @@ func main() {
 				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
 					issueInfos{
 						IssueinfoIndID:      paramI,
+						IssueinfoIndKey:     paramK,
 						IssueinfoIndHead:    paramHD,
 						IssueinfoIndProj:    paramP,
 						IssueinfoIndBranch:  paramB,
@@ -304,6 +335,12 @@ func main() {
 				if fun == nil {
 					break
 				}
+			}
+			// auto changing ID is redundant for fun that do this, too.
+			// TODO: restructure single input in inputIssueInfo4Act and loop in fun
+			changingID, prefID, postID := parseTypicalJiraNum(svr, issueInfo[IssueinfoIndID])
+			if changingID {
+				issueInfo[IssueinfoIndID] = prefID + postID
 			}
 			authInfo, err := cfg2AuthInfo(*svr, cfg)
 			if err != nil {
@@ -314,38 +351,7 @@ func main() {
 			if err != nil {
 				eztools.LogErrFatal(err)
 			}
-			if issues == nil {
-				op("No results.")
-			} else {
-				for i, issue := range issues {
-					op("Issue/Reviewer/Comment " +
-						strconv.Itoa(i+1))
-					op(IssueinfoStrID + "=" +
-						issue[IssueinfoIndID])
-					op(IssueinfoStrAssignee + "/" +
-						IssueinfoStrKey + "/" +
-						IssueinfoStrName + "/" +
-						IssueinfoStrSubmittable + "=" +
-						issue[IssueinfoIndSubmittable])
-					op(IssueinfoStrHead + "/" +
-						IssueinfoStrSummary + "/" +
-						IssueinfoStrRevCur + "/" +
-						IssueinfoStrVerified + "=" +
-						issue[IssueinfoIndHead])
-					op(IssueinfoStrProj + "/" +
-						IssueinfoStrCodereview + "=" +
-						issue[IssueinfoIndProj])
-					op(IssueinfoStrBranch + "/" +
-						IssueinfoStrDispname + "=" +
-						issue[IssueinfoIndBranch])
-					op(IssueinfoStrState + "/" +
-						IssueinfoStrSubmitType + "=" +
-						issue[IssueinfoIndState])
-					op(IssueinfoStrMergeable + "/" +
-						IssueinfoStrComments + "=" +
-						issue[IssueinfoIndMergeable])
-				}
-			}
+			dispResults(issues)
 			if choices == nil { // no loop
 				break
 			}
@@ -363,6 +369,48 @@ func main() {
 			eztools.ShowStrln("waiting for update check to end...")
 		}
 		<-upch
+	}
+}
+
+func dispResults(issues []issueInfos) {
+	if issues == nil {
+		dispResultOutputFunc("No results.")
+	} else {
+		var i int
+		if step < 1 {
+			i = len(issues) - 1
+		} else {
+			i = 0
+		}
+		for ; i >= 0 && i < len(issues); i += step {
+			issue := issues[i]
+			dispResultOutputFunc("Issue/Reviewer/Comment " +
+				strconv.Itoa(i+1))
+			dispResultOutputFunc(IssueinfoStrID + "=" +
+				issue[IssueinfoIndID])
+			dispResultOutputFunc(IssueinfoStrAssignee + "/" +
+				IssueinfoStrKey + "/" +
+				IssueinfoStrName + "/" +
+				IssueinfoStrSubmittable + "=" +
+				issue[IssueinfoIndSubmittable])
+			dispResultOutputFunc(IssueinfoStrHead + "/" +
+				IssueinfoStrSummary + "/" +
+				IssueinfoStrRevCur + "/" +
+				IssueinfoStrVerified + "=" +
+				issue[IssueinfoIndHead])
+			dispResultOutputFunc(IssueinfoStrProj + "/" +
+				IssueinfoStrCodereview + "=" +
+				issue[IssueinfoIndProj])
+			dispResultOutputFunc(IssueinfoStrBranch + "/" +
+				IssueinfoStrDispname + "=" +
+				issue[IssueinfoIndBranch])
+			dispResultOutputFunc(IssueinfoStrState + "/" +
+				IssueinfoStrSubmitType + "=" +
+				issue[IssueinfoIndState])
+			dispResultOutputFunc(IssueinfoStrMergeable + "/" +
+				IssueinfoStrComments + "=" +
+				issue[IssueinfoIndMergeable])
+		}
 	}
 }
 
@@ -986,7 +1034,10 @@ const typicalJiraSeparator = "-"
 //	the non digit part. this is saved as project.
 //	the digit part
 func parseTypicalJiraNum(svr *svrs, num string) (ret bool, nonDigit, digit string) {
-	re := regexp.MustCompile(`^[^\d]+[-][\d]+$`)
+	if len(num) < 1 {
+		return false, "", ""
+	}
+	re := regexp.MustCompile(`^[^-]+[-][\d]+$`)
 	pref := re.FindStringSubmatch(num)
 	if pref != nil {
 		parts := strings.Split(pref[0], typicalJiraSeparator)
@@ -1002,8 +1053,10 @@ func parseTypicalJiraNum(svr *svrs, num string) (ret bool, nonDigit, digit strin
 				parts := strings.Split(pref[0], typicalJiraSeparator)
 				// parts[0]=""
 				if len(parts) == 2 && len(parts[1]) > 0 {
-					eztools.ShowStrln("Auto changed to " +
-						svr.Proj + typicalJiraSeparator + parts[1])
+					if eztools.Debugging {
+						eztools.ShowStrln("Auto changing to " +
+							svr.Proj + typicalJiraSeparator + parts[1])
+					}
 					return true, svr.Proj + typicalJiraSeparator, parts[1]
 				}
 			}
@@ -1159,6 +1212,17 @@ func cfmInputOrPromptStr(svr *svrs, inf *issueInfos, ind int, prompt string) boo
 	if len(s) < 1 || s == inf[ind] {
 		return false
 	}
+	if len(inf[ind]) < 1 {
+		var (
+			ok   bool
+			sNum string
+		)
+		if ok, base, sNum = parseTypicalJiraNum(svr, s); ok {
+			smart = true // there is a reference for smart affix
+			s = sNum
+			//eztools.ShowStrln("not int previously")
+		}
+	}
 	if smart {
 		if _, err := strconv.Atoi(s); err != nil {
 			smart = false
@@ -1176,7 +1240,6 @@ func cfmInputOrPromptStr(svr *svrs, inf *issueInfos, ind int, prompt string) boo
 		inf[ind] = s
 		return true
 	}
-	//eztools.ShowStrln("smart changing")
 	// smart affix
 	inf[ind] = base + s
 	//if eztools.Debugging {
@@ -1218,8 +1281,6 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 		case "close a case to resolved from any known statues":
 			useInputOrPromptStr(inf, IssueinfoIndComment,
 				"test step for closure")
-		case "search for comments by project and user":
-			useInputOrPrompt(inf, IssueinfoIndProj)
 		}
 	case CategoryGerrit:
 		switch action {
@@ -1230,6 +1291,7 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"show revision/commit of a submit",
 			"add scores to a submit",
 			"reject a case from any known statues",
+			"revert a submit",
 			"merge a submit":
 			useInputOrPrompt(inf, IssueinfoIndID)
 		case "cherry pick all my open":
@@ -1266,7 +1328,8 @@ func makeCat2Act() cat2Act {
 			{"show details of a case", jiraDetail},
 			{"list comments of a case", jiraComments},
 			{"add a comment to a case", jiraAddComment},
-			{"search for comments by project and user", jiraSearchCommentsByProjNUser},
+			{"delete a comment from a case", jiraDelComment},
+			{"change a comment from a case", jiraModComment},
 			{"list my open cases", jiraMyOpen},
 			{"link a case to the other", jiraLink},
 			{"reject a case from any known statues", jiraReject},
@@ -1298,5 +1361,6 @@ func makeCat2Act() cat2Act {
 			{"abandon a submit", gerritAbandon},
 			{"cherry pick all my open submits", gerritPickMyOpen},
 			{"cherry pick a submit", gerritPick},
+			{"revert a submit", gerritRevert},
 		}}
 }

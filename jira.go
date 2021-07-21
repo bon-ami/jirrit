@@ -181,7 +181,7 @@ func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 					continue
 				}
 				inf, _ := loopStringMap(cmt, "author",
-					[]string{"body", "updated"},
+					[]string{"body", "updated", "id"},
 					func(i string, v interface{}) bool {
 						id, _ := chkNLoopStringMap(v,
 							"", []string{IssueinfoStrKey})
@@ -195,6 +195,7 @@ func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 					issues = append(issues, issueInfos{
 						IssueinfoIndComment: inf[0],
 						IssueinfoIndBranch:  inf[1],
+						IssueinfoIndID:      inf[2],
 						IssueinfoIndKey:     author})
 				}
 			}
@@ -205,14 +206,19 @@ func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
+	firstRun := true
 	for {
 		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
 		changed = cfmInputOrPromptStr(svr, &issueInfo,
 			IssueinfoIndHead, "change to assignee") || changed
 		changed = cfmInputOrPromptStr(svr, &issueInfo,
 			IssueinfoIndComment, "change to component") || changed
-		if !changed {
-			return nil, nil
+		if !firstRun {
+			if !changed {
+				return nil, nil
+			}
+		} else {
+			firstRun = false
 		}
 		if len(issueInfo[IssueinfoIndID]) < 1 ||
 			/*(*/ len(issueInfo[IssueinfoIndHead]) < 1 { //&&
@@ -714,49 +720,121 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 	}
 }
 
-func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
+func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
+	firstRun := true
 	for {
 		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
 		changed = cfmInputOrPromptStr(svr, &issueInfo,
-			IssueinfoIndComment, "comment to add") || changed
-		if !changed {
-			return nil, nil
+			IssueinfoIndKey, "ID of comment to change") || changed
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndComment, "body of comment to change") || changed
+		if !firstRun {
+			if !changed {
+				return nil, nil
+			}
+		} else {
+			firstRun = false
 		}
 		if len(issueInfo[IssueinfoIndID]) < 1 ||
-			len(issueInfo[IssueinfoIndComment]) < 1 {
+			len(issueInfo[IssueinfoIndComment]) < 1 ||
+			len(issueInfo[IssueinfoIndKey]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
-		if _, err := jiraAddComment1(svr, authInfo, issueInfo); err != nil {
+		var tranJSON struct {
+			Body string `json:"body"`
+		}
+		tranJSON.Body = issueInfo[IssueinfoIndComment]
+		jsonStr, err := json.Marshal(tranJSON)
+		if err != nil {
+			return nil, err
+		}
+		const RestAPIStr = "rest/api/latest/issue/"
+		_, err = restMap(eztools.METHOD_PUT,
+			svr.URL+RestAPIStr+issueInfo[IssueinfoIndID]+"/comment/"+
+				issueInfo[IssueinfoIndKey], authInfo,
+			bytes.NewReader(jsonStr), svr.Magic)
+		if err != nil {
 			return nil, err
 		}
 	}
 }
 
+func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	firstRun := true
+	for {
+		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndKey, "ID of comment to delete") || changed
+		if !firstRun {
+			if !changed {
+				return nil, nil
+			}
+		} else {
+			firstRun = false
+		}
+		if len(issueInfo[IssueinfoIndID]) < 1 ||
+			len(issueInfo[IssueinfoIndKey]) < 1 {
+			return nil, eztools.ErrInvalidInput
+		}
+		const RestAPIStr = "rest/api/latest/issue/"
+		_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIStr+
+			issueInfo[IssueinfoIndID]+"/comment/"+issueInfo[IssueinfoIndKey],
+			authInfo, nil, svr.Magic)
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+
+func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	firstRun := true
+	for {
+		changed := cfmInputOrPrompt(svr, &issueInfo, IssueinfoIndID)
+		changed = cfmInputOrPromptStr(svr, &issueInfo,
+			IssueinfoIndComment, "comment to add") || changed
+		if !firstRun {
+			if !changed {
+				return nil, nil
+			}
+		} else {
+			firstRun = false
+		}
+		if len(issueInfo[IssueinfoIndID]) < 1 ||
+			len(issueInfo[IssueinfoIndComment]) < 1 {
+			return nil, eztools.ErrInvalidInput
+		}
+		issues, err := jiraAddComment1(svr, authInfo, issueInfo)
+		if err != nil {
+			return nil, err
+		}
+		dispResults(issues)
+	}
+}
+
 func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
-	stru interface{}, id string) ([]issueInfos, error) {
-	var (
-		jsonStr []byte
-		err     error
-	)
+	stru interface{}, id string) (bodyMap map[string]interface{}, err error) {
+	var jsonStr []byte
 	jsonStr, err = json.Marshal(stru)
 	if err != nil {
-		return nil, err
+		return
 	}
 	if eztools.Debugging && eztools.Verbose > 2 {
 		eztools.ShowByteln(jsonStr)
 	}
 	const RestAPIStr = "rest/api/latest/issue/"
-	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
 		id+"/"+urlSuffix,
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
-		return nil, err
+		return
 	}
 	if postREST != nil {
 		postREST([]interface{}{bodyMap})
 	}
-	return nil, nil
+	return
 }
 
 func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
@@ -768,7 +846,11 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 		cmt comment1
 	)
 	cmt.Comment1 = issueInfo[IssueinfoIndComment]
-	return jiraPostSth(svr, "comment", authInfo, cmt, issueInfo[IssueinfoIndID])
+	body, err := jiraPostSth(svr, "comment", authInfo, cmt, issueInfo[IssueinfoIndID])
+	if err != nil {
+		return nil, err
+	}
+	return jiraParseCmts(body)
 }
 
 func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
@@ -787,25 +869,6 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 		postREST([]interface{}{bodyMap})
 	}
 	return jiraParseCmts(bodyMap)
-}
-
-// TODO: input param not used
-func jiraSearchCommentsByProjNUser(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndComment]) < 1 {
-		return nil, eztools.ErrInvalidInput
-	}
-	const RestAPIStr = "rest/api/latest/issue/"
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+"/comment",
-		authInfo, nil, svr.Magic)
-	if err != nil {
-		return nil, err
-	}
-	if postREST != nil {
-		postREST([]interface{}{bodyMap})
-	}
-	return nil, err
 }
 
 func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,

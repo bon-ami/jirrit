@@ -12,6 +12,8 @@
  - `-p string` provide a project.
  - `-c string` provide a component or a comment.
  - `-s string` provide ID of a linked issue
+ - `-k string` provide a key or description
+ - `-reverse` reverse output results
  - `-cfg string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-log string` provide a log file. It defaults to jirrit.log under current dir.
  - `-getsvrcfg` prints configured servers
@@ -84,6 +86,7 @@ Usually, these fields can be seen in an issue's detail.
   - abandon a submit
   - cherry pick all my open submits
   - cherry pick a submit
+  - revert a submit
 
 ## Input grammar
 

@@ -317,6 +317,11 @@ func gerritRebase(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/rebase")
 }
 
+func gerritRevert(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/revert")
+}
+
 func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
