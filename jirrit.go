@@ -16,28 +16,29 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+const (
+	module = "jirrit"
+	// CategoryJira JIRA server in xml
+	CategoryJira = "JIRA"
+	// CategoryGerrit Gerrit server in xml
+	CategoryGerrit = "Gerrit"
+	// PassBasic plain text password in xml
+	PassBasic = "basic"
+	// PassPlain BASE64ed password in xml
+	PassPlain = "plain"
+	// PassDigest HTTP password in xml
+	PassDigest = "digest"
+	// intGerritMerge is interval between each status check to merge a submit, in seconds
+	intGerritMerge = 15
+)
+
 var (
 	ver, cfgFile         string
 	cfg                  jirrit
 	uiSilent             bool
 	step                 int
 	dispResultOutputFunc func(...interface{})
-)
-
-const (
-	module = "jirrit"
-	// CategoryJira server type in xml
-	CategoryJira = "JIRA"
-	// CategoryGerrit server type in xml
-	CategoryGerrit = "Gerrit"
-	// PassBasic password type in xml
-	PassBasic = "basic"
-	// PassPlain password type in xml
-	PassPlain = "plain"
-	// PassDigest password type in xml
-	PassDigest = "digest"
-	// intGerritMerge is interval between each status check to merge a submit, in seconds
-	intGerritMerge = 15
+	svrTypes             []string
 )
 
 type passwords struct {
@@ -85,6 +86,7 @@ type jirrit struct {
 
 func main() {
 	const ParamDef = "_"
+	svrTypes = []string{CategoryJira, CategoryGerrit}
 	var (
 		paramH, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
@@ -157,7 +159,7 @@ func main() {
 	if err != nil {
 		eztools.LogErrFatal(err)
 		var changed bool
-		if cfg.Svrs, changed = addSvr(cfg.Svrs); !changed {
+		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
 			return
 		}
 		home, _ := os.UserHomeDir()
@@ -197,19 +199,16 @@ func main() {
 			defer noInteractionAllowed()
 			return
 		}
-		var unDef string
-		if len(cfg.User) > 0 {
-			unDef = "[Enter=" + cfg.User + "]"
-		}
-		un := eztools.PromptStr("username=" + unDef)
-		if len(un) < 1 && len(unDef) > 0 {
-			un = cfg.User
-		}
-		if len(un) > 0 {
-			cfg.User = un
-		}
-		cfg.Svrs, _ = addSvr(cfg.Svrs)
+		cfg.User = chkUsr(cfg.User)
+		cfg.Svrs, _ = addSvr(cfg.Svrs, cfg.Pass)
 		return
+	}
+	if !uiSilent {
+		cfg.User = chkUsr(cfg.User)
+		if !chkSvr(cfg.Svrs, cfg.Pass) {
+			eztools.LogPrint(module + " cannot run without server configs!")
+			return
+		}
 	}
 	var svr *svrs
 	if paramW != ParamDef {
@@ -445,13 +444,133 @@ func noInteractionAllowed() {
 	eztools.LogPrint("NO interaction allowed in silent mode to provide information!")
 }
 
-func addSvr(svrIn []svrs) (svrOut []svrs, ret bool) {
-	svrTypes := []string{CategoryJira, CategoryGerrit}
-	passTypes := []string{PassBasic, PassPlain, PassDigest}
+func chkUsr(user string) string {
+	var unDef string
+	if len(user) > 0 {
+		return user
+		//unDef = "[Enter=" + user + "]"
+	}
+	un := eztools.PromptStr("username" + unDef)
+	if len(un) < 1 && len(unDef) > 0 {
+		un = user
+	}
+	return un
+}
+
+func chkExistSvr(svr []svrs, name, value string, indx int) bool {
+	for i, svr1 := range svr {
+		if i == indx {
+			continue
+		}
+		var value2Compare string
+		//TODO: can we get a definite member outside the loop?
+		switch name {
+		case "name":
+			value2Compare = svr1.Name
+		case "url":
+			value2Compare = svr1.URL
+		case "ip":
+			value2Compare = svr1.IP
+		}
+		if value2Compare == value {
+			return true
+		}
+	}
+	return false
+}
+
+func chkNInputSvrFld(svrSlc []svrs, svr1 svrs, field *string, text string, indx int) bool {
+	value := field
+	if len(*value) < 1 {
+		// try to identify this server
+		idCandidates := []string{svr1.Name, svr1.URL, svr1.IP, strconv.Itoa(indx)}
+		var id string
+		for _, v := range idCandidates {
+			if len(v) < 1 {
+				return true
+			}
+			id = v
+		}
+		*value = eztools.PromptStr(text + " for server " + id)
+		if len(*value) < 1 {
+			return false
+		}
+	}
+	if chkExistSvr(svrSlc, text, *value, indx) {
+		eztools.ShowStrln("name or ip in existence. please enter a new one.")
+		*field = ""
+		return chkNInputSvrFld(svrSlc, svr1, field, text, indx)
+	}
+	return true
+}
+
+func chkSvr(svr []svrs, pass passwords) bool {
+	if nil == svr || len(svr) < 1 {
+		eztools.LogPrint("NO servers defined. Run with param -setsvrcfg to add some!")
+		return false
+	}
+	pass4All := len(pass.Type) > 0 && len(pass.Pass) > 0
+	for i, svr1 := range svr {
+		mandatory := []struct {
+			addr *string
+			text string
+		}{
+			{&svr[i].Name, "name"},
+			{&svr[i].IP, "ip"}}
+		for _, mand1 := range mandatory {
+			if !chkNInputSvrFld(svr, svr1, mand1.addr, mand1.text, i) {
+				return false
+			}
+		}
+		if pass4All {
+			continue
+		}
+		if len(svr1.Pass.Type) < 1 || len(svr1.Pass.Pass) < 1 {
+			eztools.ShowStrln("NO global password configured. Configure it for " + svr[i].Name)
+			passType, passTxt, ok := inputPass4Svr(svr1.Type)
+			if !ok {
+				return false
+			}
+			svr[i].Pass.Type = passType
+			svr[i].Pass.Pass = passTxt
+		}
+	}
+	return saveCfg()
+}
+
+func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
+	passTypes := []string{PassBasic + " - plain text",
+		PassPlain + " - base64'ed",
+		PassDigest + " - HTTP password, such as from Settings of Gerrit"}
+	const (
+		pref = "Since this server is "
+		affi = " is recommended."
+	)
+	switch svrType {
+	case CategoryGerrit:
+		eztools.ShowStrln(pref + svrType + ", " + PassDigest + affi)
+	case CategoryJira:
+		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
+	}
+	typeInd := eztools.ChooseStrings(passTypes)
+	if typeInd == eztools.InvalidID {
+		return
+	}
+	passTypeSlc := strings.Split(passTypes[typeInd], " - ")
+	passType = passTypeSlc[0]
+	passTxt = eztools.PromptStr("password")
+	if len(passTxt) < 1 {
+		return
+	}
+	ok = true
+	return
+}
+
+func addSvr(svrIn []svrs, pass passwords) (svrOut []svrs, ret bool) {
 	const MAGIC = ")]}'"
-	var name, url, ip string
+	var name, url, ip, magic string
 	svrOut = svrIn
-	eztools.ShowStrln("Only manatory fields for servers will be asked.")
+	eztools.ShowStrln("Only mandatory fields for servers will be asked.")
 	for {
 		typeInd := eztools.ChooseStrings(svrTypes)
 		if typeInd == eztools.InvalidID {
@@ -460,24 +579,12 @@ func addSvr(svrIn []svrs) (svrOut []svrs, ret bool) {
 		svrType := svrTypes[typeInd]
 		for _, i := range []string{"name", "url", "ip"} {
 			value := eztools.PromptStr(i)
-			for _, svr1 := range cfg.Svrs {
-				var value2Compare string
-				//TODO: can we get a definite member outside the loop?
-				switch i {
-				case "name":
-					value2Compare = svr1.Name
-				case "url":
-					value2Compare = svr1.URL
-				case "ip":
-					if len(value) < 1 {
-						continue
-					}
-					value2Compare = svr1.IP
-				}
-				if value2Compare == value {
-					eztools.ShowSthln("server already exists")
-					return
-				}
+			if len(value) < 1 {
+				break
+			}
+			if chkExistSvr(svrOut, i, value, -1) {
+				eztools.ShowSthln("server already exists")
+				break
 			}
 			switch i {
 			case "name":
@@ -488,13 +595,14 @@ func addSvr(svrIn []svrs) (svrOut []svrs, ret bool) {
 				ip = value
 			}
 		}
-		typeInd = eztools.ChooseStrings(passTypes)
-		if typeInd == eztools.InvalidID {
-			break
+		if len(name) < 1 || len(url) < 1 {
+			continue
 		}
-		passType := svrTypes[typeInd]
-		passTxt := eztools.PromptStr("password")
-		var magic string
+		if len(pass.Type) > 0 && len(pass.Pass) > 0 {
+			eztools.ShowStrln("If you want to use " + pass.Type +
+				" " + pass.Pass + " configured for all servers, answer an invalid value.")
+		}
+		passType, passTxt, _ := inputPass4Svr(svrType)
 		if svrType == CategoryGerrit {
 			magic = eztools.PromptStr("magic([Y/y=" +
 				MAGIC + "])")
