@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"flag"
 	"io"
@@ -77,11 +78,12 @@ type svrs struct {
 }
 
 type jirrit struct {
-	Cmt  string    `xml:",comment"`
-	Log  string    `xml:"log"`
-	User string    `xml:"user"`
-	Pass passwords `xml:"pass"`
-	Svrs []svrs    `xml:"server"`
+	Cmt        string    `xml:",comment"`
+	EzToolsCfg string    `xml:"eztoolscfg"`
+	Log        string    `xml:"log"`
+	User       string    `xml:"user"`
+	Pass       passwords `xml:"pass"`
+	Svrs       []svrs    `xml:"server"`
 }
 
 func main() {
@@ -245,7 +247,7 @@ func main() {
 
 	// self upgrade
 	upch := make(chan bool)
-	go chkUpdate(upch)
+	go chkUpdate(cfg.EzToolsCfg, upch)
 
 	var (
 		fun       actionFunc
@@ -644,17 +646,29 @@ func saveCfg() bool {
 	return true
 }
 
-func chkUpdate(upch chan bool) {
-	db, err := eztools.Connect()
-	if err != nil {
-		upch <- false
-		if err == eztools.ErrNoValidResults {
-			eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
+func chkUpdate(eztoolscfg string, upch chan bool) {
+	var (
+		db  *sql.DB
+		err error
+	)
+	if len(eztoolscfg) > 0 {
+		db, err = eztools.ConnectWtPath(eztoolscfg)
+		if err != nil {
+			eztoolscfg = ""
 		}
-		eztools.LogErr(err)
-	} else {
-		defer db.Close()
 	}
+	if len(eztoolscfg) == 0 {
+		db, err = eztools.Connect()
+		if err != nil {
+			upch <- false
+			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
+				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
+			}
+			eztools.LogErrPrint(err)
+			return
+		}
+	}
+	defer db.Close()
 	eztools.AppUpgrade(db, module, ver, nil, upch)
 }
 
