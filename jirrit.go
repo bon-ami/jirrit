@@ -481,29 +481,33 @@ func chkExistSvr(svr []svrs, name, value string, indx int) bool {
 	return false
 }
 
-func chkNInputSvrFld(svrSlc []svrs, svr1 svrs, field *string, text string, indx int) bool {
-	value := field
-	if len(*value) < 1 {
+func chkNInputSvrFld(svrSlc []svrs, svr1 svrs, field *string, text string,
+	indx int) (changed, ok bool) {
+	value := *field
+	if len(value) < 1 {
 		// try to identify this server
 		idCandidates := []string{svr1.Name, svr1.URL, svr1.IP, strconv.Itoa(indx)}
 		var id string
 		for _, v := range idCandidates {
-			if len(v) < 1 {
-				return true
+			if len(v) > 0 {
+				id = v
+				break
 			}
-			id = v
 		}
-		*value = eztools.PromptStr(text + " for server " + id)
-		if len(*value) < 1 {
-			return false
+		value = eztools.PromptStr(text + " for server " + id)
+		if len(value) < 1 {
+			return
 		}
+		*field = value
+		changed = true
 	}
-	if chkExistSvr(svrSlc, text, *value, indx) {
+	if chkExistSvr(svrSlc, text, value, indx) {
 		eztools.ShowStrln("name or ip in existence. please enter a new one.")
 		*field = ""
-		return chkNInputSvrFld(svrSlc, svr1, field, text, indx)
+		_, ok = chkNInputSvrFld(svrSlc, svr1, field, text, indx)
+		return true, ok
 	}
-	return true
+	return changed, true
 }
 
 func chkSvr(svr []svrs, pass passwords) bool {
@@ -512,17 +516,20 @@ func chkSvr(svr []svrs, pass passwords) bool {
 		return false
 	}
 	pass4All := len(pass.Type) > 0 && len(pass.Pass) > 0
+	changed := false
 	for i, svr1 := range svr {
 		mandatory := []struct {
 			addr *string
 			text string
 		}{
 			{&svr[i].Name, "name"},
-			{&svr[i].IP, "ip"}}
+			{&svr[i].URL, "url"}}
 		for _, mand1 := range mandatory {
-			if !chkNInputSvrFld(svr, svr1, mand1.addr, mand1.text, i) {
+			c, o := chkNInputSvrFld(svr, svr1, mand1.addr, mand1.text, i)
+			if !o {
 				return false
 			}
+			changed = changed || c
 		}
 		if pass4All {
 			continue
@@ -535,7 +542,11 @@ func chkSvr(svr []svrs, pass passwords) bool {
 			}
 			svr[i].Pass.Type = passType
 			svr[i].Pass.Pass = passTxt
+			changed = true
 		}
+	}
+	if !changed {
+		return true
 	}
 	return saveCfg()
 }
@@ -785,11 +796,16 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 	return funcs[fi].f, issueInfo
 }
 
+// return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
-	body, _ /*errno*/, err = eztools.RestGetOrPostWtMagic(method,
+	var errno int
+	body, errno, err = eztools.RestGetOrPostWtMagic(method,
 		url, authInfo, bodyReq, []byte(magic))
 	if err != nil {
+		if errno == 404 {
+			return nil, nil
+		}
 		eztools.LogErrPrint( /*strconv.Itoa(errno), */ err)
 		if body != nil {
 			bodyBytes, ok := body.([]byte)
