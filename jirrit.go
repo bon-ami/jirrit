@@ -385,7 +385,7 @@ func dispResults(issues []issueInfos) {
 		}
 		for ; i >= 0 && i < len(issues); i += step {
 			issue := issues[i]
-			dispResultOutputFunc("Issue/Reviewer/Comment " +
+			dispResultOutputFunc("Issue/Reviewer/Comment/File " +
 				strconv.Itoa(i+1))
 			dispResultOutputFunc(IssueinfoStrID + "=" +
 				issue[IssueinfoIndID])
@@ -400,15 +400,18 @@ func dispResults(issues []issueInfos) {
 				IssueinfoStrVerified + "=" +
 				issue[IssueinfoIndHead])
 			dispResultOutputFunc(IssueinfoStrProj + "/" +
+				IssueinfoStrOldPath + "/" +
 				IssueinfoStrCodereview + "=" +
 				issue[IssueinfoIndProj])
 			dispResultOutputFunc(IssueinfoStrBranch + "/" +
+				IssueinfoStrBin + "/" +
 				IssueinfoStrDispname + "=" +
 				issue[IssueinfoIndBranch])
 			dispResultOutputFunc(IssueinfoStrState + "/" +
 				IssueinfoStrSubmitType + "=" +
 				issue[IssueinfoIndState])
 			dispResultOutputFunc(IssueinfoStrMergeable + "/" +
+				IssueinfoStrCherry + "/" +
 				IssueinfoStrComments + "=" +
 				issue[IssueinfoIndMergeable])
 		}
@@ -961,10 +964,14 @@ const (
 	IssueinfoIndSubmittable = iota - IssueinfoIndMax
 	// IssueinfoIndVerified verified of issueInfos for gerrit
 	IssueinfoIndVerified
+	// IssueinfoIndOldPath binary of issueInfos for gerrit file list
+	IssueinfoIndOldPath
 	// IssueinfoIndCodereview codereview of issueInfos for gerrit
-	IssueinfoIndCodereview
+	IssueinfoIndCodereview = iota - IssueinfoIndMax - 1
+	// IssueinfoIndBin binary of issueInfos for gerrit file list
+	IssueinfoIndBin
 	// IssueinfoIndScore configured score of issueInfos for gerrit
-	IssueinfoIndScore // upper bound of scoreInfos
+	IssueinfoIndScore = iota - IssueinfoIndMax - 2 // upper bound of scoreInfos
 	// IssueinfoIndSubmitType submit type of issueInfos for gerrit
 	IssueinfoIndSubmitType
 	// IssueinfoIndMergeable mergable of issueInfos for gerrit
@@ -975,13 +982,13 @@ const (
 	// placeholder for ID
 
 	// IssueinfoIndDesc description of issueInfos for Jira
-	IssueinfoIndDesc = iota + 1 - IssueinfoIndMax*2
+	IssueinfoIndDesc = iota - 1 - IssueinfoIndMax*2
 	// no id for summary, jira
 
 	// IssueinfoIndDispname display name of issueInfos for Jira
-	IssueinfoIndDispname = iota + 3 - IssueinfoIndMax*2
+	IssueinfoIndDispname = iota + 1 - IssueinfoIndMax*2
 	// IssueinfoIndComment comment of issueInfos for Jira
-	IssueinfoIndComment = iota + 4 - IssueinfoIndMax*2
+	IssueinfoIndComment = iota + 2 - IssueinfoIndMax*2
 
 	// IssueinfoStrID ID string for issueInfos
 	IssueinfoStrID = "id"
@@ -1025,6 +1032,18 @@ const (
 	IssueinfoStrMergeable = "mergeable"
 	// IssueinfoStrComments comment string for issueInfos
 	IssueinfoStrComments = "comments"
+
+	// gerrit file list
+
+	// IssueinfoStrBin binary string for issueInfos
+	IssueinfoStrBin = "binary"
+	// IssueinfoStrBin old path/renamed from string for issueInfos
+	IssueinfoStrOldPath = "old_path"
+
+	// gerrit download list
+
+	// IssueinfoStrCherry cherry pick string of download for issueInfos
+	IssueinfoStrCherry = "Cherry Pick"
 )
 
 type issueInfos [IssueinfoIndMax]string
@@ -1054,8 +1073,10 @@ var issueDetailsTxt = issueInfos{
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
 var issueRevsTxt = issueInfos{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
-	IssueinfoStrProj, /*placeholder*/
-	IssueinfoStrBranch, IssueinfoStrSubmitType, ""}
+	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType, ""}
+var issueDldCmds = issueInfos{
+	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
+	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
 
 var reviewInfoTxt = issueInfos{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrVerified,
@@ -1175,7 +1196,8 @@ func parseTypicalJiraNum(svr *svrs, num string) (ret bool, nonDigit, digit strin
 	if len(num) < 1 {
 		return false, "", ""
 	}
-	re := regexp.MustCompile(`^[^-]+[-][\d]+$`)
+	re := regexp.MustCompile(`^[^-,]+[-][\d]+$`)
+	//eztools.ShowStrln("parsing " + num + " 2 typical JIRA")
 	pref := re.FindStringSubmatch(num)
 	if pref != nil {
 		parts := strings.Split(pref[0], typicalJiraSeparator)
@@ -1183,9 +1205,9 @@ func parseTypicalJiraNum(svr *svrs, num string) (ret bool, nonDigit, digit strin
 			saveProj(svr, parts[0])
 			return true, parts[0] + typicalJiraSeparator, parts[1]
 		}
-	} else {
+	} else { // "-123", "A-1,B-2", "123", etc.
 		if len(svr.Proj) > 0 {
-			re = regexp.MustCompile(`[-][\d]+$`)
+			re = regexp.MustCompile(`^[-][\d]+$`)
 			pref = re.FindStringSubmatch(num)
 			if pref != nil {
 				parts := strings.Split(pref[0], typicalJiraSeparator)
@@ -1215,6 +1237,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 			eztools.LogPrint("Done with " + issueInfo[IssueinfoIndID])
 		}
 	}
+	//eztools.Log(strings.Count(issueInfo[IssueinfoIndID], separator))
 	switch strings.Count(issueInfo[IssueinfoIndID], separator) {
 	case 0: // single ID
 		if ok, prefix, lowerBoundStr := parseTypicalJiraNum(svr,
@@ -1288,6 +1311,8 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		currentNo = parts[0]
 	}
 	i := 1
+	/*eztools.ShowStrln(prefix + "_" + currentNo)
+	eztools.ShowSthln(parts)*/
 	for {
 		issueInfo[IssueinfoIndID] = prefix + currentNo
 		//eztools.ShowStrln("looping " + issueInfo[IssueinfoIndID])
@@ -1426,12 +1451,17 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"show reviewers of a submit",
 			"rebase a submit",
 			"abandon a submit",
-			"show revision/commit of a submit",
+			"show current revision/commit of a submit",
 			"add scores to a submit",
 			"reject a case from any known statues",
 			"revert a submit",
+			"list files of a submit",
 			"merge a submit":
 			useInputOrPrompt(inf, IssueinfoIndID)
+		case "list files of a submit by revision":
+			useInputOrPrompt(inf, IssueinfoIndID)
+			useInputOrPromptStr(inf,
+				IssueinfoIndHead, IssueinfoStrRevCur)
 		case "cherry pick all my open":
 			useInputOrPromptStr(inf,
 				IssueinfoIndHead, IssueinfoStrRevCur)
@@ -1489,7 +1519,7 @@ func makeCat2Act() cat2Act {
 			{"list all open submits", gerritAllOpen},
 			{"show details of a submit", gerritDetail},
 			{"show reviewers of a submit", gerritReviews},
-			{"show revision/commit of a submit", gerritRev},
+			{"show current revision/commit of a submit", gerritRev},
 			{"rebase a submit", gerritRebase},
 			{"merge a submit", gerritMerge},
 			{"add scores to a submit", gerritScore},
@@ -1500,5 +1530,7 @@ func makeCat2Act() cat2Act {
 			{"cherry pick all my open submits", gerritPickMyOpen},
 			{"cherry pick a submit", gerritPick},
 			{"revert a submit", gerritRevert},
+			{"list files of a submit", gerritListFiles},
+			{"list files of a submit by revision", gerritListFilesByRev},
 		}}
 }

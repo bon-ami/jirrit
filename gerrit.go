@@ -39,7 +39,7 @@ func gerritGetIssuesOrReviews(method, url, magic string,
 param:
 	m	body
 	issues	results are appended to this
-	strs	keywords to parse
+	strs	keywords to parse. should be on the first level
 	issue	partially parsed fields, usually for looping only
 */
 func gerritParseIssuesOrReviews(m map[string]interface{},
@@ -58,18 +58,18 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 		if len(strs[i]) < 1 {
 			continue
 		}
-		// string array to loop?
-		mp, ok := m[strs[i]].(map[string]interface{})
-		if ok {
-			gerritParseIssuesOrReviews(mp, issues, strs, issue)
-			continue
-		}
 		// try to match one field
 		if m[strs[i]] == nil {
 			if eztools.Debugging && eztools.Verbose > 2 {
 				eztools.ShowStrln("unmatching " +
 					strs[i])
 			}
+			continue
+		}
+		// string array to loop?
+		mp, ok := m[strs[i]].(map[string]interface{})
+		if ok {
+			gerritParseIssuesOrReviews(mp, issues, strs, issue)
 			continue
 		}
 		// string?
@@ -126,6 +126,11 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 	return []issueInfos{*issue}
 }
 
+func gerritParseFileList(m map[string]interface{},
+	issues []issueInfos, issue *issueInfos) []issueInfos {
+	return nil
+}
+
 // no ID will return, since not in replies
 func gerritGetReviews(url, magic string, authInfo eztools.AuthInfo) (
 	[]issueInfos, error) {
@@ -151,16 +156,6 @@ func gerritGetIssues(url, magic string, authInfo eztools.AuthInfo) (
 		magic, authInfo,
 		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
 			return gerritParseIssuesOrReviews(m, issues, issueInfoTxt, nil)
-		})
-}
-
-// gerritGetRevs retrieves from URL and parse response into revision info
-func gerritGetRevs(url, magic string, authInfo eztools.AuthInfo) (
-	[]issueInfos, error) {
-	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
-		magic, authInfo,
-		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
-			return gerritParseIssuesOrReviews(m, issues, issueRevsTxt, nil)
 		})
 }
 
@@ -211,9 +206,22 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	const RestAPIStr = "changes/?q="
 	// +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
-	return gerritGetRevs(svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+"&o=ALL_REVISIONS",
-		svr.Magic, authInfo)
+	return gerritGetIssuesOrReviews(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoIndID]+"&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS",
+		svr.Magic, authInfo,
+		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			issues = gerritParseIssuesOrReviews(m, issues, issueRevsTxt, nil)
+			dlds := gerritParseRecursively(m, []string{"ssh", "commands"}, gerritParseDlds)
+			if len(issues) != 1 || len(dlds) != 1 {
+				eztools.LogPrint("Invalid number of revision/downloads!")
+				for _, i := range dlds {
+					issues = append(issues, i)
+				}
+			} else {
+				issues[0][IssueinfoIndMergeable] = dlds[0][IssueinfoIndMergeable]
+			}
+			return issues
+		})
 }
 
 func gerritDetail(svr *svrs, authInfo eztools.AuthInfo,
@@ -253,6 +261,169 @@ func gerritReviews2Scores(svr *svrs, authInfo eztools.AuthInfo,
 		//inf[j][ISSUEINFO_IND_ID] = id[ISSUEINFO_IND_ID]
 	}
 	return
+}
+
+func gerritParseFiles(body map[string]interface{}) []issueInfos {
+	issues := make([]issueInfos, 0)
+	for file1, v := range body {
+		if file1 == "/COMMIT_MSG" {
+			continue
+		}
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			eztools.LogPrint(reflect.TypeOf(v).String() +
+				" got instead of map string to interface!")
+			continue
+		}
+		type flds struct {
+			name, value string
+			indx        int
+		}
+		fldSlc := [...]flds{
+			{name: IssueinfoStrBin,
+				indx: IssueinfoIndBin},
+			{name: IssueinfoStrState,
+				indx: IssueinfoIndState},
+			{name: IssueinfoStrOldPath,
+				indx: IssueinfoIndOldPath},
+		}
+
+		for i, v := range fldSlc {
+			fldSlc[i].value, ok = func(m map[string]interface{}, str string) (string, bool) {
+				if m[str] == nil {
+					return "", true
+				}
+				fb, ok := m[str].(bool)
+				if ok {
+					return strconv.FormatBool(fb), true
+				}
+				fn, ok := m[str].(string)
+				if !ok {
+					eztools.LogPrint(reflect.TypeOf(m[str]).String() +
+						" got instead of string for " + str)
+					return "", false
+
+				}
+				return fn, true
+			}(m, v.name)
+		}
+		inf := issueInfos{IssueinfoIndHead: file1}
+		for _, fld1 := range fldSlc {
+			if len(fld1.value) > 0 {
+				inf[fld1.indx] = fld1.value
+			}
+		}
+		issues = append(issues, inf)
+		if eztools.Debugging && eztools.Verbose > 2 {
+			eztools.ShowStrln(file1 + " checked")
+		}
+	}
+	return issues
+}
+
+func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 || len(issueInfo[IssueinfoIndHead]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "changes/"
+	bodyMap, err := restMap(eztools.METHOD_GET,
+		svr.URL+RestAPIStr+
+			issueInfo[IssueinfoIndID]+"/revisions/"+
+			issueInfo[IssueinfoIndHead]+"/files/",
+		authInfo, nil, svr.Magic)
+	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
+		return nil, err
+	}
+	return gerritParseFiles(bodyMap), nil
+}
+
+func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoIndID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	/*inf, err := gerritRev(svr, authInfo, issueInfo)
+	if err != nil {
+		return nil, err
+	}
+	if len(inf) != 1 {
+		eztools.LogPrint("NO single revision info found!")
+		return inf, eztools.ErrNoValidResults
+	}
+	infWtRev := inf[0]
+	if len(infWtRev[IssueinfoIndHead]) < 1 {
+		eztools.LogPrint("NO revision found!")
+		return inf, eztools.ErrNoValidResults
+	}
+	issueInfo[IssueinfoIndHead] = infWtRev[IssueinfoIndHead]
+	return gerritListFilesByRev(svr, authInfo, issueInfo)*/
+	/*const RestAPIStr = "changes/?q="
+	bodyMap, err := restMap(eztools.METHOD_GET,
+		svr.URL+RestAPIStr+
+			issueInfo[IssueinfoIndID]+
+			"&o=CURRENT_REVISION&o=CURRENT_FILES",
+		authInfo, nil, svr.Magic)
+	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
+		return nil, err
+	}
+	f := bodyMap["files"]
+	if f == nil {
+		return nil, nil
+	}
+	fm, ok := f.(map[string]interface{})
+	if !ok {
+		eztools.LogPrint(reflect.TypeOf(f).String() +
+			" got instead of map string to interface!")
+		return nil, nil
+	}
+	return gerritParseFiles(fm), nil*/
+	const RestAPIStr = "changes/?q="
+	return gerritGetIssuesOrReviews(eztools.METHOD_GET,
+		svr.URL+RestAPIStr+
+			issueInfo[IssueinfoIndID]+
+			"&o=CURRENT_REVISION&o=CURRENT_FILES",
+		svr.Magic, authInfo, func(m map[string]interface{}, issues []issueInfos) []issueInfos {
+			return gerritParseRecursively(m, []string{"files"}, gerritParseFiles)
+		})
+}
+
+func gerritParseRecursively(m map[string]interface{}, str []string, // issues []issueInfos,
+	fun func(body map[string]interface{}) []issueInfos) (issues []issueInfos) {
+	if m[str[0]] != nil {
+		m1 := m
+		for _, v := range str {
+			fm, ok := m1[v].(map[string]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(m1[v]).String() +
+					" got instead of map string to interface for " + v)
+				return nil
+			}
+			m1 = fm
+		}
+		return fun(m1)
+	}
+	for _, v := range m {
+		fm, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, i := range gerritParseRecursively(fm, str /*issues,*/, fun) {
+			issues = append(issues, i)
+		}
+	}
+	return issues
+}
+
+func gerritParseDlds(body map[string]interface{}) []issueInfos {
+	retI := body[IssueinfoStrCherry]
+	retS, ok := retI.(string)
+	if !ok {
+		eztools.LogPrint(reflect.TypeOf(retI).String() +
+			" got instead of string!")
+		return nil
+	}
+	return []issueInfos{{IssueinfoIndMergeable: retS}}
 }
 
 // no ID will return, since not in replies
@@ -528,20 +699,6 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	map4Marshal[IssueinfoStrVerified] = 1
 	const RestAPIStr = "changes/"
 	for {
-		/*// check whether Manual-Testing exists
-		inf, _, err = gerritReviews2Scores(svr, authInfo, infWtRev)
-		if err != nil {
-			return inf, err
-		}
-		if len(inf) > 0 {
-			if len(inf[0][ISSUEINFO_IND_MANUALTEST]) > 0 {
-				map4Marshal[ISSUEINFO_STR_MANUALTEST] = 1
-			}
-			} else {
-			eztools.LogPrint("NO review info found!")
-			return inf, eztools.ErrNoValidResults
-		}*/
-
 		var jsonValue []byte
 		jsonValue, err = json.Marshal(map[string]map2Marshal{
 			"labels": map4Marshal})

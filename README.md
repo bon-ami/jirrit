@@ -76,7 +76,7 @@ Usually, these fields can be seen in an issue's detail.
   - list all open submits
   - show details of a submit (by commit ID or change ID)
   - show reviewers of a submit
-  - show revision/commit of a submit
+  - show current revision/commit of a submit
   - rebase a submit
   - merge a submit
   - add scores to a submit (Code-Review +2, Verified +1, and Manual-Testing, or other field as configured, +1)
@@ -87,6 +87,8 @@ Usually, these fields can be seen in an issue's detail.
   - cherry pick all my open submits
   - cherry pick a submit
   - revert a submit
+  - list files of a submit
+  - list files of a submit by revision
 
 ## Input grammar
 
