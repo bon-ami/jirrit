@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 	"reflect"
 	"strconv"
 	"time"
@@ -43,8 +44,8 @@ param:
 	issue	partially parsed fields, usually for looping only
 */
 func gerritParseIssuesOrReviews(m map[string]interface{},
-	issues []issueInfos, strs issueInfos,
-	issue *issueInfos) []issueInfos {
+	issues []issueInfos, strs []string,
+	issue issueInfos) []issueInfos {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowStr("parsing ")
 		eztools.ShowSthln(strs)
@@ -52,78 +53,76 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 		eztools.ShowSthln(m)
 	}
 	if issue == nil {
-		issue = new(issueInfos)
+		issue = make(issueInfos)
 	}
-	for i := 0; i < IssueinfoIndMax; i++ {
-		if len(strs[i]) < 1 {
+	for _, str1 := range strs {
+		if len(str1) < 1 {
 			continue
 		}
 		// try to match one field
-		if m[strs[i]] == nil {
+		if m[str1] == nil {
 			if eztools.Debugging && eztools.Verbose > 2 {
 				eztools.ShowStrln("unmatching " +
-					strs[i])
+					str1)
 			}
 			continue
 		}
 		// string array to loop?
-		mp, ok := m[strs[i]].(map[string]interface{})
+		mp, ok := m[str1].(map[string]interface{})
 		if ok {
 			gerritParseIssuesOrReviews(mp, issues, strs, issue)
 			continue
 		}
 		// string?
-		str, ok := m[strs[i]].(string)
+		str, ok := m[str1].(string)
 		if ok {
 			if eztools.Debugging && eztools.Verbose > 2 {
 				eztools.ShowStrln("matching " +
-					strs[i] + " <- " + str)
+					str1 + " <- " + str)
 			}
-			issue[i] = str
+			issue[str1] = str
 			continue
 		}
 		// not a string
-		if (i == IssueinfoIndSubmittable &&
-			strs[i] == IssueinfoStrSubmittable) ||
-			(i == IssueinfoIndMergeable &&
-				strs[i] == IssueinfoStrMergeable) {
+		if str1 == IssueinfoStrSubmittable ||
+			str1 == IssueinfoStrMergeable {
 			// bool is different
-			bo, ok := m[strs[i]].(bool)
+			bo, ok := m[str1].(bool)
 			if !ok {
 				if !eztools.Debugging {
 					continue
 				}
 				eztools.LogPrint(
 					reflect.TypeOf(
-						m[strs[i]]).
+						m[str1]).
 						String() +
 						" got instead of " +
 						"bool for " +
-						strs[i] + "!")
+						str1 + "!")
 			} else {
 				switch bo {
 				case true:
-					issue[i] = "true"
+					issue[str1] = "true"
 				case false:
-					issue[i] = "false"
+					issue[str1] = "false"
 				}
 				if eztools.Debugging && eztools.Verbose > 2 {
 					eztools.ShowStrln("matched " +
-						strs[i] + "=" + issue[i])
+						str1 + "=" + issue[str1])
 				}
 			}
 			continue
 		}
 		// other types
 		if eztools.Debugging {
-			eztools.Log(strs[i] + " matched with unknown type " +
-				reflect.TypeOf(m[strs[i]]).String())
+			eztools.Log(str1 + " matched with unknown type " +
+				reflect.TypeOf(m[str1]).String())
 		}
 	}
 	if issues != nil {
-		return append(issues, *issue)
+		return append(issues, issue)
 	}
-	return []issueInfos{*issue}
+	return []issueInfos{issue}
 }
 
 func gerritParseFileList(m map[string]interface{},
@@ -162,12 +161,12 @@ func gerritGetIssues(url, magic string, authInfo eztools.AuthInfo) (
 // param: issueInfo[ISSUEINFO_IND_ID] any ID acceptable
 func gerritQuery1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, opt string) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "changes/?q="
 	return gerritGetDetails(svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+opt,
+		issueInfo[IssueinfoStrID]+opt,
 		svr.Magic, authInfo)
 }
 
@@ -177,10 +176,10 @@ func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
 	inf, err := gerritQuery1(svr, authInfo, issueInfo, "")
 	if err != nil {
-		return issueInfos{}, err
+		return nil, err
 	}
 	if len(inf) != 1 {
-		return issueInfos{}, eztools.ErrNoValidResults
+		return nil, eztools.ErrNoValidResults
 	}
 	return inf[0], nil
 }
@@ -197,7 +196,7 @@ func gerritRevs(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
@@ -207,55 +206,71 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	const RestAPIStr = "changes/?q="
 	// +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET, svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+"&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS",
+		issueInfo[IssueinfoStrID]+"&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS",
 		svr.Magic, authInfo,
 		func(m map[string]interface{}, issues []issueInfos) []issueInfos {
 			issues = gerritParseIssuesOrReviews(m, issues, issueRevsTxt, nil)
-			dlds := gerritParseRecursively(m, []string{"ssh", "commands"}, gerritParseDlds)
+			dlds := gerritParseRecursively(m, []string{"ssh", "commands"},
+				func(body map[string]interface{}) []issueInfos {
+					retI := body[IssueinfoStrCherry]
+					if retI == nil {
+						eztools.LogPrint("NOTHING got intead of string!")
+						return nil
+					}
+					if retS, ok := retI.(string); ok {
+						return []issueInfos{{IssueinfoStrMergeable: retS}}
+					}
+					eztools.LogPrint(reflect.TypeOf(retI).String() +
+						" got instead of string!")
+					return nil
+				})
+
 			if len(issues) != 1 || len(dlds) != 1 {
 				eztools.LogPrint("Invalid number of revision/downloads!")
 				for _, i := range dlds {
 					issues = append(issues, i)
 				}
 			} else {
-				issues[0][IssueinfoIndMergeable] = dlds[0][IssueinfoIndMergeable]
+				issues[0][IssueinfoStrMergeable] = dlds[0][IssueinfoStrMergeable]
 			}
 			return issues
 		})
 }
 
-func gerritDetail(svr *svrs, authInfo eztools.AuthInfo,
+func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
 	return gerritQuery1(svr, authInfo, issueInfo, "&o=CURRENT_REVISION")
 }
 
-// gerritReviews2Scores get all reviews and combine into one set of scores
+func gerritDetail(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	const RestAPIStr = "changes/"
+	return gerritGetDetails(svr.URL+RestAPIStr+
+		issueInfo[IssueinfoStrID]+"/detail",
+		svr.Magic, authInfo)
+}
+
+// gerritReviews2Scores get all non-approved score items, including "" and "blocked"
 func gerritReviews2Scores(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (inf []issueInfos, scores scoreInfos, err error) {
+	issueInfo issueInfos) (inf []issueInfos, scores issueInfos, err error) {
 	/*id, err := gerritAnyID2ID(svr, authInfo, issueInfo)
 	if err != nil {
 		eztools.LogErrPrint(err)
 	}*/
-	inf, err = gerritReviews(svr, authInfo, issueInfo)
+	//inf, err = gerritReviews(svr, authInfo, issueInfo)
+	inf, err = gerritDetail(svr, authInfo, issueInfo)
 	if err != nil {
 		return
 	}
 	for _ /*j*/, inf1 := range inf {
-		for _, i := range []int{IssueinfoIndVerified,
-			IssueinfoIndCodereview, IssueinfoIndScore} {
+		for _, i := range []string{IssueinfoStrVerified,
+			IssueinfoStrCodereview} {
 			if len(inf1[i]) > 0 {
 				if inf1[i] == " 0" {
 					// not parsable bo Atoi
 					continue
 				}
-				score1, err := strconv.Atoi(inf1[i])
-				if err != nil {
-					/*if eztools.Debugging && eztools.Verbose > 0 {
-						eztools.ShowStrln(inf1[i] + " is NOT a number!")
-					}*/
-					continue
-				}
-				scores[i] += score1
+				scores[i] += inf1[i]
 			}
 		}
 		//inf[j][ISSUEINFO_IND_ID] = id[ISSUEINFO_IND_ID]
@@ -276,16 +291,15 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 			continue
 		}
 		type flds struct {
-			name, value string
-			indx        int
+			name, value, indx string
 		}
 		fldSlc := [...]flds{
 			{name: IssueinfoStrBin,
-				indx: IssueinfoIndBin},
+				indx: IssueinfoStrBin},
 			{name: IssueinfoStrState,
-				indx: IssueinfoIndState},
+				indx: IssueinfoStrState},
 			{name: IssueinfoStrOldPath,
-				indx: IssueinfoIndOldPath},
+				indx: IssueinfoStrOldPath},
 		}
 
 		for i, v := range fldSlc {
@@ -307,7 +321,7 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 				return fn, true
 			}(m, v.name)
 		}
-		inf := issueInfos{IssueinfoIndHead: file1}
+		inf := issueInfos{IssueinfoStrHead: file1}
 		for _, fld1 := range fldSlc {
 			if len(fld1.value) > 0 {
 				inf[fld1.indx] = fld1.value
@@ -323,14 +337,14 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 
 func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 || len(issueInfo[IssueinfoIndHead]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 || len(issueInfo[IssueinfoStrHead]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "changes/"
 	bodyMap, err := restMap(eztools.METHOD_GET,
 		svr.URL+RestAPIStr+
-			issueInfo[IssueinfoIndID]+"/revisions/"+
-			issueInfo[IssueinfoIndHead]+"/files/",
+			issueInfo[IssueinfoStrID]+"/revisions/"+
+			issueInfo[IssueinfoStrRevCur]+"/files/",
 		authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
@@ -340,7 +354,7 @@ func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	/*inf, err := gerritRev(svr, authInfo, issueInfo)
@@ -352,16 +366,16 @@ func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
 		return inf, eztools.ErrNoValidResults
 	}
 	infWtRev := inf[0]
-	if len(infWtRev[IssueinfoIndHead]) < 1 {
+	if len(infWtRev[IssueinfoStrHead]) < 1 {
 		eztools.LogPrint("NO revision found!")
 		return inf, eztools.ErrNoValidResults
 	}
-	issueInfo[IssueinfoIndHead] = infWtRev[IssueinfoIndHead]
+	issueInfo[IssueinfoStrHead] = infWtRev[IssueinfoStrHead]
 	return gerritListFilesByRev(svr, authInfo, issueInfo)*/
 	/*const RestAPIStr = "changes/?q="
 	bodyMap, err := restMap(eztools.METHOD_GET,
 		svr.URL+RestAPIStr+
-			issueInfo[IssueinfoIndID]+
+			issueInfo[IssueinfoStrID]+
 			"&o=CURRENT_REVISION&o=CURRENT_FILES",
 		authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
@@ -381,13 +395,15 @@ func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
 	const RestAPIStr = "changes/?q="
 	return gerritGetIssuesOrReviews(eztools.METHOD_GET,
 		svr.URL+RestAPIStr+
-			issueInfo[IssueinfoIndID]+
+			issueInfo[IssueinfoStrID]+
 			"&o=CURRENT_REVISION&o=CURRENT_FILES",
 		svr.Magic, authInfo, func(m map[string]interface{}, issues []issueInfos) []issueInfos {
 			return gerritParseRecursively(m, []string{"files"}, gerritParseFiles)
 		})
 }
 
+// gerritParseRecursively loops into the map, returning all results,
+// invoking func with the deepest found matches to name of map[string]interface{} into str.
 func gerritParseRecursively(m map[string]interface{}, str []string, // issues []issueInfos,
 	fun func(body map[string]interface{}) []issueInfos) (issues []issueInfos) {
 	if m[str[0]] != nil {
@@ -408,46 +424,35 @@ func gerritParseRecursively(m map[string]interface{}, str []string, // issues []
 		if !ok {
 			continue
 		}
-		for _, i := range gerritParseRecursively(fm, str /*issues,*/, fun) {
+		for _, i := range gerritParseRecursively(fm, str, fun) {
 			issues = append(issues, i)
 		}
 	}
 	return issues
 }
 
-func gerritParseDlds(body map[string]interface{}) []issueInfos {
-	retI := body[IssueinfoStrCherry]
-	retS, ok := retI.(string)
-	if !ok {
-		eztools.LogPrint(reflect.TypeOf(retI).String() +
-			" got instead of string!")
-		return nil
-	}
-	return []issueInfos{{IssueinfoIndMergeable: retS}}
-}
-
 // no ID will return, since not in replies
 func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "changes/"
 	return gerritGetReviews(svr.URL+RestAPIStr+
-		issueInfo[IssueinfoIndID]+"/reviewers/",
+		issueInfo[IssueinfoStrID]+"/reviewers/",
 		svr.Magic, authInfo)
 }
 
 func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 	status string, issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	var urlAffix string
 	strs := [...][2]string{
 		{"status:", status},
-		{"branch:", issueInfo[IssueinfoIndBranch]},
-		{"owner:", issueInfo[IssueinfoIndID]}}
+		{"branch:", issueInfo[IssueinfoStrBranch]},
+		{"owner:", issueInfo[IssueinfoStrID]}}
 	for _, v := range strs {
 		if len(v[1]) > 0 {
 			if len(urlAffix) > 0 {
@@ -479,7 +484,7 @@ func gerritSbOpen(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	issueInfo[IssueinfoIndID] = authInfo.User
+	issueInfo[IssueinfoStrID] = authInfo.User
 	return gerritGetIssuesWtOwner(svr, authInfo, "open", issueInfo)
 }
 
@@ -501,7 +506,7 @@ func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 			return issueInfo, err
 		}
 		// check mergable only, without submittable
-		inf, err := gerritDetail(svr, authInfo, issueInfo)
+		inf, err := gerritDetailOnCurrRev(svr, authInfo, issueInfo)
 		if err != nil {
 			return issueInfo, err
 		}
@@ -509,8 +514,8 @@ func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 			err = eztools.ErrNoValidResults
 			return issueInfo, err
 		}
-		if inf[0][IssueinfoIndSubmittable] != "false" &&
-			inf[0][IssueinfoIndMergeable] != "false" {
+		if inf[0][IssueinfoStrSubmittable] != "false" &&
+			inf[0][IssueinfoStrMergeable] != "false" {
 			// either empty(=not supported or already merged) or true will do
 			_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
 			// TODO: check returned slice
@@ -537,37 +542,36 @@ func gerritPick(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritPick1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, res []issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 ||
-		len(issueInfo[IssueinfoIndBranch]) < 1 ||
-		len(issueInfo[IssueinfoIndHead]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 ||
+		len(issueInfo[IssueinfoStrBranch]) < 1 ||
+		len(issueInfo[IssueinfoStrRevCur]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	if eztools.Debugging && !uiSilent {
 		if !eztools.ChkCfmNPrompt("continue to cherrypick "+
-			issueInfo[IssueinfoIndHead]+
-			" from "+issueInfo[IssueinfoIndID]+
-			" to "+issueInfo[IssueinfoIndBranch], "n") {
+			issueInfo[IssueinfoStrID]+
+			" from "+issueInfo[IssueinfoStrRevCur]+
+			" to "+issueInfo[IssueinfoStrBranch], "n") {
 			return nil, nil
 		}
 		eztools.Log("to cheerypick " +
-			issueInfo[IssueinfoIndHead] +
-			" from " + issueInfo[IssueinfoIndID] +
-			" to " + issueInfo[IssueinfoIndBranch])
+			issueInfo[IssueinfoStrID] +
+			" from " + issueInfo[IssueinfoStrRevCur] +
+			" to " + issueInfo[IssueinfoStrBranch])
 	}
 	const RestAPIStr = "changes/"
 	jsonValue, _ := json.Marshal(map[string]string{
 		//"message": "testing", // if this is a must, I have to read original submit message
-		"destination": issueInfo[IssueinfoIndBranch]})
+		"destination": issueInfo[IssueinfoStrBranch]})
 	bodyMap, err := restMap("POST", svr.URL+
-		RestAPIStr+issueInfo[IssueinfoIndID]+
-		"/revisions/"+issueInfo[IssueinfoIndHead]+
+		RestAPIStr+issueInfo[IssueinfoStrID]+
+		"/revisions/"+issueInfo[IssueinfoStrRevCur]+
 		"/cherrypick",
 		authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
 	if len(bodyMap) < 1 {
 		return nil, nil
 	}
-	return gerritParseIssuesOrReviews(bodyMap, res, issueInfoTxt, nil),
-		err
+	return gerritParseIssuesOrReviews(bodyMap, res, issueInfoTxt, nil), err
 }
 
 // gerritProcRevLoopMyOpen run a func on all my open issues
@@ -591,8 +595,8 @@ func gerritProcRevLoopMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowStrln("NO unique revision info found?")
 			if eztools.Debugging {
 				eztools.Log("NO unique revision found for " +
-					issueInfo[IssueinfoIndID] + " (" +
-					issueInfo[IssueinfoIndID] + ")")
+					issueInfo[IssueinfoStrID] + " (" +
+					issueInfo[IssueinfoStrID] + ")")
 			}
 			continue
 		}
@@ -605,11 +609,11 @@ func gerritProcRevLoopMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 // gerritPickMyOpen cherry picks all my open submits
 func gerritPickMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	branch := issueInfo[IssueinfoIndBranch]
+	branch := issueInfo[IssueinfoStrBranch]
 	f := func(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo issueInfos,
 		res []issueInfos) []issueInfos {
-		issueInfo[IssueinfoIndBranch] = branch
+		issueInfo[IssueinfoStrBranch] = branch
 		resO, _ := gerritPick1(svr, authInfo, issueInfo, res)
 		return resO
 	}
@@ -655,18 +659,18 @@ func gerritActOn1WtAnyID(svr *svrs, authInfo eztools.AuthInfo,
 func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues []issueInfos,
 	action string) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return issues, eztools.ErrInvalidInput
 	}
 	if eztools.Debugging && !uiSilent {
 		if !eztools.ChkCfmNPrompt(action+" "+
-			issueInfo[IssueinfoIndID], "n") {
+			issueInfo[IssueinfoStrID], "n") {
 			return nil, nil
 		}
 	}
 	const RestAPIStr = "changes/"
 	bodyMap, err := restMap("POST", svr.URL+
-		RestAPIStr+issueInfo[IssueinfoIndID]+action,
+		RestAPIStr+issueInfo[IssueinfoStrID]+action,
 		authInfo, nil, svr.Magic)
 	return gerritParseIssuesOrReviews(bodyMap, issues, issueInfoTxt, nil),
 		err
@@ -674,7 +678,7 @@ func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	inf, err := gerritRev(svr, authInfo, issueInfo)
@@ -686,7 +690,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		return inf, eztools.ErrNoValidResults
 	}
 	infWtRev := inf[0]
-	if len(infWtRev[IssueinfoIndHead]) < 1 {
+	if len(infWtRev[IssueinfoStrHead]) < 1 {
 		eztools.LogPrint("NO revision found!")
 		return inf, eztools.ErrNoValidResults
 	}
@@ -709,13 +713,13 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		//eztools.ShowStrln(string(jsonValue))
 		if eztools.Debugging && !uiSilent {
 			if !eztools.ChkCfmNPrompt("continue to +2/1 to "+
-				infWtRev[IssueinfoIndID], "n") {
+				infWtRev[IssueinfoStrID], "n") {
 				return nil, nil
 			}
 		}
 		body, err := restSth("POST", svr.URL+RestAPIStr+
-			infWtRev[IssueinfoIndID]+"/revisions/"+
-			infWtRev[IssueinfoIndHead]+"/review",
+			infWtRev[IssueinfoStrID]+"/revisions/"+
+			infWtRev[IssueinfoStrHead]+"/review",
 			authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
 		// response only contain scores for a success, so it is not parsed
 		if err == nil {
@@ -765,7 +769,7 @@ func gerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
 		// list ready commits
 		inf, err := gerritMyOpen(svr, authInfo, issueInfo)
 		if err == nil {
@@ -776,25 +780,25 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			for _, v := range inf {
 				choices = append(choices,
-					v[IssueinfoIndHead]+" <-> "+
-						v[IssueinfoIndBranch])
+					v[IssueinfoStrHead]+" <-> "+
+						v[IssueinfoStrBranch])
 			}
 			i := eztools.ChooseStrings(choices)
 			if i != eztools.InvalidID {
-				issueInfo[IssueinfoIndID] = inf[i][IssueinfoIndID]
+				issueInfo[IssueinfoStrID] = inf[i][IssueinfoStrID]
 			}
 		}
 	}
-	if len(issueInfo[IssueinfoIndID]) < 1 {
-		useInputOrPrompt(&issueInfo, IssueinfoIndID)
-		if len(issueInfo[IssueinfoIndID]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
+		useInputOrPrompt(issueInfo, IssueinfoStrID)
+		if len(issueInfo[IssueinfoStrID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
 	}
 	var (
 		err                          error
 		inf                          []issueInfos
-		scores                       scoreInfos
+		scores                       issueInfos
 		debugVeri, scored, elsewhere bool
 		submitType                   string
 	)
@@ -803,8 +807,9 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	eztools.ShowStr("waiting for issue to be submittable/mergeable.")
 	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
+	READY2MERGE:
 		for err == nil {
-			inf, err = gerritDetail(svr, authInfo, issueInfo)
+			inf, err = gerritDetailOnCurrRev(svr, authInfo, issueInfo)
 			if err != nil {
 				break
 			}
@@ -812,15 +817,23 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				err = eztools.ErrNoValidResults
 				break
 			}
-			if inf[0][IssueinfoIndMergeable] == "false" {
+			if inf[0][IssueinfoStrMergeable] == "false" {
 				// conflict
 				err = eztools.ErrOutOfBound
 				break
 			}
-			if inf[0][IssueinfoIndSubmittable] != "false" {
-				// true or empty
+			switch inf[0][IssueinfoStrSubmittable] {
+			case "true":
 				// the only successful break of loop
-				break
+				break READY2MERGE
+			case "":
+				//gerritDetails and check
+				/*labels:map[
+				  Code-Review:map[
+				          approved:map  for OK
+				          blocking:true for NG
+				          rejected:map  also NG
+				          values:map[ 0:No score +1:Looks good to me, but someone else must approve +2:Looks good to me, approved -1:I would prefer this is not merged as is -2:This shall not be merged]]*/
 			}
 
 			if debugVeri {
@@ -833,7 +846,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 					err = eztools.ErrNoValidResults
 					break
 				}
-				submitType = inf[0][IssueinfoIndSubmitType]
+				submitType = inf[0][IssueinfoStrSubmitType]
 			}
 
 			// get scores
@@ -847,30 +860,29 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			}*/
 
 			if debugVeri {
-				eztools.Log("Verified=" + strconv.Itoa(scores[IssueinfoIndVerified]))
+				eztools.Log("Verified=" + scores[IssueinfoStrVerified])
 				// MERGE_IF_NECESSARY/FAST_FORWARD_ONLY
 				eztools.Log(IssueinfoStrSubmitType + "=" +
 					submitType)
 				debugVeri = false
 			}
-			if scores[IssueinfoIndCodereview] < 2 ||
-				(len(svr.Score) > 0 && scores[IssueinfoIndScore] < 1) ||
-				scores[IssueinfoIndVerified] < 1 {
-				if scored {
-					if !elsewhere && scores[IssueinfoIndVerified] > 0 {
-						eztools.Log("failed to score non-verified field")
-						elsewhere = true
-					}
-				} else {
-					_, err = gerritScore(svr, authInfo, inf[0])
-					if err != nil {
-						eztools.LogErrPrintWtInfo(
-							"failed to score and wait for it to be scored by elsewhere.",
-							err)
-					}
-					scored = true
+			/*if scores[IssueinfoStrCodereview] < 2 ||
+			len(svr.Score) > 0 || scores[IssueinfoStrVerified] < 1 {*/
+			if scored {
+				if !elsewhere && len(scores[IssueinfoStrVerified]) > 0 {
+					eztools.Log("failed to score non-verified field")
+					elsewhere = true
 				}
+			} else {
+				_, err = gerritScore(svr, authInfo, inf[0])
+				if err != nil {
+					eztools.LogErrPrintWtInfo(
+						"failed to score and wait for it to be scored by elsewhere.",
+						err)
+				}
+				scored = true
 			}
+			//}
 
 			time.Sleep(intGerritMerge * time.Second)
 			eztools.ShowStr(".")
@@ -887,4 +899,43 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		// TODO: check returned slice
 		return issueInfo, err
 	})
+}
+
+func gerritListPrj(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) ([]issueInfos, error) {
+	if len(issueInfo[IssueinfoStrProj]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "projects/"
+	bodyMap, err := restMap(eztools.METHOD_GET,
+		svr.URL+RestAPIStr+
+			url.QueryEscape(issueInfo[IssueinfoStrProj])+"/config",
+		authInfo, nil, svr.Magic)
+	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
+		return nil, err
+	}
+	return gerritParseRecursively(bodyMap, []string{"jira"},
+		func(m map[string]interface{}) []issueInfos {
+			issueInfo := make(issueInfos)
+			sth := false
+			for _, v := range [...]string{
+				IssueinfoStrLink, IssueinfoStrMatch} {
+				if m[v] == nil {
+					eztools.LogPrint("NOTHING got intead of string for " +
+						v + "!")
+					continue
+				}
+				if retS, ok := m[v].(string); !ok {
+					eztools.LogPrint(reflect.TypeOf(m[v]).String() +
+						" got instead of string for " + v + "!")
+				} else {
+					issueInfo[v] = retS
+					sth = true
+				}
+			}
+			if !sth {
+				return nil
+			}
+			return []issueInfos{issueInfo}
+		}), nil
 }

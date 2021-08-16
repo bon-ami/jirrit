@@ -250,10 +250,10 @@ func main() {
 	go chkUpdate(cfg.EzToolsCfg, upch)
 
 	var (
-		fun       actionFunc
-		issueInfo issueInfos
-		choices   []string
+		fun     actionFunc
+		choices []string
 	)
+	issueInfo := make(issueInfos)
 	//if eztools.Debugging && eztools.Verbose > 0 {
 	dispResultOutputFunc = eztools.LogPrint
 	//} else {
@@ -283,13 +283,13 @@ func main() {
 					uiSilent = true
 					fun = v.f
 					issueInfo = issueInfos{
-						IssueinfoIndID:      paramI,
-						IssueinfoIndKey:     paramK,
-						IssueinfoIndHead:    paramHD,
-						IssueinfoIndProj:    paramP,
-						IssueinfoIndBranch:  paramB,
-						IssueinfoIndState:   paramS,
-						IssueinfoIndComment: paramC}
+						IssueinfoStrID:       paramI,
+						IssueinfoStrKey:      paramK,
+						IssueinfoStrHead:     paramHD,
+						IssueinfoStrProj:     paramP,
+						IssueinfoStrBranch:   paramB,
+						IssueinfoStrState:    paramS,
+						IssueinfoStrComments: paramC}
 					eztools.Log("runtime params: server=" +
 						svr.Name + ", action=" + v.n +
 						", info array:")
@@ -326,22 +326,22 @@ func main() {
 			if fun == nil {
 				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
 					issueInfos{
-						IssueinfoIndID:      paramI,
-						IssueinfoIndKey:     paramK,
-						IssueinfoIndHead:    paramHD,
-						IssueinfoIndProj:    paramP,
-						IssueinfoIndBranch:  paramB,
-						IssueinfoIndState:   paramS,
-						IssueinfoIndComment: paramC})
+						IssueinfoStrID:       paramI,
+						IssueinfoStrKey:      paramK,
+						IssueinfoStrHead:     paramHD,
+						IssueinfoStrProj:     paramP,
+						IssueinfoStrBranch:   paramB,
+						IssueinfoStrState:    paramS,
+						IssueinfoStrComments: paramC})
 				if fun == nil {
 					break
 				}
 			}
 			// auto changing ID is redundant for fun that do this, too.
 			// TODO: restructure single input in inputIssueInfo4Act and loop in fun
-			changingID, prefID, postID := parseTypicalJiraNum(svr, issueInfo[IssueinfoIndID])
+			changingID, prefID, postID := parseTypicalJiraNum(svr, issueInfo[IssueinfoStrID])
 			if changingID {
-				issueInfo[IssueinfoIndID] = prefID + postID
+				issueInfo[IssueinfoStrID] = prefID + postID
 			}
 			authInfo, err := cfg2AuthInfo(*svr, cfg)
 			if err != nil {
@@ -384,36 +384,11 @@ func dispResults(issues []issueInfos) {
 			i = 0
 		}
 		for ; i >= 0 && i < len(issues); i += step {
-			issue := issues[i]
 			dispResultOutputFunc("Issue/Reviewer/Comment/File " +
 				strconv.Itoa(i+1))
-			dispResultOutputFunc(IssueinfoStrID + "=" +
-				issue[IssueinfoIndID])
-			dispResultOutputFunc(IssueinfoStrAssignee + "/" +
-				IssueinfoStrKey + "/" +
-				IssueinfoStrName + "/" +
-				IssueinfoStrSubmittable + "=" +
-				issue[IssueinfoIndSubmittable])
-			dispResultOutputFunc(IssueinfoStrHead + "/" +
-				IssueinfoStrSummary + "/" +
-				IssueinfoStrRevCur + "/" +
-				IssueinfoStrVerified + "=" +
-				issue[IssueinfoIndHead])
-			dispResultOutputFunc(IssueinfoStrProj + "/" +
-				IssueinfoStrOldPath + "/" +
-				IssueinfoStrCodereview + "=" +
-				issue[IssueinfoIndProj])
-			dispResultOutputFunc(IssueinfoStrBranch + "/" +
-				IssueinfoStrBin + "/" +
-				IssueinfoStrDispname + "=" +
-				issue[IssueinfoIndBranch])
-			dispResultOutputFunc(IssueinfoStrState + "/" +
-				IssueinfoStrSubmitType + "=" +
-				issue[IssueinfoIndState])
-			dispResultOutputFunc(IssueinfoStrMergeable + "/" +
-				IssueinfoStrCherry + "/" +
-				IssueinfoStrComments + "=" +
-				issue[IssueinfoIndMergeable])
+			for i1, v1 := range issues[i] {
+				dispResultOutputFunc(i1 + "=" + v1)
+			}
 		}
 	}
 }
@@ -795,7 +770,7 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 			return nil, issueInfo
 		}
 	}
-	inputIssueInfo4Act(svrType, funcs[fi].n, &issueInfo)
+	inputIssueInfo4Act(svrType, funcs[fi].n, issueInfo)
 	return funcs[fi].f, issueInfo
 }
 
@@ -939,56 +914,56 @@ func getValuesFromMaps(name string, field interface{}) string {
 const (
 	//common use
 
-	// IssueinfoIndID ID for issueInfos
-	IssueinfoIndID = iota
-	// IssueinfoIndKey key for issueInfos
-	IssueinfoIndKey
-	// IssueinfoIndHead head/title for issueInfos
-	IssueinfoIndHead
-	// IssueinfoIndProj project for issueInfos
-	IssueinfoIndProj
-	// IssueinfoIndBranch branch for issueInfos
-	IssueinfoIndBranch
-	// IssueinfoIndState state for issueInfos
-	IssueinfoIndState
-	// IssueinfoIndExt extension/placeholder for issueInfos
-	IssueinfoIndExt // placeholder for mergable of gerrit and comment of jira
-	// IssueinfoIndMax number of issueInfos indexes
-	IssueinfoIndMax
+	/*// IssueinfoStrID ID for issueInfos
+	IssueinfoStrID = iota
+	// IssueinfoStrKey key for issueInfos
+	IssueinfoStrKey
+	// IssueinfoStrHead head/title for issueInfos
+	IssueinfoStrHead
+	// IssueinfoStrProj project for issueInfos
+	IssueinfoStrProj
+	// IssueinfoStrBranch branch for issueInfos
+	IssueinfoStrBranch
+	// IssueinfoStrState state for issueInfos
+	IssueinfoStrState
+	// IssueinfoStrExt extension/placeholder for issueInfos
+	IssueinfoStrExt // placeholder for mergable of gerrit and comment of jira
+	// IssueinfoStrMax number of issueInfos indexes
+	IssueinfoStrMax
 
 	// gerrit state
 
 	// placeholder for ID
 
-	// IssueinfoIndSubmittable submittable of issueInfos for gerrit
-	IssueinfoIndSubmittable = iota - IssueinfoIndMax
-	// IssueinfoIndVerified verified of issueInfos for gerrit
-	IssueinfoIndVerified
-	// IssueinfoIndOldPath binary of issueInfos for gerrit file list
-	IssueinfoIndOldPath
-	// IssueinfoIndCodereview codereview of issueInfos for gerrit
-	IssueinfoIndCodereview = iota - IssueinfoIndMax - 1
-	// IssueinfoIndBin binary of issueInfos for gerrit file list
-	IssueinfoIndBin
-	// IssueinfoIndScore configured score of issueInfos for gerrit
-	IssueinfoIndScore = iota - IssueinfoIndMax - 2 // upper bound of scoreInfos
-	// IssueinfoIndSubmitType submit type of issueInfos for gerrit
-	IssueinfoIndSubmitType
-	// IssueinfoIndMergeable mergable of issueInfos for gerrit
-	IssueinfoIndMergeable
+	// IssueinfoStrSubmittable submittable of issueInfos for gerrit
+	IssueinfoStrSubmittable = iota - IssueinfoStrMax
+	// IssueinfoStrVerified verified of issueInfos for gerrit
+	IssueinfoStrVerified
+	// IssueinfoStrOldPath binary of issueInfos for gerrit file list
+	IssueinfoStrOldPath
+	// IssueinfoStrCodereview codereview of issueInfos for gerrit
+	IssueinfoStrCodereview = iota - IssueinfoStrMax - 1
+	// IssueinfoStrBin binary of issueInfos for gerrit file list
+	IssueinfoStrBin
+	// IssueinfoStrScore configured score of issueInfos for gerrit
+	IssueinfoStrScore = iota - IssueinfoStrMax - 2 // upper bound of scoreInfos
+	// IssueinfoStrSubmitType submit type of issueInfos for gerrit
+	IssueinfoStrSubmitType
+	// IssueinfoStrMergeable mergable of issueInfos for gerrit
+	IssueinfoStrMergeable
 
 	// jira details
 
 	// placeholder for ID
 
-	// IssueinfoIndDesc description of issueInfos for Jira
-	IssueinfoIndDesc = iota - 1 - IssueinfoIndMax*2
+	// IssueinfoStrDesc description of issueInfos for Jira
+	IssueinfoStrDesc = iota - 1 - IssueinfoStrMax*2
 	// no id for summary, jira
 
-	// IssueinfoIndDispname display name of issueInfos for Jira
-	IssueinfoIndDispname = iota + 1 - IssueinfoIndMax*2
-	// IssueinfoIndComment comment of issueInfos for Jira
-	IssueinfoIndComment = iota + 2 - IssueinfoIndMax*2
+	// IssueinfoStrDispname display name of issueInfos for Jira
+	IssueinfoStrDispname = iota + 1 - IssueinfoStrMax*2
+	// IssueinfoStrComment comment of issueInfos for Jira
+	IssueinfoStrComment = iota + 2 - IssueinfoStrMax*2*/
 
 	// IssueinfoStrID ID string for issueInfos
 	IssueinfoStrID = "id"
@@ -1044,12 +1019,20 @@ const (
 
 	// IssueinfoStrCherry cherry pick string of download for issueInfos
 	IssueinfoStrCherry = "Cherry Pick"
+
+	// gerrit project config
+
+	// IssueinfoStrLink is the JIRA link string in config of a project
+	IssueinfoStrLink = "link"
+	// IssueinfoStrMatch is the JIRA match pattern string in config of a project
+	IssueinfoStrMatch = "match"
 )
 
-type issueInfos [IssueinfoIndMax]string
-type scoreInfos [IssueinfoIndScore + 1]int
+type issueInfos map[string]string
 
-func (issueInfo *issueInfos) String() string {
+//type scoreInfos [IssueinfoStrScore + 1]int
+
+/*func (issueInfo *issueInfos) String() string {
 	var res string
 	for _, v := range issueInfo {
 		switch len(res) {
@@ -1063,25 +1046,23 @@ func (issueInfo *issueInfos) String() string {
 	}
 	res += " ]"
 	return res
-}
+}*/
 
-var issueInfoTxt = issueInfos{
+var issueInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrHead,
-	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, ""}
-var issueDetailsTxt = issueInfos{
+	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState}
+var issueDetailsTxt = []string{
 	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
-var issueRevsTxt = issueInfos{
+var issueRevsTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
-	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType, ""}
-var issueDldCmds = issueInfos{
+	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType}
+var issueDldCmds = []string{
 	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
-
-var reviewInfoTxt = issueInfos{
+var reviewInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrVerified,
-	IssueinfoStrCodereview, IssueinfoStrDispname, /*placeholder for SCORE*/
-	IssueinfoStrApprovals, ""}
+	IssueinfoStrCodereview, IssueinfoStrDispname, IssueinfoStrApprovals}
 
 /*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
 ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME,
@@ -1090,7 +1071,7 @@ ISSUEINFO_STR_STATE}*/
 ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
 ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
 
-func chkNSetIssueInfo(v interface{}, issueInfo *issueInfos, i int) bool {
+func chkNSetIssueInfo(v interface{}, issueInfo issueInfos, i string) bool {
 	if v == nil {
 		eztools.Log("nil got, not string")
 		return false
@@ -1234,21 +1215,21 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	const separator = ","
 	printID := func() {
 		if err == nil {
-			eztools.LogPrint("Done with " + issueInfo[IssueinfoIndID])
+			eztools.LogPrint("Done with " + issueInfo[IssueinfoStrID])
 		}
 	}
-	//eztools.Log(strings.Count(issueInfo[IssueinfoIndID], separator))
-	switch strings.Count(issueInfo[IssueinfoIndID], separator) {
+	//eztools.Log(strings.Count(issueInfo[IssueinfoStrID], separator))
+	switch strings.Count(issueInfo[IssueinfoStrID], separator) {
 	case 0: // single ID
 		if ok, prefix, lowerBoundStr := parseTypicalJiraNum(svr,
-			issueInfo[IssueinfoIndID]); ok {
-			issueInfo[IssueinfoIndID] = prefix + lowerBoundStr
+			issueInfo[IssueinfoStrID]); ok {
+			issueInfo[IssueinfoStrID] = prefix + lowerBoundStr
 		}
 		issueInfo, err := fun(issueInfo)
 		printID()
 		return []issueInfos{issueInfo}, err
 	case 2: // x,,y or x,y,z
-		parts := strings.Split(issueInfo[IssueinfoIndID], separator)
+		parts := strings.Split(issueInfo[IssueinfoStrID], separator)
 		//eztools.Log(parts)
 		if len(parts) != 2 || len(parts[0]) < 1 || len(parts[2]) < 1 {
 			if len(parts) != 3 {
@@ -1286,8 +1267,8 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 				return
 			}
 			for i := lowerBound; i <= upperBound; i++ {
-				issueInfo[IssueinfoIndID] = prefix + strconv.Itoa(i)
-				//eztools.ShowStrln("looping " + issueInfo[IssueinfoIndID])
+				issueInfo[IssueinfoStrID] = prefix + strconv.Itoa(i)
+				//eztools.ShowStrln("looping " + issueInfo[IssueinfoStrID])
 				issueInfo, err = fun(issueInfo)
 				/*if err != nil {
 					return
@@ -1302,7 +1283,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		}
 	}
 	// x,y[,...]
-	parts := strings.Split(issueInfo[IssueinfoIndID], separator)
+	parts := strings.Split(issueInfo[IssueinfoStrID], separator)
 	var (
 		prefix, prefixNew, currentNo string
 		ok                           bool
@@ -1314,8 +1295,8 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	/*eztools.ShowStrln(prefix + "_" + currentNo)
 	eztools.ShowSthln(parts)*/
 	for {
-		issueInfo[IssueinfoIndID] = prefix + currentNo
-		//eztools.ShowStrln("looping " + issueInfo[IssueinfoIndID])
+		issueInfo[IssueinfoStrID] = prefix + currentNo
+		//eztools.ShowStrln("looping " + issueInfo[IssueinfoStrID])
 		issueInfo, err = fun(issueInfo)
 		/*if err != nil {
 			return
@@ -1337,7 +1318,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	return
 }
 
-func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
+func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 	if uiSilent {
 		defer noInteractionAllowed()
 		return
@@ -1356,7 +1337,7 @@ func cfmInputOrPromptStrMultiLines(inf *issueInfos, ind int, prompt string) {
 }
 
 // return value: whether anything new is input
-func cfmInputOrPromptStr(svr *svrs, inf *issueInfos, ind int, prompt string) bool {
+func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if uiSilent {
 		return false
 	}
@@ -1411,11 +1392,11 @@ func cfmInputOrPromptStr(svr *svrs, inf *issueInfos, ind int, prompt string) boo
 	return true
 }
 
-func cfmInputOrPrompt(svr *svrs, inf *issueInfos, ind int) bool {
-	return cfmInputOrPromptStr(svr, inf, ind, issueInfoTxt[ind])
+func cfmInputOrPrompt(svr *svrs, inf issueInfos, ind string) bool {
+	return cfmInputOrPromptStr(svr, inf, ind, ind)
 }
 
-func useInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
+func useInputOrPromptStr(inf issueInfos, ind, prompt string) {
 	if len(inf[ind]) > 0 {
 		return
 	}
@@ -1426,11 +1407,11 @@ func useInputOrPromptStr(inf *issueInfos, ind int, prompt string) {
 	inf[ind] = eztools.PromptStr(prompt)
 }
 
-func useInputOrPrompt(inf *issueInfos, ind int) {
-	useInputOrPromptStr(inf, ind, issueInfoTxt[ind])
+func useInputOrPrompt(inf issueInfos, ind string) {
+	useInputOrPromptStr(inf, ind, ind)
 }
 
-func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
+func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 	switch svrType {
 	case CategoryJira:
 		switch action {
@@ -1440,9 +1421,9 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"check whether watching a case",
 			"watch a case",
 			"unwatch a case":
-			useInputOrPrompt(inf, IssueinfoIndID)
+			useInputOrPrompt(inf, IssueinfoStrID)
 		case "close a case to resolved from any known statues":
-			useInputOrPromptStr(inf, IssueinfoIndComment,
+			useInputOrPromptStr(inf, IssueinfoStrComments,
 				"test step for closure")
 		}
 	case CategoryGerrit:
@@ -1457,30 +1438,27 @@ func inputIssueInfo4Act(svrType, action string, inf *issueInfos) {
 			"revert a submit",
 			"list files of a submit",
 			"merge a submit":
-			useInputOrPrompt(inf, IssueinfoIndID)
+			useInputOrPrompt(inf, IssueinfoStrID)
 		case "list files of a submit by revision":
-			useInputOrPrompt(inf, IssueinfoIndID)
-			useInputOrPromptStr(inf,
-				IssueinfoIndHead, IssueinfoStrRevCur)
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(inf, IssueinfoStrRevCur)
 		case "cherry pick all my open":
-			useInputOrPromptStr(inf,
-				IssueinfoIndHead, IssueinfoStrRevCur)
-			useInputOrPrompt(inf, IssueinfoIndBranch)
+			useInputOrPrompt(inf, IssueinfoStrBranch)
 		case "list merged submits of someone",
 			"add socres, wait for it to be mergable and merge sb.'s submits",
 			"list sb.'s open submits":
 			useInputOrPromptStr(inf,
-				IssueinfoIndID, IssueinfoStrAssignee)
-			useInputOrPrompt(inf, IssueinfoIndBranch)
+				IssueinfoStrID, IssueinfoStrAssignee)
+			useInputOrPrompt(inf, IssueinfoStrBranch)
 		case "cherry pick a submit":
 			eztools.ShowStrln("Please input an ID that can make it " +
 				"distinguished, such as commit, instead of Change " +
 				"ID, which is reused among cherrypicks.")
-			useInputOrPromptStr(inf,
-				IssueinfoIndID, IssueinfoStrID)
-			useInputOrPromptStr(inf,
-				IssueinfoIndHead, IssueinfoStrRevCur)
-			useInputOrPrompt(inf, IssueinfoIndBranch)
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(inf, IssueinfoStrRevCur)
+			useInputOrPrompt(inf, IssueinfoStrBranch)
+		case "list links of a project":
+			useInputOrPrompt(inf, IssueinfoStrProj)
 		}
 	default:
 		eztools.LogPrint("Server type unknown: " + svrType)
@@ -1509,15 +1487,14 @@ func makeCat2Act() cat2Act {
 			{"list watchers of a case", jiraWatcherList},
 			{"check whether watching a case", jiraWatcherCheck},
 			{"watch a case", jiraWatcherAdd},
-			{"unwatch a case", jiraWatcherDel},
-		},
+			{"unwatch a case", jiraWatcherDel}},
 		CategoryGerrit: []action2Func{
 			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
 			{"list sb.'s open submits", gerritSbOpen},
 			{"list all my open revisions/commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
-			{"show details of a submit", gerritDetail},
+			{"show details of a submit", gerritDetailOnCurrRev},
 			{"show reviewers of a submit", gerritReviews},
 			{"show current revision/commit of a submit", gerritRev},
 			{"rebase a submit", gerritRebase},
@@ -1532,5 +1509,5 @@ func makeCat2Act() cat2Act {
 			{"revert a submit", gerritRevert},
 			{"list files of a submit", gerritListFiles},
 			{"list files of a submit by revision", gerritListFilesByRev},
-		}}
+			{"list links of a project", gerritListPrj}}}
 }
