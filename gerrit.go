@@ -18,9 +18,6 @@ func gerritGetIssuesOrReviews(method, url, magic string,
 	if err != nil || nil == bodySlc || len(bodySlc) < 1 {
 		return nil, err
 	}
-	if postREST != nil {
-		postREST(bodySlc)
-	}
 	issues := make([]issueInfos, 0)
 	for _, v := range bodySlc {
 		m, ok := v.(map[string]interface{})
@@ -321,7 +318,7 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 				return fn, true
 			}(m, v.name)
 		}
-		inf := issueInfos{IssueinfoStrHead: file1}
+		inf := issueInfos{IssueinfoStrFile: file1}
 		for _, fld1 := range fldSlc {
 			if len(fld1.value) > 0 {
 				inf[fld1.indx] = fld1.value

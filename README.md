@@ -57,8 +57,10 @@ Usually, these fields can be seen in an issue's detail.
   - show details of a case
   - list comments of a case
   - add a comment to a case
+  - delete a comment from a case
+  - change a comment from a case
   - list my open cases
-  - link a case to the other
+  - link a case to another
   - reject a case from any known statues
   - close a case to resolved from any known statues (change it to resolved)
   - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
@@ -67,6 +69,10 @@ Usually, these fields can be seen in an issue's detail.
   - check whether watching a case
   - watch a case
   - unwatch a case
+  - add a file to a case
+  - list files attached to a case
+  - get a file to a case (specify a full path, a file name under current dir, or a dir in existence, without current file under it. If no file name provided, the original file name of the attachment will be taken. If destination file already exists, this will fail.)
+  - remove a file attached to a case
 
 - Gerrit
   - list merged submits of someone
@@ -89,6 +95,7 @@ Usually, these fields can be seen in an issue's detail.
   - revert a submit
   - list files of a submit
   - list files of a submit by revision
+  - list config of a project
 
 ## Input grammar
 

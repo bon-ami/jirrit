@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -92,7 +93,7 @@ func main() {
 	var (
 		paramH, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
-		paramR, paramA, paramW, paramK,
+		paramR, paramA, paramW, paramK, paramF,
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
 	)
@@ -125,6 +126,7 @@ func main() {
 			"or (test step) comment for JIRA (closure)")
 	flag.StringVar(&paramS, "s", "",
 		"linked issue when linking issues")
+	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
@@ -276,20 +278,24 @@ func main() {
 			eztools.LogPrint("Unknown server " + paramR)
 		}
 	}
+	mkIssueinfo := func() issueInfos {
+		return issueInfos{
+			IssueinfoStrID:       paramI,
+			IssueinfoStrKey:      paramK,
+			IssueinfoStrHead:     paramHD,
+			IssueinfoStrProj:     paramP,
+			IssueinfoStrBranch:   paramB,
+			IssueinfoStrState:    paramS,
+			IssueinfoStrFile:     paramF,
+			IssueinfoStrComments: paramC}
+	}
 	if svr != nil {
 		if len(paramA) > 0 {
 			for _, v := range cats[svr.Type] {
 				if paramA == v.n {
 					uiSilent = true
 					fun = v.f
-					issueInfo = issueInfos{
-						IssueinfoStrID:       paramI,
-						IssueinfoStrKey:      paramK,
-						IssueinfoStrHead:     paramHD,
-						IssueinfoStrProj:     paramP,
-						IssueinfoStrBranch:   paramB,
-						IssueinfoStrState:    paramS,
-						IssueinfoStrComments: paramC}
+					issueInfo = mkIssueinfo()
 					eztools.Log("runtime params: server=" +
 						svr.Name + ", action=" + v.n +
 						", info array:")
@@ -316,7 +322,7 @@ func main() {
 				break
 			}
 		}
-		if len(svr.Proj) > 0 {
+		if len(svr.Proj) > 0 && !uiSilent {
 			eztools.ShowSthln("default project/ID prefix: " + svr.Proj)
 		}
 		if fun == nil {
@@ -325,14 +331,7 @@ func main() {
 		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
 				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
-					issueInfos{
-						IssueinfoStrID:       paramI,
-						IssueinfoStrKey:      paramK,
-						IssueinfoStrHead:     paramHD,
-						IssueinfoStrProj:     paramP,
-						IssueinfoStrBranch:   paramB,
-						IssueinfoStrState:    paramS,
-						IssueinfoStrComments: paramC})
+					mkIssueinfo())
 				if fun == nil {
 					break
 				}
@@ -350,9 +349,18 @@ func main() {
 			}
 			issues, err := fun(svr, authInfo, issueInfo)
 			if err != nil {
-				eztools.LogErrFatal(err)
+				if err == eztools.ErrNoValidResults {
+					if uiSilent {
+						eztools.Log("NO results.")
+					} else {
+						eztools.LogPrint("NO results.")
+					}
+				} else {
+					eztools.LogErrFatal(err)
+				}
+			} else {
+				dispResults(issues)
 			}
-			dispResults(issues)
 			if choices == nil { // no loop
 				break
 			}
@@ -698,14 +706,6 @@ type action2Func struct {
 
 type cat2Act map[string][]action2Func
 
-type postRESTs func([]interface{})
-
-var postREST postRESTs
-
-func setPostREST(fun postRESTs) {
-	postREST = fun
-}
-
 func isValidSvr(cats cat2Act, svr *svrs) bool {
 	if len(svr.Name) < 1 || len(svr.Type) < 1 || len(svr.URL) < 1 {
 		return false
@@ -774,16 +774,11 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 	return funcs[fi].f, issueInfo
 }
 
-// return nil for 404
-func restSth(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (body interface{}, err error) {
-	var errno int
-	body, errno, err = eztools.RestGetOrPostWtMagic(method,
-		url, authInfo, bodyReq, []byte(magic))
+func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
+	if errno == http.StatusNotFound {
+		return nil, eztools.ErrNoValidResults
+	}
 	if err != nil {
-		if errno == 404 {
-			return nil, nil
-		}
 		eztools.LogErrPrint( /*strconv.Itoa(errno), */ err)
 		if body != nil {
 			bodyBytes, ok := body.([]byte)
@@ -799,9 +794,21 @@ func restSth(method, url string, authInfo eztools.AuthInfo,
 				eztools.LogPrint(string(bodyBytes))
 			}
 		}
-		return
 	}
-	return
+	return body, err
+}
+
+func restFile(method, url string, authInfo eztools.AuthInfo,
+	fType, fName string, hdrs map[string]string, magic string) (body interface{}, err error) {
+	return chkErrRest(eztools.RestGetOrPostWtMagicNFileNHdr(method,
+		url, authInfo, []byte(magic), fType, fName, hdrs))
+}
+
+// return nil for 404
+func restSth(method, url string, authInfo eztools.AuthInfo,
+	bodyReq io.Reader, magic string) (body interface{}, err error) {
+	return chkErrRest(eztools.RestGetOrPostWtMagic(method,
+		url, authInfo, bodyReq, []byte(magic)))
 }
 
 func showRspBody(err error, body interface{}) {
@@ -828,10 +835,10 @@ func restSlc(method, url string, authInfo eztools.AuthInfo,
 	return
 }
 
-func restMapOrSth(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (body interface{},
+func restMap(method, url string, authInfo eztools.AuthInfo,
+	bodyReq io.Reader, magic string) (
 	bodyMap map[string]interface{}, err error) {
-	body, err = restSth(method, url, authInfo, bodyReq, magic)
+	body, err := restSth(method, url, authInfo, bodyReq, magic)
 	if err != nil || body == nil {
 		return
 	}
@@ -839,16 +846,9 @@ func restMapOrSth(method, url string, authInfo eztools.AuthInfo,
 	if !ok {
 		eztools.LogPrint("REST response type error for map " +
 			reflect.TypeOf(body).String())
-	} else {
-		showRspBody(err, body)
+		/*} else {
+		showRspBody(err, body)*/
 	}
-	return
-}
-
-func restMap(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (
-	bodyMap map[string]interface{}, err error) {
-	_, bodyMap, err = restMapOrSth(method, url, authInfo, bodyReq, magic)
 	return
 }
 
@@ -913,118 +913,58 @@ func getValuesFromMaps(name string, field interface{}) string {
 
 const (
 	//common use
-
-	/*// IssueinfoStrID ID for issueInfos
-	IssueinfoStrID = iota
-	// IssueinfoStrKey key for issueInfos
-	IssueinfoStrKey
-	// IssueinfoStrHead head/title for issueInfos
-	IssueinfoStrHead
-	// IssueinfoStrProj project for issueInfos
-	IssueinfoStrProj
-	// IssueinfoStrBranch branch for issueInfos
-	IssueinfoStrBranch
-	// IssueinfoStrState state for issueInfos
-	IssueinfoStrState
-	// IssueinfoStrExt extension/placeholder for issueInfos
-	IssueinfoStrExt // placeholder for mergable of gerrit and comment of jira
-	// IssueinfoStrMax number of issueInfos indexes
-	IssueinfoStrMax
-
-	// gerrit state
-
-	// placeholder for ID
-
-	// IssueinfoStrSubmittable submittable of issueInfos for gerrit
-	IssueinfoStrSubmittable = iota - IssueinfoStrMax
-	// IssueinfoStrVerified verified of issueInfos for gerrit
-	IssueinfoStrVerified
-	// IssueinfoStrOldPath binary of issueInfos for gerrit file list
-	IssueinfoStrOldPath
-	// IssueinfoStrCodereview codereview of issueInfos for gerrit
-	IssueinfoStrCodereview = iota - IssueinfoStrMax - 1
-	// IssueinfoStrBin binary of issueInfos for gerrit file list
-	IssueinfoStrBin
-	// IssueinfoStrScore configured score of issueInfos for gerrit
-	IssueinfoStrScore = iota - IssueinfoStrMax - 2 // upper bound of scoreInfos
-	// IssueinfoStrSubmitType submit type of issueInfos for gerrit
-	IssueinfoStrSubmitType
-	// IssueinfoStrMergeable mergable of issueInfos for gerrit
-	IssueinfoStrMergeable
-
-	// jira details
-
-	// placeholder for ID
-
-	// IssueinfoStrDesc description of issueInfos for Jira
-	IssueinfoStrDesc = iota - 1 - IssueinfoStrMax*2
-	// no id for summary, jira
-
-	// IssueinfoStrDispname display name of issueInfos for Jira
-	IssueinfoStrDispname = iota + 1 - IssueinfoStrMax*2
-	// IssueinfoStrComment comment of issueInfos for Jira
-	IssueinfoStrComment = iota + 2 - IssueinfoStrMax*2*/
-
-	// IssueinfoStrID ID string for issueInfos
+	// IssueinfoStrID ID string
 	IssueinfoStrID = "id"
-	// IssueinfoStrSubmittable submittable string for issueInfos
-	IssueinfoStrSubmittable = "submittable" // \
-	// IssueinfoStrKey key string for issueInfos
-	IssueinfoStrKey = "key" //
-	// IssueinfoStrAssignee assignee string for issueInfos
-	IssueinfoStrAssignee = "assignee" //
-	// IssueinfoStrName name string for issueInfos
-	IssueinfoStrName = "name" // /
-	// IssueinfoStrHead subject string for issueInfos
-	IssueinfoStrHead = "subject" // \
-	// IssueinfoStrSummary summary string for issueInfos
-	IssueinfoStrSummary = "summary" //
-	// IssueinfoStrDesc description string for issueInfos
-	IssueinfoStrDesc = "description" //
-	// IssueinfoStrRevCur current revision string for issueInfos
-	IssueinfoStrRevCur = "current_revision" //
-	// IssueinfoStrVerified verified string for issueInfos
-	IssueinfoStrVerified = "Verified" // /
-	// IssueinfoStrProj project string for issueInfos
-	IssueinfoStrProj = "project" // \
-	// IssueinfoStrCodereview code review string for issueInfos
-	IssueinfoStrCodereview = "Code-Review" // /
-	// IssueinfoStrBranch branch string for issueInfos
-	IssueinfoStrBranch = "branch" // \
-	// IssueinfoStrDispname display name string for issueInfos
-	IssueinfoStrDispname = "displayName" // /
+	// IssueinfoStrSubmittable submittable string
+	IssueinfoStrSubmittable = "submittable"
+	// IssueinfoStrKey key string
+	IssueinfoStrKey = "key"
+	// IssueinfoStrAssignee assignee string
+	IssueinfoStrAssignee = "assignee"
+	// IssueinfoStrName name string
+	IssueinfoStrName = "name"
+	// IssueinfoStrHead subject string
+	IssueinfoStrHead = "subject"
+	// IssueinfoStrSummary summary string
+	IssueinfoStrSummary = "summary"
+	// IssueinfoStrDesc description string
+	IssueinfoStrDesc = "description"
+	// IssueinfoStrRevCur current revision string
+	IssueinfoStrRevCur = "current_revision"
+	// IssueinfoStrVerified verified string
+	IssueinfoStrVerified = "Verified"
+	// IssueinfoStrProj project string
+	IssueinfoStrProj = "project"
+	// IssueinfoStrCodereview code review string
+	IssueinfoStrCodereview = "Code-Review"
+	// IssueinfoStrBranch branch string
+	IssueinfoStrBranch = "branch"
+	// IssueinfoStrDispname display name string
+	IssueinfoStrDispname = "displayName"
 	// for code-review, verified and manual-testing
-
-	// IssueinfoStrSubmitType submit type string for issueInfos
-	IssueinfoStrSubmitType = "submit_type" // \
-	// IssueinfoStrApprovals approvals string for issueInfos
-	IssueinfoStrApprovals = "approvals" //
-	// IssueinfoStrState state string for issueInfos
-	IssueinfoStrState = "status" // /
-	// gerrit details
-
-	// IssueinfoStrMergeable mergable string for issueInfos
+	// IssueinfoStrSubmitType submit type string
+	IssueinfoStrSubmitType = "submit_type"
+	// IssueinfoStrApprovals approvals string
+	IssueinfoStrApprovals = "approvals"
+	// IssueinfoStrState state string
+	IssueinfoStrState = "status"
+	// IssueinfoStrFile file string
+	IssueinfoStrFile = "file"
+	// IssueinfoStrSize size string
+	IssueinfoStrSize = "size"
+	// IssueinfoStrMergeable mergable string for details, gerrit
 	IssueinfoStrMergeable = "mergeable"
-	// IssueinfoStrComments comment string for issueInfos
+	// IssueinfoStrComments comment string for details, gerrit
 	IssueinfoStrComments = "comments"
-
-	// gerrit file list
-
-	// IssueinfoStrBin binary string for issueInfos
+	// IssueinfoStrBin binary string for file list, gerrit
 	IssueinfoStrBin = "binary"
-	// IssueinfoStrBin old path/renamed from string for issueInfos
+	// IssueinfoStrBin old path/renamed from string for file list, gerrit
 	IssueinfoStrOldPath = "old_path"
-
-	// gerrit download list
-
-	// IssueinfoStrCherry cherry pick string of download for issueInfos
+	// IssueinfoStrCherry cherry pick string of download for gerrit
 	IssueinfoStrCherry = "Cherry Pick"
-
-	// gerrit project config
-
-	// IssueinfoStrLink is the JIRA link string in config of a project
+	// IssueinfoStrLink is the JIRA link string in config of a project, gerrit
 	IssueinfoStrLink = "link"
-	// IssueinfoStrMatch is the JIRA match pattern string in config of a project
+	// IssueinfoStrMatch is the JIRA match pattern string in config of a project, gerrit
 	IssueinfoStrMatch = "match"
 )
 
@@ -1417,6 +1357,7 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 		switch action {
 		case "show details of a case",
 			"list comments of a case",
+			"list files attached to a case",
 			"list watchers of a case",
 			"check whether watching a case",
 			"watch a case",
@@ -1425,6 +1366,16 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 		case "close a case to resolved from any known statues":
 			useInputOrPromptStr(inf, IssueinfoStrComments,
 				"test step for closure")
+		case "remove a file attached to a case":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")
+		case "add a file to a case":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(inf, IssueinfoStrFile)
+		case "get a file to a case":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")
+			useInputOrPromptStr(inf, IssueinfoStrFile, "file to be saved as")
 		}
 	case CategoryGerrit:
 		switch action {
@@ -1457,7 +1408,7 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPrompt(inf, IssueinfoStrRevCur)
 			useInputOrPrompt(inf, IssueinfoStrBranch)
-		case "list links of a project":
+		case "list config of a project":
 			useInputOrPrompt(inf, IssueinfoStrProj)
 		}
 	default:
@@ -1477,17 +1428,21 @@ func makeCat2Act() cat2Act {
 			{"delete a comment from a case", jiraDelComment},
 			{"change a comment from a case", jiraModComment},
 			{"list my open cases", jiraMyOpen},
-			{"link a case to the other", jiraLink},
+			{"link a case to another", jiraLink},
+			{"list watchers of a case", jiraWatcherList},
+			{"check whether watching a case", jiraWatcherCheck},
+			{"watch a case", jiraWatcherAdd},
+			{"unwatch a case", jiraWatcherDel},
+			{"add a file to a case", jiraAddFile},
+			{"list files attached to a case", jiraListFile},
+			{"get a file to a case", jiraGetFile},
+			{"remove a file attached to a case", jiraDelFile},
 			{"reject a case from any known statues", jiraReject},
 			{"close a case to resolved from any known statues", jiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
 			{"close a case with default design as steps", jiraCloseDef},
-			{"close a case with general requirement as steps", jiraCloseGen},
-			{"list watchers of a case", jiraWatcherList},
-			{"check whether watching a case", jiraWatcherCheck},
-			{"watch a case", jiraWatcherAdd},
-			{"unwatch a case", jiraWatcherDel}},
+			{"close a case with general requirement as steps", jiraCloseGen}},
 		CategoryGerrit: []action2Func{
 			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
@@ -1509,5 +1464,5 @@ func makeCat2Act() cat2Act {
 			{"revert a submit", gerritRevert},
 			{"list files of a submit", gerritListFiles},
 			{"list files of a submit by revision", gerritListFilesByRev},
-			{"list links of a project", gerritListPrj}}}
+			{"list config of a project", gerritListPrj}}}
 }

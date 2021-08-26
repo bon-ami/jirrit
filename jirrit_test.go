@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"testing"
 
 	"gitee.com/bon-ami/eztools"
@@ -37,19 +36,6 @@ func test1(t *testing.T, cat, fun string) {
 		eztools.ShowStrln("no config file found")
 		return
 	}
-	setPostREST(func(bodySlc []interface{}) {
-		if debugging < 3 {
-			return
-		}
-		for i, v := range bodySlc {
-			eztools.ShowStrln("Result " + strconv.Itoa(i))
-			eztools.RangeStrMap(v, func(k string, v interface{}) bool {
-				eztools.ShowStr(k + "=")
-				eztools.ShowSthln(v)
-				return false
-			})
-		}
-	})
 	cats := makeCat2Act()
 	for _, s := range cfg.Svrs {
 		if len(cat) > 0 && cat != s.Type {
