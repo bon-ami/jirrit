@@ -13,6 +13,7 @@
  - `-c string` provide a component or a comment.
  - `-s string` provide ID of a linked issue
  - `-k string` provide a key or description
+ - `-f string` provide a file/dir to save attachment as
  - `-reverse` reverse output results
  - `-cfg string` provide a config file. It defaults to jirrit.xml under current dir or home dir.
  - `-log string` provide a log file. It defaults to jirrit.log under current dir.
