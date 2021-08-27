@@ -322,6 +322,11 @@ func main() {
 				break
 			}
 		}
+		authInfo, err := cfg2AuthInfo(*svr, cfg)
+		if err != nil {
+			eztools.LogErr(err)
+			break
+		}
 		if len(svr.Proj) > 0 && !uiSilent {
 			eztools.ShowSthln("default project/ID prefix: " + svr.Proj)
 		}
@@ -338,29 +343,24 @@ func main() {
 			}
 			// auto changing ID is redundant for fun that do this, too.
 			// TODO: restructure single input in inputIssueInfo4Act and loop in fun
-			changingID, prefID, postID := parseTypicalJiraNum(svr, issueInfo[IssueinfoStrID])
-			if changingID {
-				issueInfo[IssueinfoStrID] = prefID + postID
-			}
-			authInfo, err := cfg2AuthInfo(*svr, cfg)
-			if err != nil {
-				eztools.LogErrFatal(err)
-				break
-			}
-			issues, err := fun(svr, authInfo, issueInfo)
-			if err != nil {
-				if err == eztools.ErrNoValidResults {
-					if uiSilent {
-						eztools.Log("NO results.")
+			loopIssues(svr, issueInfo,
+				func(inf issueInfos) (issueInfos, error) {
+					issues, err := fun(svr, authInfo, inf)
+					if err != nil {
+						if err == eztools.ErrNoValidResults {
+							if uiSilent {
+								eztools.Log("NO results.")
+							} else {
+								eztools.LogPrint("NO results.")
+							}
+						} else {
+							eztools.LogErr(err)
+						}
 					} else {
-						eztools.LogPrint("NO results.")
+						dispResults(issues)
 					}
-				} else {
-					eztools.LogErrFatal(err)
-				}
-			} else {
-				dispResults(issues)
-			}
+					return inf, err
+				})
 			if choices == nil { // no loop
 				break
 			}
@@ -776,10 +776,10 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 
 func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 	if errno == http.StatusNotFound {
-		return nil, eztools.ErrNoValidResults
+		err = eztools.ErrNoValidResults
 	}
 	if err != nil {
-		eztools.LogErrPrint( /*strconv.Itoa(errno), */ err)
+		eztools.LogErrPrintWtInfo("REST error" /*strconv.Itoa(errno) */, err)
 		if body != nil {
 			bodyBytes, ok := body.([]byte)
 			if !ok {
@@ -1113,37 +1113,38 @@ const typicalJiraSeparator = "-"
 //		otherwise, false is returned.
 //	the non digit part. this is saved as project.
 //	the digit part
-func parseTypicalJiraNum(svr *svrs, num string) (ret bool, nonDigit, digit string) {
+func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
+	digit string, changes, parsed bool) {
 	if len(num) < 1 {
-		return false, "", ""
+		return "", "", false, false
 	}
 	re := regexp.MustCompile(`^[^-,]+[-][\d]+$`)
 	//eztools.ShowStrln("parsing " + num + " 2 typical JIRA")
 	pref := re.FindStringSubmatch(num)
-	if pref != nil {
+	if pref != nil { // "A-1"
 		parts := strings.Split(pref[0], typicalJiraSeparator)
 		if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
 			saveProj(svr, parts[0])
-			return true, parts[0] + typicalJiraSeparator, parts[1]
+			return parts[0] + typicalJiraSeparator, parts[1], false, true
 		}
-	} else { // "-123", "A-1,B-2", "123", etc.
-		if len(svr.Proj) > 0 {
+	} else {
+		if len(svr.Proj) > 0 { // "-1", "1"
 			re = regexp.MustCompile(`^[-][\d]+$`)
 			pref = re.FindStringSubmatch(num)
 			if pref != nil {
 				parts := strings.Split(pref[0], typicalJiraSeparator)
 				// parts[0]=""
 				if len(parts) == 2 && len(parts[1]) > 0 {
-					if eztools.Debugging {
+					if eztools.Debugging && eztools.Verbose > 2 {
 						eztools.ShowStrln("Auto changing to " +
 							svr.Proj + typicalJiraSeparator + parts[1])
 					}
-					return true, svr.Proj + typicalJiraSeparator, parts[1]
+					return svr.Proj + typicalJiraSeparator, parts[1], true, true
 				}
 			}
-		}
+		} // "A-1,B-2" not handled
 	}
-	return false, "", ""
+	return "", "", false, false
 }
 
 // loopIssues runs a function on all numbers between, inclusively,
@@ -1161,7 +1162,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	//eztools.Log(strings.Count(issueInfo[IssueinfoStrID], separator))
 	switch strings.Count(issueInfo[IssueinfoStrID], separator) {
 	case 0: // single ID
-		if ok, prefix, lowerBoundStr := parseTypicalJiraNum(svr,
+		if prefix, lowerBoundStr, _, ok := parseTypicalJiraNum(svr,
 			issueInfo[IssueinfoStrID]); ok {
 			issueInfo[IssueinfoStrID] = prefix + lowerBoundStr
 		}
@@ -1187,7 +1188,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 			lowerBound, err = strconv.Atoi(parts[0])
 			if err != nil {
 				var ok bool
-				if ok, prefix, lowerBoundStr = parseTypicalJiraNum(svr, parts[0]); !ok {
+				if prefix, lowerBoundStr, _, ok = parseTypicalJiraNum(svr, parts[0]); !ok {
 					eztools.LogPrint("the former part must be in the form of X-0 or 0")
 					return
 				}
@@ -1228,7 +1229,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		prefix, prefixNew, currentNo string
 		ok                           bool
 	)
-	if ok, prefix, currentNo = parseTypicalJiraNum(svr, parts[0]); !ok {
+	if prefix, currentNo, _, ok = parseTypicalJiraNum(svr, parts[0]); !ok {
 		currentNo = parts[0]
 	}
 	i := 1
@@ -1244,7 +1245,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		issueInfoOut = append(issueInfoOut, issueInfo)
 		printID()
 		if i < len(parts) {
-			if ok, prefixNew, currentNo = parseTypicalJiraNum(svr, parts[i]); !ok {
+			if prefixNew, currentNo, _, ok = parseTypicalJiraNum(svr, parts[i]); !ok {
 				// reuse old prefix
 				currentNo = parts[i]
 			} else {
@@ -1276,6 +1277,7 @@ func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 	inf[ind] += s
 }
 
+// cfmInputOrPromptStr does not accept multiple ID format for input
 // return value: whether anything new is input
 func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if uiSilent {
@@ -1283,10 +1285,10 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	}
 	const linefeed = " (end with \\ to input multi lines)"
 	var def, base string
-	var smart bool // no smart affix available by default
+	var changes, smart bool // no smart affix available by default
 	if len(inf[ind]) > 0 {
 		var ok bool
-		if ok, base, _ = parseTypicalJiraNum(svr, inf[ind]); ok {
+		if base, _, changes, ok = parseTypicalJiraNum(svr, inf[ind]); ok {
 			smart = true // there is a reference for smart affix
 			//eztools.ShowStrln("not int previously")
 		}
@@ -1301,7 +1303,7 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 			ok   bool
 			sNum string
 		)
-		if ok, base, sNum = parseTypicalJiraNum(svr, s); ok {
+		if base, sNum, changes, ok = parseTypicalJiraNum(svr, s); ok {
 			smart = true // there is a reference for smart affix
 			s = sNum
 			//eztools.ShowStrln("not int previously")
@@ -1326,12 +1328,15 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	}
 	// smart affix
 	inf[ind] = base + s
-	//if eztools.Debugging {
-	eztools.ShowStrln("Auto changed to " + inf[ind])
-	//}
+	if changes {
+		//if eztools.Verbose > 0 {
+		eztools.ShowStrln("Auto changed to " + inf[ind])
+		//}
+	}
 	return true
 }
 
+// cfmInputOrPrompt does not accept multiple ID format for input
 func cfmInputOrPrompt(svr *svrs, inf issueInfos, ind string) bool {
 	return cfmInputOrPromptStr(svr, inf, ind, ind)
 }

@@ -14,19 +14,33 @@ import (
 func gerritGetIssuesOrReviews(method, url, magic string,
 	authInfo eztools.AuthInfo, fun func(map[string]interface{},
 		[]issueInfos) []issueInfos) ([]issueInfos, error) {
-	bodySlc, err := restSlc(method, url, authInfo, nil, magic)
-	if err != nil || nil == bodySlc || len(bodySlc) < 1 {
+	body, err := restSth(method, url, authInfo, nil, magic)
+	if err != nil || body == nil {
 		return nil, err
 	}
 	issues := make([]issueInfos, 0)
-	for _, v := range bodySlc {
-		m, ok := v.(map[string]interface{})
-		if !ok {
-			eztools.LogPrint(reflect.TypeOf(v).String() +
-				" got instead of map string to interface!")
-			continue
+	bodySlc, ok := body.([]interface{})
+	if ok {
+		if len(bodySlc) < 1 {
+			return nil, err
 		}
-		issues = fun(m, issues)
+		for _, v := range bodySlc {
+			m, ok := v.(map[string]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(v).String() +
+					" got instead of map string to interface!")
+				continue
+			}
+			issues = fun(m, issues)
+		}
+	} else {
+		bodyMap, ok := body.(map[string]interface{})
+		if ok {
+			issues = fun(bodyMap, issues)
+		} else {
+			eztools.LogPrint(reflect.TypeOf(body).String() +
+				" got instead of slice of or map string to, interface!")
+		}
 	}
 	return issues, err
 }
@@ -259,6 +273,7 @@ func gerritReviews2Scores(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return
 	}
+	//eztools.ShowSthln(inf)
 	for _ /*j*/, inf1 := range inf {
 		for _, i := range []string{IssueinfoStrVerified,
 			IssueinfoStrCodereview} {
@@ -687,7 +702,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		return inf, eztools.ErrNoValidResults
 	}
 	infWtRev := inf[0]
-	if len(infWtRev[IssueinfoStrHead]) < 1 {
+	if len(infWtRev[IssueinfoStrRevCur]) < 1 {
 		eztools.LogPrint("NO revision found!")
 		return inf, eztools.ErrNoValidResults
 	}
@@ -716,13 +731,13 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		body, err := restSth("POST", svr.URL+RestAPIStr+
 			infWtRev[IssueinfoStrID]+"/revisions/"+
-			infWtRev[IssueinfoStrHead]+"/review",
+			infWtRev[IssueinfoStrRevCur]+"/review",
 			authInfo, bytes.NewBuffer(jsonValue), svr.Magic)
 		// response only contain scores for a success, so it is not parsed
 		if err == nil {
 			break
 		}
-		eztools.LogErrWtInfo("failed to", err)
+		eztools.LogErrWtInfo("failed to get review info", err)
 		if body != nil {
 			bodyBytes, ok := body.([]byte)
 			if ok {
@@ -736,7 +751,16 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 					eztools.Log("Retrying to scrore without verify.")
 					continue
 				}
+				eztools.LogPrint(bodyBytes)
+			} else {
+				eztools.Log(reflect.TypeOf(body).String() +
+					" got instead of slice of bytes")
 			}
+		} else {
+			eztools.Log("no body got")
+			delete(map4Marshal, IssueinfoStrVerified)
+			eztools.Log("Retrying to scrore without verify.")
+			continue
 		}
 		break
 	}
@@ -777,7 +801,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			for _, v := range inf {
 				choices = append(choices,
-					v[IssueinfoStrHead]+" <-> "+
+					v[IssueinfoStrRevCur]+" <-> "+
 						v[IssueinfoStrBranch])
 			}
 			i := eztools.ChooseStrings(choices)
