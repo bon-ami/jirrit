@@ -47,9 +47,6 @@ Usually, these fields can be seen in an issue's detail.
   - **testexp** is the field name for test expectation.
   - **state** are state names. Supported attributes: **not open**.
 
-  For Gerrit servers, there may be more to config for scores.
-  - **score** contains the field name other than Code-Review and Verified, that needs +1. In my case, it is `Manual-Testing`.
-
 ## Actions
 
 - Jira

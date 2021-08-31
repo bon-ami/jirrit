@@ -26,7 +26,6 @@
                 <url>http://gerrit.com:8080/a/</url>
                 <ip>1.1.1.1</ip>
                 <magic>)]}'</magic>
-                <score>Manual-Testing</score>
         </server>
         <server type="Gerrit" name="BJ">
                 <pass type="plain">Allen</pass>

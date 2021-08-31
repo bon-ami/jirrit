@@ -72,7 +72,6 @@ type svrs struct {
 	Pass  passwords `xml:"pass"`
 	Magic string    `xml:"magic"`
 	State []states  `xml:"state"`
-	Score string    `xml:"score"`
 	Flds  fields    `xml:"fields"`
 	Proj  string    `xml:"project"`
 	Watch string    `xml:"watch"`
@@ -954,6 +953,8 @@ const (
 	IssueinfoStrSize = "size"
 	// IssueinfoStrMergeable mergable string for details, gerrit
 	IssueinfoStrMergeable = "mergeable"
+	// IssueinfoStrLabels labels string for scores, gerrit
+	IssueinfoStrLabels = "labels"
 	// IssueinfoStrComments comment string for details, gerrit
 	IssueinfoStrComments = "comments"
 	// IssueinfoStrBin binary string for file list, gerrit
@@ -1056,7 +1057,9 @@ func loopStringMap(m map[string]interface{},
 		keyVal = nil
 	}
 	for i, v := range m {
-		//eztools.ShowStrln("looping " + i)
+		if eztools.Debugging && eztools.Verbose > 2 {
+			eztools.ShowStrln("looping " + i)
+		}
 		if len(keyStr) > 0 {
 			matched := false
 			for j, key1 := range keyStr {
