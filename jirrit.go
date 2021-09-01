@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,6 +42,9 @@ var (
 	step                 int
 	dispResultOutputFunc func(...interface{})
 	svrTypes             []string
+	errAuth              = errors.New("Auth failure")
+	errConn              = errors.New("Conn failure")
+	errCfg               = errors.New("Cfg failure")
 )
 
 type passwords struct {
@@ -88,6 +92,13 @@ type jirrit struct {
 
 func main() {
 	const ParamDef = "_"
+	const (
+		extCfg = iota + 1
+		extAuth
+		extConn
+		extInpt
+		extRslt
+	)
 	svrTypes = []string{CategoryJira, CategoryGerrit}
 	var (
 		paramH, paramV, paramVV, paramVVV,
@@ -96,6 +107,7 @@ func main() {
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramS, paramC string
 	)
+	const cfgSvrOpt = "setsvrcfg"
 	flag.BoolVar(&paramH, "h", false, "help message")
 	flag.BoolVar(&paramV, "v", false,
 		"log file output")
@@ -105,7 +117,7 @@ func main() {
 	flag.BoolVar(&paramReverse, "reverse", false, "reverse output")
 	flag.BoolVar(&paramGetSvrCfg, "getsvrcfg", false,
 		"get server list from config")
-	flag.BoolVar(&paramSetSvrCfg, "setsvrcfg", false,
+	flag.BoolVar(&paramSetSvrCfg, cfgSvrOpt, false,
 		"set servers as config")
 	flag.StringVar(&paramR, "r", "", "server name, to be together with -a")
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
@@ -131,6 +143,13 @@ func main() {
 	flag.Parse()
 	if paramH {
 		eztools.ShowStrln(module + " v" + ver)
+		eztools.ShowStrln("  Return values.")
+		eztools.ShowStrln("0", "no error")
+		eztools.ShowStrln(extCfg, "config error")
+		eztools.ShowStrln(extAuth, "auth error")
+		eztools.ShowStrln(extConn, "connection error")
+		eztools.ShowStrln(extInpt, "input error")
+		eztools.ShowStrln(extRslt, "result error")
 		eztools.ShowStrln("  When inputting ID's, there are following options for some actions.")
 		eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
 		eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
@@ -160,15 +179,27 @@ func main() {
 	var err error
 	cfgFile, err = eztools.XMLsReadDefaultNoCreate(paramCfg, module, &cfg)
 	if err != nil {
-		eztools.LogErrFatal(err)
-		var changed bool
-		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
-			return
+		eztools.LogErrPrintWtInfo("failed to open config file", err)
+		if len(paramCfg) > 0 {
+			cfgFile = paramCfg
+		} else {
+			home, _ := os.UserHomeDir()
+			cfgFile = filepath.Join(home, module+".xml")
 		}
-		home, _ := os.UserHomeDir()
-		cfgFile = filepath.Join(home, module+".xml")
+		switch eztools.PromptStr("create " +
+			cfgFile + "?([Enter]=y)") {
+		case "", "y", "Y", "yes", "YES", "Yes":
+			break
+		default:
+			os.Exit(extCfg)
+		}
+		var changed bool
+		cfg.User = chkUsr(cfg.User, false)
+		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
+			os.Exit(extCfg)
+		}
 		if !saveCfg() {
-			return
+			os.Exit(extCfg)
 		}
 	}
 	if len(paramLog) > 0 {
@@ -202,15 +233,21 @@ func main() {
 			defer noInteractionAllowed()
 			return
 		}
-		cfg.User = chkUsr(cfg.User)
-		cfg.Svrs, _ = addSvr(cfg.Svrs, cfg.Pass)
+		cfg.User = chkUsr(cfg.User, true)
+		var changed bool
+		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
+			os.Exit(extCfg)
+		}
+		if !saveCfg() {
+			os.Exit(extCfg)
+		}
 		return
 	}
 	if !uiSilent {
-		cfg.User = chkUsr(cfg.User)
-		if !chkSvr(cfg.Svrs, cfg.Pass) {
-			eztools.LogPrint(module + " cannot run without server configs!")
-			return
+		cfg.User = chkUsr(cfg.User, true)
+		if !chkSvr(cfg.Svrs, cfg.Pass, cfgSvrOpt) {
+			failSvrCfg(cfgSvrOpt)
+			os.Exit(extCfg)
 		}
 	}
 	var svr *svrs
@@ -241,7 +278,9 @@ func main() {
 				}
 			}
 			svr.Watch = paramW
-			saveCfg()
+			if !saveCfg() {
+				os.Exit(extCfg)
+			}
 		}
 		return
 	}
@@ -304,7 +343,6 @@ func main() {
 			}
 			if fun == nil {
 				eztools.LogPrint("\"" + paramA +
-
 					"\" NOT recognized as a command")
 			}
 		}
@@ -314,6 +352,7 @@ func main() {
 	} else {
 		step = 1
 	}
+	err = nil
 	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
@@ -321,10 +360,11 @@ func main() {
 				break
 			}
 		}
-		authInfo, err := cfg2AuthInfo(*svr, cfg)
+		var authInfo eztools.AuthInfo
+		authInfo, err = cfg2AuthInfo(*svr, cfg)
 		if err != nil {
 			eztools.LogErr(err)
-			break
+			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
 			eztools.ShowSthln("default project/ID prefix: " + svr.Proj)
@@ -340,9 +380,7 @@ func main() {
 					break
 				}
 			}
-			// auto changing ID is redundant for fun that do this, too.
-			// TODO: restructure single input in inputIssueInfo4Act and loop in fun
-			loopIssues(svr, issueInfo,
+			_, err = loopIssues(svr, issueInfo,
 				func(inf issueInfos) (issueInfos, error) {
 					issues, err := fun(svr, authInfo, inf)
 					if err != nil {
@@ -378,6 +416,25 @@ func main() {
 		}
 		<-upch
 	}
+	if err != nil {
+		switch err {
+		case eztools.ErrInvalidInput:
+			os.Exit(extInpt)
+		case eztools.ErrInExistence,
+			eztools.ErrNoValidResults, eztools.ErrOutOfBound:
+			os.Exit(extRslt)
+		case errAuth:
+			os.Exit(extAuth)
+		case errCfg:
+			os.Exit(extCfg)
+		case errConn:
+			os.Exit(extConn)
+		default:
+			if eztools.Debugging {
+				eztools.ShowStrln("err val=\"" + err.Error() + "\"")
+			}
+		}
+	}
 }
 
 func dispResults(issues []issueInfos) {
@@ -398,6 +455,11 @@ func dispResults(issues []issueInfos) {
 			}
 		}
 	}
+}
+
+func failSvrCfg(cfgSvrOpt string) {
+	eztools.LogPrint("NO servers defined. Run with param -" +
+		cfgSvrOpt + " to add some!")
 }
 
 func chooseSvrByType(svr []svrs, tp string) *svrs {
@@ -431,15 +493,17 @@ func noInteractionAllowed() {
 	eztools.LogPrint("NO interaction allowed in silent mode to provide information!")
 }
 
-func chkUsr(user string) string {
-	var unDef string
+func chkUsr(user string, save bool) string {
 	if len(user) > 0 {
 		return user
-		//unDef = "[Enter=" + user + "]"
 	}
-	un := eztools.PromptStr("username" + unDef)
-	if len(un) < 1 && len(unDef) > 0 {
+	un := eztools.PromptStr("config needed. username")
+	if len(un) < 1 {
 		un = user
+	} else {
+		if save {
+			saveCfg()
+		}
 	}
 	return un
 }
@@ -495,9 +559,9 @@ func chkNInputSvrFld(svrSlc []svrs, svr1 svrs, field *string, text string,
 	return changed, true
 }
 
-func chkSvr(svr []svrs, pass passwords) bool {
+func chkSvr(svr []svrs, pass passwords, cfgSvrOpt string) bool {
 	if nil == svr || len(svr) < 1 {
-		eztools.LogPrint("NO servers defined. Run with param -setsvrcfg to add some!")
+		failSvrCfg(cfgSvrOpt)
 		return false
 	}
 	pass4All := len(pass.Type) > 0 && len(pass.Pass) > 0
@@ -614,6 +678,7 @@ func addSvr(svrIn []svrs, pass passwords) (svrOut []svrs, ret bool) {
 		svrOut = append(svrOut, svrs{Type: svrType,
 			Name: name, URL: url, IP: ip, Magic: magic,
 			Pass: passwords{Type: passType, Pass: passTxt}})
+		ret = true
 	}
 	return
 }
@@ -774,8 +839,29 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 }
 
 func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
-	if errno == http.StatusNotFound {
-		err = eztools.ErrNoValidResults
+	var (
+		dnsErr *net.DNSError
+		urlErr *url.Error
+	)
+	switch {
+	case errors.As(err, &dnsErr):
+		err = errConn
+	case errors.As(err, &urlErr):
+		/*urlErr, ok := err.(*url.Error)
+		if ok {
+		if urlErr.Timeout() {*/
+		err = errCfg
+	/*}
+	}*/
+	default:
+		switch errno {
+		case http.StatusNotFound:
+			err = eztools.ErrNoValidResults
+		case http.StatusUnauthorized:
+			err = errAuth
+		case http.StatusGatewayTimeout:
+			err = errConn
+		}
 	}
 	if err != nil {
 		eztools.LogErrPrintWtInfo("REST error" /*strconv.Itoa(errno) */, err)
@@ -1154,6 +1240,9 @@ func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
 // X-0 and X-1, or 0,1 from input in format of X-0,1 or 0,1
 // If it is not a range, the function's return values are returned.
 // Otherwise, no return values.
+// IssueinfoStrID is set for each loop of function fun,
+// from multiple ID's in one issueInfo,
+// while other fields use the former values returned from function fun
 func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	issueInfos, error)) (issueInfoOut []issueInfos, err error) {
 	const separator = ","
