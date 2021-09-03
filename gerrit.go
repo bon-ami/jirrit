@@ -842,6 +842,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		// list ready commits
 		inf, err := gerritMyOpen(svr, authInfo, issueInfo)
+		issueInfo[IssueinfoStrID] = "" // dirty to be user ID by above function
 		if err == nil {
 			var choices []string
 			if uiSilent {
@@ -850,8 +851,9 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			for _, v := range inf {
 				choices = append(choices,
-					v[IssueinfoStrRevCur]+" <-> "+
-						v[IssueinfoStrBranch])
+					v[IssueinfoStrHead]+" <-> "+
+						v[IssueinfoStrBranch]+
+						" ("+v[IssueinfoStrID]+")")
 			}
 			i := eztools.ChooseStrings(choices)
 			if i != eztools.InvalidID {
