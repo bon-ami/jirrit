@@ -1390,16 +1390,16 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if len(s) < 1 || s == inf[ind] {
 		return false
 	}
-	if len(inf[ind]) < 1 {
-		var (
-			ok   bool
-			sNum string
-		)
-		if base, sNum, changes, ok = parseTypicalJiraNum(svr, s); ok {
-			smart = true // there is a reference for smart affix
-			s = sNum
-			//eztools.ShowStrln("not int previously")
-		}
+	var (
+		ok, changesI bool
+		sNum, baseI  string
+	)
+	if baseI, sNum, changesI, ok = parseTypicalJiraNum(svr, s); ok {
+		smart = true // there is a reference for smart affix
+		s = sNum
+		base = baseI
+		changes = changes || changesI
+		//eztools.ShowStrln("not int previously")
 	}
 	if smart {
 		if _, err := strconv.Atoi(s); err != nil {

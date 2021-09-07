@@ -162,9 +162,31 @@ func jiraParseIssues(m map[string]interface{}) []issueInfos {
 	return results
 }
 
+func jiraParse1Cmt(m map[string]interface{}) (issueInfos, error) {
+	var author string
+	inf, ok := loopStringMap(m, "author",
+		[]string{"body", "updated", "id"},
+		func(i string, v interface{}) bool {
+			id, _ := chkNLoopStringMap(v,
+				"", []string{IssueinfoStrKey})
+			if id == nil {
+				return false
+			}
+			author = id[0]
+			return false
+		})
+	if !ok || len(inf) < 1 {
+		return nil, eztools.ErrNoValidResults
+	}
+	return issueInfos{
+		IssueinfoStrComments: inf[0],
+		IssueinfoStrBranch:   inf[1],
+		IssueinfoStrID:       inf[2],
+		IssueinfoStrKey:      author}, nil
+}
+
 func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 	var (
-		author string
 		issues []issueInfos
 	)
 	loopStringMap(m, IssueinfoStrComments, nil,
@@ -184,24 +206,13 @@ func jiraParseCmts(m map[string]interface{}) ([]issueInfos, error) {
 						"map[string]interface{}")
 					continue
 				}
-				inf, _ := loopStringMap(cmt, "author",
-					[]string{"body", "updated", "id"},
-					func(i string, v interface{}) bool {
-						id, _ := chkNLoopStringMap(v,
-							"", []string{IssueinfoStrKey})
-						if id == nil {
-							return false
-						}
-						author = id[0]
-						return false
-					})
-				if len(inf[0]) > 0 {
-					issues = append(issues, issueInfos{
-						IssueinfoStrComments: inf[0],
-						IssueinfoStrBranch:   inf[1],
-						IssueinfoStrID:       inf[2],
-						IssueinfoStrKey:      author})
+				issue1, err := jiraParse1Cmt(cmt)
+				if err != nil {
+					// not parsed error only
+					eztools.Log("No detail of comment found")
+					continue
 				}
+				issues = append(issues, issue1)
 			}
 			return false
 		})
@@ -818,7 +829,11 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	return jiraParseCmts(body)
+	inf, err := jiraParse1Cmt(body)
+	if err != nil {
+		return nil, err
+	}
+	return []issueInfos{inf}, err
 }
 
 func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
