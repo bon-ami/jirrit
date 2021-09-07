@@ -349,15 +349,12 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 			continue
 		}
 		type flds struct {
-			name, value, indx string
+			name, value string
 		}
 		fldSlc := [...]flds{
-			{name: IssueinfoStrBin,
-				indx: IssueinfoStrBin},
-			{name: IssueinfoStrState,
-				indx: IssueinfoStrState},
-			{name: IssueinfoStrOldPath,
-				indx: IssueinfoStrOldPath},
+			{name: IssueinfoStrBin},
+			{name: IssueinfoStrState},
+			{name: IssueinfoStrOldPath},
 		}
 
 		for i, v := range fldSlc {
@@ -382,7 +379,7 @@ func gerritParseFiles(body map[string]interface{}) []issueInfos {
 		inf := issueInfos{IssueinfoStrFile: file1}
 		for _, fld1 := range fldSlc {
 			if len(fld1.value) > 0 {
-				inf[fld1.indx] = fld1.value
+				inf[fld1.name] = fld1.value
 			}
 		}
 		issues = append(issues, inf)
@@ -563,29 +560,25 @@ func gerritRevert(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) ([]issueInfos, error) {
-	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
-		issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
-		if err != nil {
-			return issueInfo, err
-		}
-		// check mergable only, without submittable
-		inf, err := gerritDetailOnCurrRev(svr, authInfo, issueInfo)
-		if err != nil {
-			return issueInfo, err
-		}
-		if len(inf) < 1 {
-			err = eztools.ErrNoValidResults
-			return issueInfo, err
-		}
-		if inf[0][IssueinfoStrSubmittable] != "false" &&
-			inf[0][IssueinfoStrMergeable] != "false" {
-			// either empty(=not supported or already merged) or true will do
-			_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
-			// TODO: check returned slice
-			return issueInfo, err
-		}
-		return issueInfo, eztools.ErrNoValidResults
-	})
+	issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
+	if err != nil {
+		return nil, err
+	}
+	// check mergable only, without submittable
+	inf, err := gerritDetailOnCurrRev(svr, authInfo, issueInfo)
+	if err != nil {
+		return nil, err
+	}
+	if len(inf) < 1 {
+		err = eztools.ErrNoValidResults
+		return nil, err
+	}
+	if inf[0][IssueinfoStrSubmittable] != "false" &&
+		inf[0][IssueinfoStrMergeable] != "false" {
+		// either empty(=not supported or already merged) or true will do
+		return gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
+	}
+	return nil, eztools.ErrNoValidResults
 }
 
 func gerritAbandon(svr *svrs, authInfo eztools.AuthInfo,
@@ -705,15 +698,11 @@ func gerritActOnMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 func gerritActOn1WtAnyID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues []issueInfos,
 	action string) ([]issueInfos, error) {
-	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
-		issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
-		if err != nil {
-			return issueInfo, err
-		}
-		_, err = gerritActOn1(svr, authInfo, issueInfo, nil, action)
-		// TODO: check returned slice
-		return issueInfo, err
-	})
+	issueInfo, err := gerritAnyID2ID(svr, authInfo, issueInfo)
+	if err != nil {
+		return nil, err
+	}
+	return gerritActOn1(svr, authInfo, issueInfo, nil, action)
 }
 
 // gerritActOn1 POST changes/ID/action
@@ -873,60 +862,56 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		scored bool
 	)
 	eztools.ShowStr("waiting for issue to be submittable/mergeable.")
-	return loopIssues(svr, issueInfo, func(issueInfo issueInfos) (issueInfos, error) {
-	READY2MERGE:
-		for err == nil {
-			inf, err = gerritDetailOnCurrRev(svr, authInfo, issueInfo)
-			if err != nil {
-				break
-			}
-			if len(inf) < 1 {
-				err = eztools.ErrNoValidResults
-				break
-			}
-			if inf[0][IssueinfoStrMergeable] == "false" {
-				// conflict
-				err = eztools.ErrOutOfBound
-				break
-			}
-			switch inf[0][IssueinfoStrSubmittable] {
-			case "true":
-				// the only successful break of loop
-				break READY2MERGE
-			case "":
-				//gerritDetails and check
-				/*labels:map[
-				  Code-Review:map[
-				          approved:map  for OK
-				          blocking:true for NG
-				          rejected:map  also NG
-				          values:map[ 0:No score +1:Looks good to me, but someone else must approve +2:Looks good to me, approved -1:I would prefer this is not merged as is -2:This shall not be merged]]*/
-			}
-
-			if !scored {
-				_, err = gerritScore(svr, authInfo, inf[0])
-				if err != nil {
-					eztools.LogErrPrintWtInfo(
-						"failed to score and wait for it to be scored by elsewhere",
-						err)
-				}
-				scored = true
-			}
-			time.Sleep(intGerritMerge * time.Second)
-			eztools.ShowStr(".")
-		}
-		eztools.ShowStrln("")
+READY2MERGE:
+	for err == nil {
+		inf, err = gerritDetailOnCurrRev(svr, authInfo, issueInfo)
 		if err != nil {
-			if err == eztools.ErrOutOfBound {
-				eztools.LogPrint("Conflict to merge?")
-			}
-			return issueInfo, err
+			break
 		}
-		// _, err = gerritMerge(svr, authInfo, issueInfo) not used because of redundant steps of checking
-		_, err = gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
-		// TODO: check returned slice
-		return issueInfo, err
-	})
+		if len(inf) < 1 {
+			err = eztools.ErrNoValidResults
+			break
+		}
+		if inf[0][IssueinfoStrMergeable] == "false" {
+			// conflict
+			err = eztools.ErrOutOfBound
+			break
+		}
+		switch inf[0][IssueinfoStrSubmittable] {
+		case "true":
+			// the only successful break of loop
+			break READY2MERGE
+		case "":
+			//gerritDetails and check
+			/*labels:map[
+			  Code-Review:map[
+			          approved:map  for OK
+			          blocking:true for NG
+			          rejected:map  also NG
+			          values:map[ 0:No score +1:Looks good to me, but someone else must approve +2:Looks good to me, approved -1:I would prefer this is not merged as is -2:This shall not be merged]]*/
+		}
+
+		if !scored {
+			_, err = gerritScore(svr, authInfo, inf[0])
+			if err != nil {
+				eztools.LogErrPrintWtInfo(
+					"failed to score and wait for it to be scored by elsewhere",
+					err)
+			}
+			scored = true
+		}
+		time.Sleep(intGerritMerge * time.Second)
+		eztools.ShowStr(".")
+	}
+	eztools.ShowStrln("")
+	if err != nil {
+		if err == eztools.ErrOutOfBound {
+			eztools.LogPrint("Conflict to merge?")
+		}
+		return nil, err
+	}
+	// _, err = gerritMerge(svr, authInfo, issueInfo) not used because of redundant steps of checking
+	return gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
 }
 
 func gerritListPrj(svr *svrs, authInfo eztools.AuthInfo,

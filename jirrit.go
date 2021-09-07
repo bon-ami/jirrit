@@ -105,7 +105,7 @@ func main() {
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
 		paramR, paramA, paramW, paramK, paramF,
 		paramI, paramB, paramCfg, paramLog,
-		paramHD, paramP, paramS, paramC string
+		paramHD, paramP, paramL, paramC string
 	)
 	const cfgSvrOpt = "setsvrcfg"
 	flag.BoolVar(&paramH, "h", false, "help message")
@@ -135,7 +135,7 @@ func main() {
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
 			"or (test step) comment for JIRA (closure)")
-	flag.StringVar(&paramS, "s", "",
+	flag.StringVar(&paramL, "l", "",
 		"linked issue when linking issues")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
@@ -230,7 +230,7 @@ func main() {
 	}
 	if paramSetSvrCfg {
 		if uiSilent {
-			defer noInteractionAllowed()
+			noInteractionAllowed()
 			return
 		}
 		cfg.User = chkUsr(cfg.User, true)
@@ -323,7 +323,7 @@ func main() {
 			IssueinfoStrHead:     paramHD,
 			IssueinfoStrProj:     paramP,
 			IssueinfoStrBranch:   paramB,
-			IssueinfoStrState:    paramS,
+			IssueinfoStrLink:     paramL,
 			IssueinfoStrFile:     paramF,
 			IssueinfoStrComments: paramC}
 	}
@@ -793,7 +793,7 @@ func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 		return &candidates[0]
 	}
 	if uiSilent {
-		defer noInteractionAllowed()
+		noInteractionAllowed()
 		return nil
 	}
 	eztools.ShowStrln(" Choose a server")
@@ -824,7 +824,7 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 	issueInfo issueInfos) (actionFunc, issueInfos) {
 	var fi int
 	if uiSilent && len(choices) > 1 {
-		defer noInteractionAllowed()
+		noInteractionAllowed()
 		return nil, issueInfo
 	}
 	if len(choices) > 1 {
@@ -987,7 +987,7 @@ func getValuesFromMaps(name string, field interface{}) string {
 		return values[0]
 	}
 	if uiSilent {
-		defer noInteractionAllowed()
+		noInteractionAllowed()
 		return ""
 	}
 	if choice := eztools.ChooseStrings(values); choice != eztools.InvalidID {
@@ -1097,102 +1097,6 @@ ISSUEINFO_STR_STATE}*/
 /*var jiraDetailTxt = issueInfos{
 ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
 ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
-
-func chkNSetIssueInfo(v interface{}, issueInfo issueInfos, i string) bool {
-	if v == nil {
-		eztools.Log("nil got, not string")
-		return false
-	}
-	str, ok := v.(string)
-	if !ok {
-		eztools.LogPrint(reflect.TypeOf(v).String() +
-			" got instead of string")
-		return false
-	}
-	issueInfo[i] = str
-	return true
-}
-
-// check map type before looping it
-func chkNLoopStringMap(m interface{},
-	mustStr string, keyStr []string) ([]string, bool) {
-	sub, ok := m.(map[string]interface{})
-	if !ok {
-		eztools.LogPrint(reflect.TypeOf(m).String() +
-			" got instead of map[string]interface{}")
-		return nil, false
-	}
-	return loopStringMap(sub, mustStr, keyStr, nil)
-}
-
-/*
-loop map.
-	If key matches keyStr, put value into keyVal
-		in case of string or skip otherwise.
-	If key does not match mustStr, skip.
-Invoke fun with key and value.
-Both return values of fun and this means whether
-	any item ever processed successfully.
-*/
-func loopStringMap(m map[string]interface{},
-	mustStr string, keyStr []string,
-	fun func(string, interface{}) bool) (keyVal []string, ret bool) {
-	if len(keyStr) > 0 {
-		keyVal = make([]string, len(keyStr))
-	} else {
-		keyVal = nil
-	}
-	for i, v := range m {
-		if eztools.Debugging && eztools.Verbose > 2 {
-			eztools.ShowStrln("looping " + i)
-		}
-		if len(keyStr) > 0 {
-			matched := false
-			for j, key1 := range keyStr {
-				if i == key1 {
-					matched = true
-					id, ok := v.(string)
-					if !ok {
-						eztools.LogPrint(
-							reflect.TypeOf(v).String() +
-								" got instead of string")
-						break
-					}
-					ret = true
-					keyVal[j] = id
-					if fun == nil {
-						break
-					}
-					//eztools.ShowStrln("id=" + id)
-					break
-				}
-			}
-			if matched {
-				continue
-			}
-		}
-		if len(mustStr) > 0 && i != mustStr {
-			//eztools.ShowStrln("skipping " + i)
-			continue
-		}
-		if fun != nil {
-			ret = fun(i, v) || ret
-		}
-	}
-	return keyVal, ret
-}
-
-func custFld(jsonStr, fldKey, fldVal string) string {
-	if len(fldKey) > 0 {
-		if len(jsonStr) > 0 {
-			jsonStr += `,
-`
-		}
-		return jsonStr + `        "` +
-			fldKey + `": "` + fldVal + `"`
-	}
-	return jsonStr
-}
 
 const typicalJiraSeparator = "-"
 
@@ -1353,7 +1257,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 
 func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 	if uiSilent {
-		defer noInteractionAllowed()
+		noInteractionAllowed()
 		return
 	}
 	const linefeed = " (end with \\ to continue with more lines. empty to stop)"
@@ -1373,6 +1277,7 @@ func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 // return value: whether anything new is input
 func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if uiSilent {
+		noInteractionAllowed()
 		return false
 	}
 	const linefeed = " (end with \\ to input multi lines)"
@@ -1438,7 +1343,7 @@ func useInputOrPromptStr(inf issueInfos, ind, prompt string) {
 		return
 	}
 	if uiSilent {
-		defer noInteractionAllowed()
+		noInteractionAllowed()
 		return
 	}
 	inf[ind] = eztools.PromptStr(prompt)
@@ -1452,7 +1357,8 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 	switch svrType {
 	case CategoryJira:
 		switch action {
-		case "show details of a case",
+		case "move status of a case",
+			"show details of a case",
 			"list comments of a case",
 			"list files attached to a case",
 			"list watchers of a case",
@@ -1460,6 +1366,10 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			"watch a case",
 			"unwatch a case":
 			useInputOrPrompt(inf, IssueinfoStrID)
+		case "link a case to another":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrLink,
+				"ID to be linked to")
 		case "close a case to resolved from any known statues":
 			useInputOrPromptStr(inf, IssueinfoStrComments,
 				"test step for closure")
@@ -1473,6 +1383,21 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")
 			useInputOrPromptStr(inf, IssueinfoStrFile, "file to be saved as")
+		case "change a comment from a case":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrKey, "comment ID")
+			useInputOrPromptStr(inf, IssueinfoStrComments, "comment body")
+		case "delete a comment from a case":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrKey, "comment ID")
+		case "add a comment to a case",
+			"reject a case from any known statues":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(inf, IssueinfoStrComments)
+		case "transfer a case to someone":
+			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPromptStr(inf, IssueinfoStrHead, "assignee")
+			useInputOrPromptStr(inf, IssueinfoStrComments, "component")
 		}
 	case CategoryGerrit:
 		switch action {
@@ -1482,7 +1407,6 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			"abandon a submit",
 			"show current revision/commit of a submit",
 			"add scores to a submit",
-			"reject a case from any known statues",
 			"revert a submit",
 			"list files of a submit",
 			"merge a submit":
