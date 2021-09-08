@@ -394,7 +394,7 @@ func main() {
 							eztools.LogErr(err)
 						}
 					} else {
-						dispResults(issues)
+						issues.Print(dispResultOutputFunc)
 					}
 					return inf, err
 				})
@@ -437,9 +437,9 @@ func main() {
 	}
 }
 
-func dispResults(issues []issueInfos) {
+func (issues issueInfoSlc) Print(fun func(...interface{})) {
 	if issues == nil {
-		dispResultOutputFunc("No results.")
+		fun("No results.")
 	} else {
 		var i int
 		if step < 1 {
@@ -448,10 +448,10 @@ func dispResults(issues []issueInfos) {
 			i = 0
 		}
 		for ; i >= 0 && i < len(issues); i += step {
-			dispResultOutputFunc("Issue/Reviewer/Comment/File " +
+			fun("Issue/Reviewer/Comment/File " +
 				strconv.Itoa(i+1))
 			for i1, v1 := range issues[i] {
-				dispResultOutputFunc(i1 + "=" + v1)
+				fun(i1 + "=" + v1)
 			}
 		}
 	}
@@ -762,7 +762,7 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 category name -> []action2Func
 cat2Act
 */
-type actionFunc func(*svrs, eztools.AuthInfo, issueInfos) ([]issueInfos, error)
+type actionFunc func(*svrs, eztools.AuthInfo, issueInfos) (issueInfoSlc, error)
 type action2Func struct {
 	n string
 	f actionFunc
@@ -1056,6 +1056,17 @@ const (
 )
 
 type issueInfos map[string]string
+type issueInfoSlc []issueInfos
+
+func (inf issueInfos) ToSlc() issueInfoSlc {
+	return issueInfoSlc{inf}
+}
+func (inf issueInfoSlc) ToMapSlc() (res []map[string]string) {
+	for _, i := range inf {
+		res = append(res, i)
+	}
+	return
+}
 
 //type scoreInfos [IssueinfoStrScore + 1]int
 
@@ -1148,7 +1159,7 @@ func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
 // from multiple ID's in one issueInfo,
 // while other fields use the former values returned from function fun
 func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
-	issueInfos, error)) (issueInfoOut []issueInfos, err error) {
+	issueInfos, error)) (issueInfoOut issueInfoSlc, err error) {
 	const separator = ","
 	printID := func() {
 		if err == nil {
@@ -1164,7 +1175,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		}
 		issueInfo, err := fun(issueInfo)
 		printID()
-		return []issueInfos{issueInfo}, err
+		return issueInfoSlc{issueInfo}, err
 	case 2: // x,,y or x,y,z
 		parts := strings.Split(issueInfo[IssueinfoStrID], separator)
 		//eztools.Log(parts)
