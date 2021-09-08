@@ -1434,11 +1434,8 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 				IssueinfoStrID, IssueinfoStrAssignee)
 			useInputOrPrompt(inf, IssueinfoStrBranch)
 		case "cherry pick a submit":
-			eztools.ShowStrln("Please input an ID that can make it " +
-				"distinguished, such as commit, instead of Change " +
-				"ID, which is reused among cherrypicks.")
 			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPrompt(inf, IssueinfoStrRevCur)
+			useInputOrPromptStr(inf, IssueinfoStrRevCur, "revision(empty for current)")
 			useInputOrPrompt(inf, IssueinfoStrBranch)
 		case "list config of a project":
 			useInputOrPrompt(inf, IssueinfoStrProj)

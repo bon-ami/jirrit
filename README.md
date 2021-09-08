@@ -97,6 +97,8 @@ Usually, these fields can be seen in an issue's detail.
 
 ## Input grammar
 
+ - For gerrit, in most cases, input an ID that can make it distinguished, such as commit.<BR>
+Be aware Change IDs are same among cherrypicks.
  - For most prompts, [Enter] without default value as shown is taken as an invalid input and return to previous menu.
  - If previous value is in the format of ".+\-[0-9]+", or X-0, to be easier to read, and the new input is just a number, it will be taken as the number replacing the previous number part.
  - In some cases, input support multiple lines. End an input with "\" to indicate it is a line of multiple ones and continue inputting.

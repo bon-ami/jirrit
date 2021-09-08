@@ -593,6 +593,21 @@ func gerritAbandonMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritPick(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
+	if len(issueInfo[IssueinfoStrID]) < 1 ||
+		len(issueInfo[IssueinfoStrBranch]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	if len(issueInfo[IssueinfoStrRevCur]) < 1 {
+		inf, err := gerritRev(svr, authInfo, issueInfo)
+		if err != nil {
+			return nil, err
+		}
+		if len(inf) < 1 {
+			return nil, eztools.ErrNoValidResults
+		}
+		// should be only one or same among all
+		issueInfo[IssueinfoStrRevCur] = inf[0][IssueinfoStrRevCur]
+	}
 	return gerritPick1(svr, authInfo, issueInfo, nil)
 }
 

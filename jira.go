@@ -325,7 +325,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrHead]) < 1 {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	type insets struct {
 		Name string `json:"name"`
@@ -702,7 +702,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrLink]) < 1 ||
 		issueInfo[IssueinfoStrLink] ==
 			issueInfo[IssueinfoStrID] {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	if uiSilent { // TODO: command params
 		defer noInteractionAllowed()
@@ -719,7 +719,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 			return linkChoices[i].name
 		}, "link type")
 	if linkType == eztools.InvalidID {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	type ils struct {
 		Add struct {
@@ -762,7 +762,7 @@ func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	if len(issueInfo[IssueinfoStrKey]) < 1 {
 		inf, err := jiraComments(svr, authInfo, issueInfo)
@@ -802,7 +802,7 @@ func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 	// TODO: select key
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrKey]) < 1 {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIStr+
 		issueInfo[IssueinfoStrID]+"/comment/"+issueInfo[IssueinfoStrKey],
@@ -815,7 +815,7 @@ func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
-		return nil, nil
+		return nil, eztools.ErrInvalidInput
 	}
 	inf, err := jiraAddComment1(svr, authInfo, issueInfo)
 	if err != nil {
