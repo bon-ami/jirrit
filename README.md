@@ -59,8 +59,8 @@ Usually, these fields can be seen in an issue's detail.
   - change a comment from a case
   - list my open cases
   - link a case to another
-  - reject a case from any known statues
-  - close a case to resolved from any known statues (change it to resolved)
+  - reject a case from any known statuses
+  - close a case to resolved from any known statuses (change it to resolved)
   - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
   - close a case with general requirement as steps (change it to resolved, adding test condition="none", steps="general requirement" and expectation="none")
   - list watchers of a case
@@ -104,5 +104,4 @@ Be aware Change IDs are same among cherrypicks.
  - In some cases, input support multiple lines. End an input with "\" to indicate it is a line of multiple ones and continue inputting.
  - In some cases,<BR>
 Input ".+\-[0-9]+[,][,][0-9]+", or "X-0,,1", or "0,,1", to be easier to read, to batch process all the ID's between, and including, the two numbers.<BR>
-Input "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.)<BR>
-Supported for: reject and closure in Jira; rebase, merge and abandon in Gerrit.
+Input "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.)

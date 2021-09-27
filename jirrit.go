@@ -45,6 +45,8 @@ var (
 	errAuth              = errors.New("Auth failure")
 	errConn              = errors.New("Conn failure")
 	errCfg               = errors.New("Cfg failure")
+	errGram              = errors.New("Request failure in grammar")
+	errSrvr              = errors.New("Server error")
 )
 
 type passwords struct {
@@ -82,12 +84,16 @@ type svrs struct {
 }
 
 type jirrit struct {
-	Cmt        string    `xml:",comment"`
-	EzToolsCfg string    `xml:"eztoolscfg"`
-	Log        string    `xml:"log"`
-	User       string    `xml:"user"`
-	Pass       passwords `xml:"pass"`
-	Svrs       []svrs    `xml:"server"`
+	Cmt        string `xml:",comment"`
+	EzToolsCfg string `xml:"eztoolscfg"`
+	AppUp      struct {
+		Interval int    `xml:"interval"`
+		Previous string `xml:"previous"`
+	} `xml:"appup"`
+	Log  string    `xml:"log"`
+	User string    `xml:"user"`
+	Pass passwords `xml:"pass"`
+	Svrs []svrs    `xml:"server"`
 }
 
 func main() {
@@ -98,6 +104,8 @@ func main() {
 		extConn
 		extInpt
 		extRslt
+		extGram
+		extSrvr
 	)
 	svrTypes = []string{CategoryJira, CategoryGerrit}
 	var (
@@ -143,21 +151,23 @@ func main() {
 	flag.Parse()
 	if paramH {
 		eztools.ShowStrln(module + " v" + ver)
-		eztools.ShowStrln("  Return values.")
-		eztools.ShowStrln("0", "no error")
-		eztools.ShowStrln(extCfg, "config error")
-		eztools.ShowStrln(extAuth, "auth error")
-		eztools.ShowStrln(extConn, "connection error")
-		eztools.ShowStrln(extInpt, "input error")
-		eztools.ShowStrln(extRslt, "result error")
-		eztools.ShowStrln("  When inputting ID's, there are following options for some actions.")
+		eztools.ShowStrln("::Return values::")
+		eztools.ShowStrln("", "0", "no error")
+		eztools.ShowStrln("", extCfg, "config error")
+		eztools.ShowStrln("", extAuth, "auth error")
+		eztools.ShowStrln("", extConn, "connection error")
+		eztools.ShowStrln("", extInpt, "input error")
+		eztools.ShowStrln("", extRslt, "result error")
+		eztools.ShowStrln("", extGram, "request error")
+		eztools.ShowStrln("", extSrvr, "server error")
+		eztools.ShowStrln("::When inputting ID's, there are following options for some actions::")
 		eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
 		eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
 		eztools.ShowStrln(" 3. ID range, such as 0,,2 or X-0,2")
 		eztools.ShowStrln("")
 		flag.Usage()
 		eztools.ShowStrln("")
-		eztools.ShowStrln("action strings, to be used with server name, \"r\", only, and that will eliminate interactions in UI:")
+		eztools.ShowStrln("::Action strings, \"a\", to be used with server names, \"r\", only, and that will eliminate interactions in UI::")
 		for cat, i := range makeCat2Act() {
 			eztools.ShowStrln("\t\t" + cat)
 			for _, j := range i {
@@ -209,7 +219,7 @@ func main() {
 	}
 	if len(cfg.Log) > 0 {
 		logger, err := os.OpenFile(cfg.Log,
-			os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err == nil {
 			if err = eztools.InitLogger(logger); err != nil {
 				eztools.LogErrPrint(err)
@@ -293,7 +303,6 @@ func main() {
 		fun     actionFunc
 		choices []string
 	)
-	issueInfo := make(issueInfos)
 	//if eztools.Debugging && eztools.Verbose > 0 {
 	dispResultOutputFunc = eztools.LogPrint
 	//} else {
@@ -317,27 +326,33 @@ func main() {
 		}
 	}
 	mkIssueinfo := func() issueInfos {
-		return issueInfos{
-			IssueinfoStrID:       paramI,
-			IssueinfoStrKey:      paramK,
-			IssueinfoStrHead:     paramHD,
-			IssueinfoStrProj:     paramP,
-			IssueinfoStrBranch:   paramB,
-			IssueinfoStrLink:     paramL,
-			IssueinfoStrFile:     paramF,
-			IssueinfoStrComments: paramC}
+		inf := make(issueInfos)
+		matrix := [...][]string{
+			{paramI, IssueinfoStrID},
+			{paramK, IssueinfoStrKey},
+			{paramHD, IssueinfoStrHead},
+			{paramP, IssueinfoStrProj},
+			{paramB, IssueinfoStrBranch},
+			{paramL, IssueinfoStrLink},
+			{paramF, IssueinfoStrFile},
+			{paramC, IssueinfoStrComments}}
+		for _, i := range matrix {
+			if len(i[0]) > 0 {
+				inf[i[1]] = i[0]
+			}
+		}
+		return inf
 	}
+	issueInfo := mkIssueinfo()
+	funParam := "N/A"
+	svrParam := "N/A"
 	if svr != nil {
 		if len(paramA) > 0 {
 			for _, v := range cats[svr.Type] {
 				if paramA == v.n {
 					uiSilent = true
 					fun = v.f
-					issueInfo = mkIssueinfo()
-					eztools.Log("runtime params: server=" +
-						svr.Name + ", action=" + v.n +
-						", info array:")
-					eztools.Log(issueInfo)
+					funParam = v.n
 					break
 				}
 			}
@@ -346,7 +361,11 @@ func main() {
 					"\" NOT recognized as a command")
 			}
 		}
+		svrParam = svr.Name
 	}
+	eztools.Log("runtime params: server=" +
+		svrParam + ", action=" + funParam + ", info array:")
+	eztools.Log(issueInfo)
 	if paramReverse {
 		step = -1
 	} else {
@@ -410,13 +429,19 @@ func main() {
 	if eztools.Debugging {
 		eztools.ShowStrln("waiting for update check...")
 	}
-	if <-upch {
+	if <-upch && <-upch {
 		if eztools.Debugging {
 			eztools.ShowStrln("waiting for update check to end...")
 		}
-		<-upch
+		if <-upch {
+			cfg.AppUp.Previous = eztools.TranDate("")
+			saveCfg()
+		}
 	}
 	if err != nil {
+		if eztools.Debugging {
+			eztools.ShowStrln("exit with \"" + err.Error() + "\"")
+		}
 		switch err {
 		case eztools.ErrInvalidInput:
 			os.Exit(extInpt)
@@ -429,10 +454,10 @@ func main() {
 			os.Exit(extCfg)
 		case errConn:
 			os.Exit(extConn)
-		default:
-			if eztools.Debugging {
-				eztools.ShowStrln("err val=\"" + err.Error() + "\"")
-			}
+		case errGram:
+			os.Exit(extGram)
+		case errSrvr:
+			os.Exit(extSrvr)
 		}
 	}
 }
@@ -448,6 +473,9 @@ func (issues issueInfoSlc) Print(fun func(...interface{})) {
 			i = 0
 		}
 		for ; i >= 0 && i < len(issues); i += step {
+			if len(issues[i]) < 1 {
+				continue
+			}
 			fun("Issue/Reviewer/Comment/File " +
 				strconv.Itoa(i+1))
 			for i1, v1 := range issues[i] {
@@ -707,7 +735,24 @@ func saveCfg() bool {
 	return true
 }
 
+/*
+upch <-      | false                               | true
+	1st. | no check                            | to check
+	2nd. | wrong update server config          |
+	3rd. | wrong other config or check failure |
+*/
 func chkUpdate(eztoolscfg string, upch chan bool) {
+	if cfg.AppUp.Interval < 1 {
+		return
+	}
+	if len(cfg.AppUp.Previous) > 0 {
+		diff, ok := eztools.DiffDate(cfg.AppUp.Previous,
+			eztools.TranDate(""))
+		if ok && diff <= cfg.AppUp.Interval {
+			upch <- false
+			return
+		}
+	}
 	var (
 		db  *sql.DB
 		err error
@@ -721,16 +766,18 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 	if len(eztoolscfg) == 0 {
 		db, err = eztools.Connect()
 		if err != nil {
-			upch <- false
 			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
 				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
 			}
 			eztools.LogErrPrint(err)
+			upch <- false
 			return
 		}
 	}
 	defer db.Close()
+	upch <- true
 	eztools.AppUpgrade(db, module, ver, nil, upch)
+	return
 }
 
 func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
@@ -855,12 +902,16 @@ func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 	}*/
 	default:
 		switch errno {
+		case http.StatusBadRequest:
+			err = errGram
 		case http.StatusNotFound:
 			err = eztools.ErrNoValidResults
 		case http.StatusUnauthorized:
 			err = errAuth
 		case http.StatusGatewayTimeout:
 			err = errConn
+		case http.StatusInternalServerError:
+			err = errSrvr
 		}
 	}
 	if err != nil {
@@ -876,7 +927,7 @@ func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 				}
 			} else {
 				//eztools.ShowSthln(bodyBytes)
-				eztools.LogPrint(string(bodyBytes))
+				eztools.LogPrint("REST body=" + string(bodyBytes))
 			}
 		}
 	}
@@ -1031,6 +1082,8 @@ const (
 	IssueinfoStrSubmitType = "submit_type"
 	// IssueinfoStrApprovals approvals string
 	IssueinfoStrApprovals = "approvals"
+	// IssueinfoStrRej rejected string
+	IssueinfoStrRej = "rejected"
 	// IssueinfoStrState state string
 	IssueinfoStrState = "status"
 	// IssueinfoStrFile file string
@@ -1163,7 +1216,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	const separator = ","
 	printID := func() {
 		if err == nil {
-			eztools.LogPrint("Done with " + issueInfo[IssueinfoStrID])
+			eztools.Log("Done with " + issueInfo[IssueinfoStrID])
 		}
 	}
 	//eztools.Log(strings.Count(issueInfo[IssueinfoStrID], separator))
@@ -1381,7 +1434,8 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrLink,
 				"ID to be linked to")
-		case "close a case to resolved from any known statues":
+		case "close a case to resolved from any known statuses":
+			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrComments,
 				"test step for closure")
 		case "remove a file attached to a case":
@@ -1402,7 +1456,7 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrKey, "comment ID")
 		case "add a comment to a case",
-			"reject a case from any known statues":
+			"reject a case from any known statuses":
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPrompt(inf, IssueinfoStrComments)
 		case "transfer a case to someone":
@@ -1414,13 +1468,8 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 		switch action {
 		case "show details of a submit",
 			"show reviewers of a submit",
-			"rebase a submit",
-			"abandon a submit",
 			"show current revision/commit of a submit",
-			"add scores to a submit",
-			"revert a submit",
-			"list files of a submit",
-			"merge a submit":
+			"list files of a submit":
 			useInputOrPrompt(inf, IssueinfoStrID)
 		case "list files of a submit by revision":
 			useInputOrPrompt(inf, IssueinfoStrID)
@@ -1466,8 +1515,8 @@ func makeCat2Act() cat2Act {
 			{"list files attached to a case", jiraListFile},
 			{"get a file to a case", jiraGetFile},
 			{"remove a file attached to a case", jiraDelFile},
-			{"reject a case from any known statues", jiraReject},
-			{"close a case to resolved from any known statues", jiraClose},
+			{"reject a case from any known statuses", jiraReject},
+			{"close a case to resolved from any known statuses", jiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
 			{"close a case with default design as steps", jiraCloseDef},

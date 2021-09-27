@@ -191,6 +191,14 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 							"map[string]interface{}")
 					continue
 				}
+				/*to, ok := tran1["to"].(map[string]interface{})
+				if !ok {
+					eztools.LogPrint(
+						reflect.TypeOf(tran1["to"]).
+							String() +
+							" got instead of string")
+					return false
+				}*/
 				tranN, ok := tran1["name"].(string)
 				if !ok {
 					eztools.LogPrint(
@@ -213,10 +221,10 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 			}
 			return true
 		})
-	/*if eztools.Debugging && eztools.Verbose > 2 {
+	if eztools.Debugging && eztools.Verbose > 2 {
 		eztools.ShowSthln(tranNames)
 		eztools.ShowSthln(tranIDs)
-	}*/
+	}
 	return
 }
 
@@ -374,7 +382,12 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	//eztools.ShowByteln(jsonStr)
+	if eztools.Debugging && eztools.Verbose > 1 {
+		eztools.Log(issueInfo[IssueinfoStrID] + " in transition")
+		if eztools.Verbose > 2 {
+			eztools.ShowByteln(jsonStr)
+		}
+	}
 	_, err = restMap(eztools.METHOD_PUT,
 		svr.URL+RestAPIStr+issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -398,8 +411,10 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 	if len(tranNames) > 0 && len(tranIDs) > 0 {
 		if len(tranName) > 0 {
 			for i, v := range tranNames {
-				if tranName == string(v) {
+				//eztools.ShowStrln(v + "=?" + tranName)
+				if tranName == v {
 					tranID = tranIDs[i]
+					//eztools.ShowStrln("tran ID=" + tranID)
 					break
 				}
 			}
@@ -424,7 +439,7 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 }
 
 func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
-	id, tranID string) (issueInfo issueInfos, err error) {
+	id, tranID string) (err error) {
 	type tranJsons struct {
 		Transition struct {
 			ID string `json:"id"`
@@ -437,19 +452,22 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 		return
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {
-		eztools.Log("Processing " + id)
+		eztools.Log(id + " in transition")
+		if eztools.Verbose > 2 {
+			eztools.ShowByteln(jsonStr)
+		}
 	}
-	//eztools.ShowByteln(jsonStr)
-	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	_, err = restSth(eztools.METHOD_POST, svr.URL+RestAPIStr+
 		id+"/transitions", authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
-	tranNames, tranIDs := jiraParseTrans(bodyMap)
-	//for i:=0; i < len(tranNames) && i<len(tranIDs);i++{
-	if len(tranNames) > 0 && len(tranIDs) > 0 {
-		// multiple?
+	// replies to transitions contains no body
+	/*tranNames, tranIDs := jiraParseTrans(bodyMap)
+	//for i := 0; i < len(tranNames) && i < len(tranIDs); i++ {
+	if len(tranNames) > 0 && len(tranIDs) > 0 { // multiple?
 		issueInfo[IssueinfoStrKey] = tranIDs[0]
 		issueInfo[IssueinfoStrState] = tranNames[0]
 	}
+	//}*/
 	return
 }
 
@@ -457,20 +475,20 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
 	fun func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) error) (issueInfoSlc, error) {
+		issueInfo issueInfos) error) error {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
-		return nil, eztools.ErrInvalidInput
+		return eztools.ErrInvalidInput
 	}
 	if fun != nil {
 		if err := fun(svr, authInfo, issueInfo); err != nil {
-			return nil, err
+			return err
 		}
 
 	}
 	var (
 		tranNames, tranIDs []string
 		err                error
-		res                issueInfoSlc
+		//res                issueInfoSlc
 	)
 	for _, tran := range steps {
 		if eztools.Debugging && eztools.Verbose > 2 {
@@ -480,27 +498,23 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			tranNames, tranIDs, err = jiraGetTrans(svr, authInfo,
 				issueInfo[IssueinfoStrID], tran)
 			if err != nil {
-				return res, err
+				return err
 			}
 		}
 		tranID, err := jiraChooseTran(tran, tranNames, tranIDs)
 		if err != nil {
-			if err == eztools.ErrNoValidResults {
-				tranNames = nil
-				tranIDs = nil
-			}
 			continue
 		}
 		tranNames = nil
 		tranIDs = nil
-		inf, err := jiraTranExec(svr, authInfo,
+		err = jiraTranExec(svr, authInfo,
 			issueInfo[IssueinfoStrID], tranID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		res = append(res, inf)
+		//res = append(res, inf)
 	}
-	return res, err
+	return err
 }
 
 func jiraConstructFields(in string) string {
@@ -518,7 +532,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 		eztools.Log("Processing " + issueInfo[IssueinfoStrID])
 	}
 	//eztools.ShowStrln(jsonStr)
-	_, err := restMap(eztools.METHOD_PUT,
+	_, err := restSth(eztools.METHOD_PUT,
 		svr.URL+RestAPIStr+
 			issueInfo[IssueinfoStrID],
 		authInfo, strings.NewReader(jsonStr),
@@ -595,7 +609,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 		"Implementing", "Reject"}
 	var jsonStr string
 	firstRun := true
-	return jiraFuncNTran(svr, authInfo, issueInfo, Steps,
+	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
 		func(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo issueInfos) error {
 			if len(issueInfo[IssueinfoStrComments]) > 0 {
@@ -630,7 +644,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		"Reopen", "Implementing", "Back to process",
 		"Assign owner", "Resolved"}
 	if len(qa) < 1 {
-		return jiraFuncNTran(svr, authInfo, issueInfo, Steps, nil)
+		return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps, nil)
 	}
 	var jsonStr string
 	for i, v := range map[string]string{
@@ -643,7 +657,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		eztools.LogPrint("NO Tst* fields " +
 			"defined for this server")
 	}
-	return jiraFuncNTran(svr, authInfo, issueInfo, Steps,
+	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
 		func(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo issueInfos) error {
 			return jiraEditWtFields(svr, authInfo, issueInfo, jsonStr)
@@ -681,12 +695,12 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	inf, err := jiraTranExec(svr, authInfo,
+	err = jiraTranExec(svr, authInfo,
 		issueInfo[IssueinfoStrID], tranID)
 	if err != nil {
 		return nil, err
 	}
-	return inf.ToSlc(), err
+	return nil, err
 }
 
 func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
