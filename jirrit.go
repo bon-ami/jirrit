@@ -393,7 +393,7 @@ func main() {
 		}
 		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
-				fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
+				funParam, fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
 					mkIssueinfo())
 				if fun == nil {
 					break
@@ -401,6 +401,7 @@ func main() {
 			}
 			_, err = loopIssues(svr, issueInfo,
 				func(inf issueInfos) (issueInfos, error) {
+					eztools.LogWtTime(svr.Name, funParam, inf)
 					issues, err := fun(svr, authInfo, inf)
 					if err != nil {
 						if err == eztools.ErrNoValidResults {
@@ -873,21 +874,21 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 }
 
 func chooseAct(svrType string, choices []string, funcs []action2Func,
-	issueInfo issueInfos) (actionFunc, issueInfos) {
+	issueInfo issueInfos) (string, actionFunc, issueInfos) {
 	var fi int
 	if uiSilent && len(choices) > 1 {
 		noInteractionAllowed()
-		return nil, issueInfo
+		return "", nil, issueInfo
 	}
 	if len(choices) > 1 {
 		eztools.ShowStrln(" Choose an action")
 		fi = eztools.ChooseStrings(choices)
 		if fi == eztools.InvalidID {
-			return nil, issueInfo
+			return "", nil, issueInfo
 		}
 	}
 	inputIssueInfo4Act(svrType, funcs[fi].n, issueInfo)
-	return funcs[fi].f, issueInfo
+	return funcs[fi].n, funcs[fi].f, issueInfo
 }
 
 func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {

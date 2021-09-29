@@ -298,9 +298,9 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		//eztools.ShowStrln(labelName + "=")
 		if label["approved"] != nil {
-			/*if eztools.Debugging && eztools.Verbose > 2 {
-				eztools.Log(labelName + " already approved.")
-			}*/
+			if eztools.Debugging && eztools.Verbose > 2 {
+				eztools.ShowStrln(labelName, " already approved.")
+			}
 			continue
 		}
 		if label["rejected"] != nil {
@@ -315,7 +315,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.LogPrint(reflect.TypeOf(values).String() +
 				" got instead of map string to interface for " +
 				labelName + "!")
-			continue
+			return nil, nil, nil
 		}
 		high := 0
 		for v := range valueMap {
@@ -781,9 +781,6 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 	scores, rejectedB4, err := gerritGetScores(svr, authInfo, issueInfo)
 	if err != nil {
 		if err == eztools.ErrInExistence {
-			if eztools.Debugging && eztools.Verbose > 1 {
-				eztools.ShowStrln("already scored")
-			}
 			return nil, nil, nil
 		}
 		return
@@ -946,7 +943,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			err = eztools.ErrOutOfBound
 			break
 		}
-		if inf[0][IssueinfoStrSubmittable] == "true" {
+		if inf[0][IssueinfoStrSubmittable] != "false" {
 			// the only successful break of loop
 			break
 		}
@@ -965,11 +962,13 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				return nil, err
 			}
 			rejected, _, err = gerritScoreNGetRej(svr, authInfo, rev[0])
+			scored = true
 			if err != nil {
 				eztools.LogErrWtInfo(
 					"failed to score and wait for it to be scored by elsewhere", err)
+			} else {
+				continue
 			}
-			scored = true
 		} else {
 			_, rejects, err = gerritGetScores(svr, authInfo, rev[0])
 			if rejects != nil {
