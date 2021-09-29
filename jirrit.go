@@ -306,7 +306,7 @@ func main() {
 	//if eztools.Debugging && eztools.Verbose > 0 {
 	dispResultOutputFunc = eztools.LogPrint
 	//} else {
-	//op = eztools.ShowSthln
+	//op = eztools.ShowStrln
 	//}
 	switch len(cfg.Svrs) {
 	case 0:
@@ -386,7 +386,7 @@ func main() {
 			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
-			eztools.ShowSthln("default project/ID prefix: " + svr.Proj)
+			eztools.ShowStrln("default project/ID prefix: " + svr.Proj)
 		}
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
@@ -405,9 +405,9 @@ func main() {
 					if err != nil {
 						if err == eztools.ErrNoValidResults {
 							if uiSilent {
-								eztools.Log("NO results.")
+								eztools.Log("NO valid results!")
 							} else {
-								eztools.LogPrint("NO results.")
+								eztools.LogPrint("NO valid results!")
 							}
 						} else {
 							eztools.LogErr(err)
@@ -434,13 +434,15 @@ func main() {
 			eztools.ShowStrln("waiting for update check to end...")
 		}
 		if <-upch {
-			cfg.AppUp.Previous = eztools.TranDate("")
-			saveCfg()
+			if cfg.AppUp.Interval > 0 {
+				cfg.AppUp.Previous = eztools.TranDate("")
+				saveCfg()
+			}
 		}
 	}
 	if err != nil {
 		if eztools.Debugging {
-			eztools.ShowStrln("exit with \"" + err.Error() + "\"")
+			eztools.LogPrint("exit with \"" + err.Error() + "\"")
 		}
 		switch err {
 		case eztools.ErrInvalidInput:
@@ -673,7 +675,7 @@ func addSvr(svrIn []svrs, pass passwords) (svrOut []svrs, ret bool) {
 				break
 			}
 			if chkExistSvr(svrOut, i, value, -1) {
-				eztools.ShowSthln("server already exists")
+				eztools.ShowStrln("server already exists")
 				break
 			}
 			switch i {
@@ -731,7 +733,9 @@ func saveCfg() bool {
 		eztools.LogErrPrint(err)
 		return false
 	}
-	eztools.ShowStrln(cfgFile + " saved.")
+	if eztools.Debugging && eztools.Verbose > 1 {
+		eztools.ShowStrln(cfgFile + " saved.")
+	}
 	return true
 }
 
@@ -743,6 +747,7 @@ upch <-      | false                               | true
 */
 func chkUpdate(eztoolscfg string, upch chan bool) {
 	if cfg.AppUp.Interval < 1 {
+		upch <- false
 		return
 	}
 	if len(cfg.AppUp.Previous) > 0 {
@@ -923,7 +928,7 @@ func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 					"not byte slice for error " +
 					reflect.TypeOf(body).String())
 				if eztools.Debugging && eztools.Verbose > 2 {
-					eztools.ShowSthln(body)
+					eztools.ShowStrln(body)
 				}
 			} else {
 				//eztools.ShowSthln(bodyBytes)
@@ -1294,7 +1299,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	}
 	i := 1
 	/*eztools.ShowStrln(prefix + "_" + currentNo)
-	eztools.ShowSthln(parts)*/
+	eztools.ShowStrln(parts)*/
 	for {
 		issueInfo[IssueinfoStrID] = prefix + currentNo
 		//eztools.ShowStrln("looping " + issueInfo[IssueinfoStrID])

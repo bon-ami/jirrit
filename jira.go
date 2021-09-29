@@ -471,7 +471,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-// jiraFuncNTran is for reject & close
+// jiraFuncNTran is transitions for reject & close
 func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
 	fun func(svr *svrs, authInfo eztools.AuthInfo,
@@ -490,7 +490,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		err                error
 		//res                issueInfoSlc
 	)
-	for _, tran := range steps {
+	for i, tran := range steps {
 		if eztools.Debugging && eztools.Verbose > 2 {
 			eztools.ShowStrln("Trying " + tran)
 		}
@@ -503,6 +503,14 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		tranID, err := jiraChooseTran(tran, tranNames, tranIDs)
 		if err != nil {
+			if i == len(steps)-1 {
+				// return error if the last step fails,
+				// since it is a key one
+				if err == eztools.ErrNoValidResults {
+					eztools.LogPrint("No available transitions. Check permission!")
+				}
+				return err
+			}
 			continue
 		}
 		tranNames = nil
