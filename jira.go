@@ -136,7 +136,7 @@ func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
 				[]string{IssueinfoStrName})
 			issueInfoOut[IssueinfoStrState] = val[0]
 		case IssueinfoStrSummary:
-			issueInfoOut[IssueinfoStrState] = chkNSetIssueInfo(v,
+			issueInfoOut[IssueinfoStrHead] = chkNSetIssueInfo(v,
 				IssueinfoStrHead)
 		case IssueinfoStrDesc:
 			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v,
@@ -393,7 +393,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraGetTrans(svr *svrs, authInfo eztools.AuthInfo,
-	id, tranName string) (tranNames, tranIDs []string, err error) {
+	id string) (tranNames, tranIDs []string, err error) {
 	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
 		id+"/transitions", authInfo, nil, svr.Magic)
 	if err != nil {
@@ -408,7 +408,7 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 	if len(tranNames) > 0 && len(tranIDs) > 0 {
 		if len(tranName) > 0 {
 			for i, v := range tranNames {
-				//eztools.ShowStrln(v + "=?" + tranName)
+				//eztools.ShowStrln(v + "=" + tranName + "?")
 				if tranName == v {
 					tranID = tranIDs[i]
 					//eztools.ShowStrln("tran ID=" + tranID)
@@ -480,7 +480,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			if len(slc) > 0 {
 				for _, v := range slc {
 					choices = append(choices,
-						v[IssueinfoStrID]+":"+v[IssueinfoStrState])
+						v[IssueinfoStrID]+":"+v[IssueinfoStrHead])
 				}
 			}
 		}
@@ -515,7 +515,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		if len(tranNames) < 1 || len(tranIDs) < 1 {
 			tranNames, tranIDs, err = jiraGetTrans(svr, authInfo,
-				issueInfo[IssueinfoStrID], tran)
+				issueInfo[IssueinfoStrID])
 			if err != nil {
 				return err
 			}
@@ -629,11 +629,24 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
+func jiraMakeStates(svr *svrs, tp string) (ret []string) {
+	for _, v := range svr.State {
+		if v.Type == tp {
+			if len(v.Text) > 0 {
+				ret = append(ret, v.Text)
+			}
+		}
+	}
+	return
+}
+
 func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	Steps := []string{"Back to process",
-		"Resolved", "SCM integrating", "Verify failed", "Reopen",
-		"Implementing", "Reject"}
+	Steps := jiraMakeStates(svr, "transition reject")
+	if Steps == nil {
+		eztools.LogPrint("No transitions configured for this server!")
+		return nil, errCfg
+	}
 	var jsonStr string
 	firstRun := true
 	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
@@ -667,11 +680,13 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
+	Steps := jiraMakeStates(svr, "transition close")
+	if Steps == nil {
+		eztools.LogPrint("No transitions configured for this server!")
+		return nil, errCfg
+	}
 	useInputOrPromptStr(issueInfo, IssueinfoStrComments,
 		"test step for closure")
-	Steps := []string{"Verify failed",
-		"Reopen", "Implementing", "Back to process",
-		"Assign owner", "Resolved"}
 	if len(qa) < 1 {
 		return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps, nil)
 	}
@@ -683,8 +698,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		jsonStr = custFld(jsonStr, i, v)
 	}
 	if len(jsonStr) < 1 {
-		eztools.LogPrint("NO Tst* fields " +
-			"defined for this server")
+		eztools.LogPrint("NO Tst* fields defined for this server")
 	}
 	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
 		func(svr *svrs, authInfo eztools.AuthInfo,
@@ -716,7 +730,7 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	names, ids, err := jiraGetTrans(svr, authInfo,
-		issueInfo[IssueinfoStrID], "")
+		issueInfo[IssueinfoStrID])
 	if err != nil {
 		return nil, err
 	}

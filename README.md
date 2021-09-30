@@ -45,7 +45,10 @@ Usually, these fields can be seen in an issue's detail.
   - **testpre** is the field name for test condition.
   - **teststep** is the field name for test steps.
   - **testexp** is the field name for test expectation.
-  - **state** are state names. Supported attributes: **not open**.
+  - **state** are state names. Supported attributes:
+    - **not open** issues with states other than these will be listed as open issues
+    - **transition reject** transitions with these names as steps are tried in order to reject an issue
+    - **transition close** transitions with these names as steps are tried in order to close an issue
 
 ## Actions
 

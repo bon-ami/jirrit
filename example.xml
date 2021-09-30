@@ -11,6 +11,12 @@
         <server type="JIRA" name="BJ">
                 <url>http://jira.com:8080/</url>
                 <state type="not open">Closed</state>
+                <state type="transition reject">"Reopen"</state>
+	        <state type="transition reject">"Implementing"</state>
+                <state type="transition reject">"Reject"</state>
+                <state type="transition close">"Reopen"</state>
+                <state type="transition close">"Assign owner"</state>
+                <state type="transition close">"Resolved"</state>
         </server>
         <server type="JIRA" name="CN">
                 <url>http://jira.com/</url>
