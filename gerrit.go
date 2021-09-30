@@ -787,6 +787,9 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	const RestAPIStr = "changes/"
 	for _, score1 := range scores {
+		if len(score1) < 1 {
+			continue
+		}
 		var jsonValue []byte
 		jsonValue, err = json.Marshal(map[string]scores2Marshal{
 			IssueinfoStrLabels: score1})
@@ -825,8 +828,9 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 				}
 			}
 		}
-		//eztools.LogErrWtInfo("failed to score", err1)
 		eztools.Log(errMsg, score1)
+		rejectedAft = make(map[string]struct{})
+		failed = make(map[string]struct{})
 		for i := range score1 {
 			rejectedAft[i] = rejectedB4[i]
 			failed[i] = struct{}{}
