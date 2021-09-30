@@ -504,7 +504,7 @@ func chooseSvrByType(svr []svrs, tp string) *svrs {
 			indx = append(indx, i)
 		}
 	}
-	i := eztools.ChooseStrings(names)
+	i, _ := eztools.ChooseStrings(names)
 	if i == eztools.InvalidID {
 		return nil
 	}
@@ -645,7 +645,7 @@ func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
 	case CategoryJira:
 		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
 	}
-	typeInd := eztools.ChooseStrings(passTypes)
+	typeInd, _ := eztools.ChooseStrings(passTypes)
 	if typeInd == eztools.InvalidID {
 		return
 	}
@@ -665,7 +665,7 @@ func addSvr(svrIn []svrs, pass passwords) (svrOut []svrs, ret bool) {
 	svrOut = svrIn
 	eztools.ShowStrln("Only mandatory fields for servers will be asked.")
 	for {
-		typeInd := eztools.ChooseStrings(svrTypes)
+		typeInd, _ := eztools.ChooseStrings(svrTypes)
 		if typeInd == eztools.InvalidID {
 			break
 		}
@@ -850,7 +850,7 @@ func chooseSvr(cats cat2Act, candidates []svrs) *svrs {
 		return nil
 	}
 	eztools.ShowStrln(" Choose a server")
-	si := eztools.ChooseStrings(choices)
+	si, _ := eztools.ChooseStrings(choices)
 	if si == eztools.InvalidID {
 		return nil
 	}
@@ -882,7 +882,7 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 	}
 	if len(choices) > 1 {
 		eztools.ShowStrln(" Choose an action")
-		fi = eztools.ChooseStrings(choices)
+		fi, _ = eztools.ChooseStrings(choices)
 		if fi == eztools.InvalidID {
 			return "", nil, issueInfo
 		}
@@ -1047,7 +1047,7 @@ func getValuesFromMaps(name string, field interface{}) string {
 		noInteractionAllowed()
 		return ""
 	}
-	if choice := eztools.ChooseStrings(values); choice != eztools.InvalidID {
+	if choice, _ := eztools.ChooseStrings(values); choice != eztools.InvalidID {
 		return values[choice]
 	}
 	return ""
@@ -1440,10 +1440,6 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrLink,
 				"ID to be linked to")
-		case "close a case to resolved from any known statuses":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrComments,
-				"test step for closure")
 		case "remove a file attached to a case":
 			useInputOrPrompt(inf, IssueinfoStrID)
 			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")

@@ -96,8 +96,7 @@ func chkNLoopStringMap(m interface{},
 	return res
 }
 
-func chkNSetIssueInfo(v interface{}, issueInfo issueInfos,
-	i string) string {
+func chkNSetIssueInfo(v interface{}, i string) string {
 	if v == nil {
 		eztools.Log("nil got, not string")
 		return ""
@@ -112,8 +111,8 @@ func chkNSetIssueInfo(v interface{}, issueInfo issueInfos,
 }
 
 // check map type before looping it
-func jiraParse1Field(m map[string]interface{},
-	issueInfo issueInfos) (issueInfoOut issueInfos) {
+func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
+	issueInfoOut = make(issueInfos)
 	for i, v := range m {
 		if v == nil {
 			continue
@@ -137,18 +136,17 @@ func jiraParse1Field(m map[string]interface{},
 				[]string{IssueinfoStrName})
 			issueInfoOut[IssueinfoStrState] = val[0]
 		case IssueinfoStrSummary:
-			issueInfoOut[IssueinfoStrState] = chkNSetIssueInfo(v, issueInfo,
+			issueInfoOut[IssueinfoStrState] = chkNSetIssueInfo(v,
 				IssueinfoStrHead)
 		case IssueinfoStrDesc:
-			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v, issueInfo,
+			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v,
 				IssueinfoStrDesc)
 		}
 	}
 	return
 }
 
-func jiraParse1Issue(m map[string]interface{},
-	issueInfo issueInfos) (issueInfoOut issueInfos) {
+func jiraParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 	var id []string
 	id, _ = loopStringMap(m, "fields",
 		[]string{IssueinfoStrKey},
@@ -162,10 +160,10 @@ func jiraParse1Issue(m map[string]interface{},
 					"map[string]interface{}")
 				return false
 			}
-			issueInfoOut = jiraParse1Field(fields, issueInfo)
+			issueInfoOut = jiraParse1Field(fields)
 			return true
 		})
-	if len(id) > 0 && issueInfo != nil {
+	if len(id) > 0 && issueInfoOut != nil {
 		issueInfoOut[IssueinfoStrID] = id[0]
 	}
 	return
@@ -253,11 +251,10 @@ func jiraParseIssues(m map[string]interface{}) issueInfoSlc {
 						"map[string]interface{}")
 					continue
 				}
-				issueInfo := make(issueInfos)
-				/*if*/ jiraParse1Issue(issue, issueInfo) // {
-				//eztools.ShowSthln(issueInfo)
-				results = append(results, issueInfo)
-				//}
+				if issueInfo := jiraParse1Issue(issue); issueInfo != nil {
+					//eztools.ShowSthln(issueInfo)
+					results = append(results, issueInfo)
+				}
 			}
 			return true
 		})
@@ -425,7 +422,7 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 			}
 			eztools.ShowStrln(
 				"There are following transitions available.")
-			i := eztools.ChooseStrings(tranNames)
+			i, _ := eztools.ChooseStrings(tranNames)
 			if i == eztools.InvalidID {
 				return "", eztools.ErrInvalidInput
 			}
@@ -476,6 +473,28 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
 	fun func(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo issueInfos) error) error {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
+		slc, err := jiraMyOpen(svr, authInfo, issueInfo)
+		var choices []string
+		if err == nil {
+			if len(slc) > 0 {
+				for _, v := range slc {
+					choices = append(choices,
+						v[IssueinfoStrID]+":"+v[IssueinfoStrState])
+				}
+			}
+		}
+		i, s := eztools.ChooseStrings(choices)
+		if i == eztools.InvalidID {
+			if s == "" {
+				return eztools.ErrInvalidInput
+			}
+			issueInfo[IssueinfoStrID] = s
+		} else {
+			issueInfo[IssueinfoStrID] = slc[i][IssueinfoStrID]
+		}
+
+	}
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return eztools.ErrInvalidInput
 	}
@@ -648,6 +667,8 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
+	useInputOrPromptStr(issueInfo, IssueinfoStrComments,
+		"test step for closure")
 	Steps := []string{"Verify failed",
 		"Reopen", "Implementing", "Back to process",
 		"Assign owner", "Resolved"}
@@ -914,7 +935,10 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	jiraParse1Issue(bodyMap, issueInfo)
+	issueInfo = jiraParse1Issue(bodyMap)
+	if issueInfo == nil {
+		return nil, nil
+	}
 	return issueInfo.ToSlc(), nil
 	//return jiraParseIssues(svr, bodyMap), err
 }

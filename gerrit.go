@@ -907,7 +907,7 @@ func gerritChooseMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 					v[IssueinfoStrBranch]+
 					" ("+v[IssueinfoStrID]+")")
 		}
-		i := eztools.ChooseStrings(choices)
+		i, _ := eztools.ChooseStrings(choices)
 		if i != eztools.InvalidID {
 			issueInfo[IssueinfoStrID] = inf[i][IssueinfoStrID]
 		}
