@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools/v2"
 )
 
 func gerritGetIssuesOrReviews(method, url, magic string,

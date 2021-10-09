@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools/v2"
 )
 
 const RestAPIStr = "rest/api/latest/issue/"

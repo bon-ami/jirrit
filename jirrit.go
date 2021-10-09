@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools"
+	"gitee.com/bon-ami/eztools/v2"
 	_ "github.com/go-sql-driver/mysql"
 )
 
