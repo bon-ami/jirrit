@@ -393,7 +393,7 @@ func main() {
 		}
 		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
-				funParam, fun, issueInfo = chooseAct(svr.Type, choices, cats[svr.Type],
+				funParam, fun, issueInfo = chooseAct(svr, choices, cats[svr.Type],
 					mkIssueinfo())
 				if fun == nil {
 					break
@@ -873,7 +873,7 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 	return choices
 }
 
-func chooseAct(svrType string, choices []string, funcs []action2Func,
+func chooseAct(svr *svrs, choices []string, funcs []action2Func,
 	issueInfo issueInfos) (string, actionFunc, issueInfos) {
 	var fi int
 	if uiSilent && len(choices) > 1 {
@@ -887,7 +887,7 @@ func chooseAct(svrType string, choices []string, funcs []action2Func,
 			return "", nil, issueInfo
 		}
 	}
-	inputIssueInfo4Act(svrType, funcs[fi].n, issueInfo)
+	inputIssueInfo4Act(svr, funcs[fi].n, issueInfo)
 	return funcs[fi].n, funcs[fi].f, issueInfo
 }
 
@@ -928,7 +928,7 @@ func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 				eztools.LogPrint("REST response type " +
 					"not byte slice for error " +
 					reflect.TypeOf(body).String())
-				if eztools.Debugging && eztools.Verbose > 2 {
+				if eztools.Debugging && eztools.Verbose > 1 {
 					eztools.ShowStrln(body)
 				}
 			} else {
@@ -1054,6 +1054,8 @@ func getValuesFromMaps(name string, field interface{}) string {
 }
 
 const (
+	// IssueinfoStrVal value string for common usages
+	IssueinfoStrVal = "value"
 	//common use
 	// IssueinfoStrID ID string
 	IssueinfoStrID = "id"
@@ -1198,7 +1200,7 @@ func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
 				parts := strings.Split(pref[0], typicalJiraSeparator)
 				// parts[0]=""
 				if len(parts) == 2 && len(parts[1]) > 0 {
-					if eztools.Debugging && eztools.Verbose > 2 {
+					if eztools.Debugging && eztools.Verbose > 1 {
 						eztools.ShowStrln("Auto changing to " +
 							svr.Proj + typicalJiraSeparator + parts[1])
 					}
@@ -1344,6 +1346,7 @@ func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 }
 
 // cfmInputOrPromptStr does not accept multiple ID format for input
+// parse JIRA number format for JIRA servers and ID strings
 // return value: whether anything new is input
 func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if uiSilent {
@@ -1353,7 +1356,7 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	const linefeed = " (end with \\ to input multi lines)"
 	var def, base string
 	var changes, smart bool // no smart affix available by default
-	if len(inf[ind]) > 0 {
+	if svr.Type == CategoryJira && ind == IssueinfoStrID && len(inf[ind]) > 0 {
 		var ok bool
 		if base, _, changes, ok = parseTypicalJiraNum(svr, inf[ind]); ok {
 			smart = true // there is a reference for smart affix
@@ -1369,18 +1372,20 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 		ok, changesI bool
 		sNum, baseI  string
 	)
-	if baseI, sNum, changesI, ok = parseTypicalJiraNum(svr, s); ok {
-		smart = true // there is a reference for smart affix
-		s = sNum
-		base = baseI
-		changes = changes || changesI
-		//eztools.ShowStrln("not int previously")
-	}
-	if smart {
-		if _, err := strconv.Atoi(s); err != nil {
-			smart = false
-			//eztools.ShowStrln("not int currently")
-			// we do not care what this number is
+	if svr.Type == CategoryJira && ind == IssueinfoStrID {
+		if baseI, sNum, changesI, ok = parseTypicalJiraNum(svr, s); ok {
+			smart = true // there is a reference for smart affix
+			s = sNum
+			base = baseI
+			changes = changes || changesI
+			//eztools.ShowStrln("not int previously")
+		}
+		if smart {
+			if _, err := strconv.Atoi(s); err != nil {
+				smart = false
+				//eztools.ShowStrln("not int currently")
+				// we do not care what this number is
+			}
 		}
 	}
 	if !smart {
@@ -1403,12 +1408,7 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	return true
 }
 
-// cfmInputOrPrompt does not accept multiple ID format for input
-func cfmInputOrPrompt(svr *svrs, inf issueInfos, ind string) bool {
-	return cfmInputOrPromptStr(svr, inf, ind, ind)
-}
-
-func useInputOrPromptStr(inf issueInfos, ind, prompt string) {
+func useInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) {
 	if len(inf[ind]) > 0 {
 		return
 	}
@@ -1416,15 +1416,15 @@ func useInputOrPromptStr(inf issueInfos, ind, prompt string) {
 		noInteractionAllowed()
 		return
 	}
-	inf[ind] = eztools.PromptStr(prompt)
+	cfmInputOrPromptStr(svr, inf, ind, prompt)
 }
 
-func useInputOrPrompt(inf issueInfos, ind string) {
-	useInputOrPromptStr(inf, ind, ind)
+func useInputOrPrompt(svr *svrs, inf issueInfos, ind string) {
+	useInputOrPromptStr(svr, inf, ind, ind)
 }
 
-func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
-	switch svrType {
+func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
+	switch svr.Type {
 	case CategoryJira:
 		switch action {
 		case "move status of a case",
@@ -1435,36 +1435,36 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			"check whether watching a case",
 			"watch a case",
 			"unwatch a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
 		case "link a case to another":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrLink,
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrLink,
 				"ID to be linked to")
 		case "remove a file attached to a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
 		case "add a file to a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPrompt(inf, IssueinfoStrFile)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPrompt(svr, inf, IssueinfoStrFile)
 		case "get a file to a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrKey, "file ID")
-			useInputOrPromptStr(inf, IssueinfoStrFile, "file to be saved as")
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
+			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "file to be saved as")
 		case "change a comment from a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrKey, "comment ID")
-			useInputOrPromptStr(inf, IssueinfoStrComments, "comment body")
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
+			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "comment body")
 		case "delete a comment from a case":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrKey, "comment ID")
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
 		case "add a comment to a case",
 			"reject a case from any known statuses":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPrompt(inf, IssueinfoStrComments)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPrompt(svr, inf, IssueinfoStrComments)
 		case "transfer a case to someone":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrHead, "assignee")
-			useInputOrPromptStr(inf, IssueinfoStrComments, "component")
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrHead, "assignee")
+			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "component")
 		}
 	case CategoryGerrit:
 		switch action {
@@ -1472,27 +1472,27 @@ func inputIssueInfo4Act(svrType, action string, inf issueInfos) {
 			"show reviewers of a submit",
 			"show current revision/commit of a submit",
 			"list files of a submit":
-			useInputOrPrompt(inf, IssueinfoStrID)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
 		case "list files of a submit by revision":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPrompt(inf, IssueinfoStrRevCur)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPrompt(svr, inf, IssueinfoStrRevCur)
 		case "cherry pick all my open":
-			useInputOrPrompt(inf, IssueinfoStrBranch)
+			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list merged submits of someone",
 			"add socres, wait for it to be mergable and merge sb.'s submits",
 			"list sb.'s open submits":
-			useInputOrPromptStr(inf,
+			useInputOrPromptStr(svr, inf,
 				IssueinfoStrID, IssueinfoStrAssignee)
-			useInputOrPrompt(inf, IssueinfoStrBranch)
+			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "cherry pick a submit":
-			useInputOrPrompt(inf, IssueinfoStrID)
-			useInputOrPromptStr(inf, IssueinfoStrRevCur, "revision(empty for current)")
-			useInputOrPrompt(inf, IssueinfoStrBranch)
+			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur, "revision(empty for current)")
+			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list config of a project":
-			useInputOrPrompt(inf, IssueinfoStrProj)
+			useInputOrPrompt(svr, inf, IssueinfoStrProj)
 		}
 	default:
-		eztools.LogPrint("Server type unknown: " + svrType)
+		eztools.LogPrint("Server type unknown: " + svr.Type)
 	}
 	//eztools.ShowSthln(inf)
 }

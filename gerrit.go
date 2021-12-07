@@ -289,6 +289,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 		return
 	}
 	scores = make([]scores2Marshal, 0)
+	rejected = make(map[string]struct{})
 	for labelName, label1 := range labelMap {
 		label, ok := label1.(map[string]interface{})
 		if !ok {
@@ -341,7 +342,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, rejected, eztools.ErrInExistence
 	}
 	err = nil
-	if eztools.Debugging && eztools.Verbose > 2 {
+	if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowSthln(scores)
 	}
 	return
@@ -543,7 +544,12 @@ func gerritSbMerged(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	eztools.ShowStrln("This may take quite a while...")
+	if !uiSilent {
+		if cfm := eztools.PromptStr("This may take quite a while..." +
+			"Confirm to continue. ([Enter]=Y/y)"); cfm == "N" || cfm == "n" {
+			return nil, eztools.ErrInvalidInput
+		}
+	}
 	const RestAPIStr = "changes/"
 	return gerritGetIssues(svr.URL+RestAPIStr, svr.Magic, authInfo)
 }
@@ -636,7 +642,7 @@ func gerritPick1(svr *svrs, authInfo eztools.AuthInfo,
 		" to "+issueInfo[IssueinfoStrBranch], "n") {
 		return nil, nil
 	}*/
-	if eztools.Debugging && eztools.Verbose > 1 {
+	if eztools.Debugging && eztools.Verbose > 0 {
 		eztools.Log("to cheerypick " +
 			issueInfo[IssueinfoStrID] +
 			" from " + issueInfo[IssueinfoStrRevCur] +
@@ -890,6 +896,10 @@ func gerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
 func gerritChooseMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
+		if uiSilent {
+			noInteractionAllowed()
+			return nil, eztools.ErrInvalidInput
+		}
 		// list ready commits
 		inf, err := gerritMyOpen(svr, authInfo, issueInfo)
 		issueInfo[IssueinfoStrID] = "" // dirty to be user ID by above function
@@ -897,23 +907,23 @@ func gerritChooseMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 			return issueInfo, err
 		}
 		var choices []string
-		if uiSilent {
-			defer noInteractionAllowed()
-			return nil, eztools.ErrInvalidInput
-		}
 		for _, v := range inf {
 			choices = append(choices,
 				v[IssueinfoStrHead]+" <-> "+
 					v[IssueinfoStrBranch]+
 					" ("+v[IssueinfoStrID]+")")
 		}
-		i, _ := eztools.ChooseStrings(choices)
-		if i != eztools.InvalidID {
-			issueInfo[IssueinfoStrID] = inf[i][IssueinfoStrID]
+		if len(choices) > 0 {
+			i, _ := eztools.ChooseStrings(choices)
+			if i != eztools.InvalidID {
+				issueInfo[IssueinfoStrID] = inf[i][IssueinfoStrID]
+			}
+		} else {
+			eztools.ShowStrln("NO open submits found!")
 		}
 	}
 	if len(issueInfo[IssueinfoStrID]) < 1 {
-		useInputOrPrompt(issueInfo, IssueinfoStrID)
+		useInputOrPrompt(svr, issueInfo, IssueinfoStrID)
 		if len(issueInfo[IssueinfoStrID]) < 1 {
 			return nil, eztools.ErrInvalidInput
 		}
