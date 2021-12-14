@@ -941,6 +941,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		inf, rev          issueInfoSlc
 		scored            bool
 		rejected, rejects map[string]struct{}
+		scores            []scores2Marshal
 	)
 	eztools.ShowStr("waiting for issue to be submittable/mergeable.")
 	for err == nil {
@@ -979,21 +980,38 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			scored = true
 			if err != nil {
 				eztools.LogErrWtInfo(
-					"failed to score and wait for it to be scored by elsewhere", err)
+					"failed to score and wait for it to be scored elsewhere", err)
+				err = nil
 			} else {
 				continue
 			}
 		} else {
-			_, rejects, err = gerritGetScores(svr, authInfo, rev[0])
+			scores, rejects, err = gerritGetScores(svr, authInfo, rev[0])
 			if rejects != nil {
 				for i := range rejects {
 					if _, ok := rejected[i]; !ok {
 						eztools.LogPrint(i +
-							" got de-scored. exiting.")
+							" got newly rejected. exiting.")
 						return issueInfoSlc{
 								issueInfos{
 									IssueinfoStrRej: i}},
 							eztools.ErrAccess
+					}
+				}
+			}
+			if scores != nil {
+				if rejects != nil {
+					for _, i := range scores {
+						for j := range i {
+							if _, ok := rejected[j]; !ok {
+								eztools.LogPrint(j +
+									" got de-scored. exiting.")
+								return issueInfoSlc{
+										issueInfos{
+											IssueinfoStrRej: j}},
+									eztools.ErrAccess
+							}
+						}
 					}
 				}
 			}

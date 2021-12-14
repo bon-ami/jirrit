@@ -949,8 +949,17 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 // return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
-	return chkErrRest(eztools.RestGetOrPostWtMagic(method,
+	if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
+		eztools.ShowSthln(bodyReq)
+	}
+	body, err = chkErrRest(eztools.RestGetOrPostWtMagic(method,
 		url, authInfo, bodyReq, []byte(magic)))
+	if eztools.Debugging && eztools.Verbose > 2 {
+		eztools.ShowSthln(body)
+	} else {
+		showRspBody(err, body)
+	}
+	return body, err
 }
 
 func showRspBody(err error, body interface{}) {
