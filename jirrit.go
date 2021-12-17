@@ -1488,7 +1488,7 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 		case "cherry pick all my open":
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list merged submits of someone",
-			"add socres, wait for it to be mergable and merge sb.'s submits",
+			"add scores, wait for it to be mergable and merge sb.'s submits",
 			"list sb.'s open submits":
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrID, IssueinfoStrAssignee)
@@ -1544,8 +1544,8 @@ func makeCat2Act() cat2Act {
 			{"rebase a submit", gerritRebase},
 			{"merge a submit", gerritMerge},
 			{"add scores to a submit", gerritScore},
-			{"add socres, wait for it to be mergable and merge a submit", gerritWaitNMerge},
-			{"add socres, wait for it to be mergable and merge sb.'s submits", gerritWaitNMergeSb},
+			{"add scores, wait for it to be mergable and merge a submit", gerritWaitNMerge},
+			{"add scores, wait for it to be mergable and merge sb.'s submits", gerritWaitNMergeSb},
 			{"abandon all my open submits", gerritAbandonMyOpen},
 			{"abandon a submit", gerritAbandon},
 			{"cherry pick all my open submits", gerritPickMyOpen},

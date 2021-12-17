@@ -87,8 +87,8 @@ Usually, these fields can be seen in an issue's detail.
   - rebase a submit
   - merge a submit
   - add scores to a submit (Code-Review +2, Verified +1, and Manual-Testing, or other field as configured, +1)
-  - add socres, wait for it to be mergable and merge a submit
-  - add socres, wait for it to be mergable and merge sb.'s submits
+  - add scores, wait for it to be mergable and merge a submit
+  - add scores, wait for it to be mergable and merge sb.'s submits
   - abandon all my open submits
   - abandon a submit
   - cherry pick all my open submits
