@@ -958,9 +958,12 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			err = eztools.ErrOutOfBound
 			break
 		}
-		if inf[0][IssueinfoStrSubmittable] != "false" {
+		if inf[0][IssueinfoStrSubmittable] != "false" &&
+			len(inf[0][IssueinfoStrMergeable])+
+				len(inf[0][IssueinfoStrSubmittable]) > 0 {
 			// the only successful break of loop
 			break
+			// if neither got, we need to check scores with more details
 		}
 		//if inf[0][IssueinfoStrSubmittable] == ""
 		//gerritDetails and check
@@ -1020,7 +1023,8 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		eztools.ShowStr(".")
 	}
 	eztools.ShowStrln("")
-	if err != nil {
+	if err != nil && err != eztools.ErrInExistence {
+		// when no scores got, ErrInExistence. Then will try to submit it.
 		if err == eztools.ErrOutOfBound {
 			eztools.LogPrint("Conflict to merge?")
 		}
