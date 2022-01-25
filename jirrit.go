@@ -27,6 +27,8 @@ const (
 	CategoryGerrit = "Gerrit"
 	// CategoryJenkins Jenkins server in xml
 	CategoryJenkins = "Jenkins"
+	// PassNone no password in xml
+	PassNone = "none"
 	// PassBasic plain text password in xml
 	PassBasic = "basic"
 	// PassPlain BASE64ed password in xml
@@ -600,7 +602,8 @@ func chkSvr(svr []svrs, pass passwords, cfgSvrOpt string) bool {
 		failSvrCfg(cfgSvrOpt)
 		return false
 	}
-	pass4All := len(pass.Type) > 0 && len(pass.Pass) > 0
+	pass4All := len(pass.Type) > 0 &&
+		(len(pass.Pass) > 0 || pass.Type == PassNone)
 	changed := false
 	for i, svr1 := range svr {
 		mandatory := []struct {
@@ -619,7 +622,7 @@ func chkSvr(svr []svrs, pass passwords, cfgSvrOpt string) bool {
 		if pass4All {
 			continue
 		}
-		if len(svr1.Pass.Type) < 1 || len(svr1.Pass.Pass) < 1 {
+		if len(svr1.Pass.Type) < 1 || (svr1.Pass.Type != PassNone && len(svr1.Pass.Pass) < 1) {
 			eztools.ShowStrln("NO global password configured. Configure it for " + svr[i].Name)
 			passType, passTxt, ok := inputPass4Svr(svr1.Type)
 			if !ok {
@@ -637,7 +640,9 @@ func chkSvr(svr []svrs, pass passwords, cfgSvrOpt string) bool {
 }
 
 func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
-	passTypes := []string{PassBasic + " - plain text",
+	passTypes := []string{
+		PassNone + " - no password",
+		PassBasic + " - plain text",
 		PassPlain + " - base64'ed",
 		PassDigest + " - HTTP password, such as from Settings of Gerrit"}
 	const (
@@ -658,9 +663,11 @@ func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
 	}
 	passTypeSlc := strings.Split(passTypes[typeInd], " - ")
 	passType = passTypeSlc[0]
-	passTxt = eztools.PromptStr("password")
-	if len(passTxt) < 1 {
-		return
+	if passType != PassNone {
+		passTxt = eztools.PromptStr("password")
+		if len(passTxt) < 1 {
+			return
+		}
 	}
 	ok = true
 	return
