@@ -38,4 +38,9 @@
                 <url>http://gerrit.bj:8080/a/</url>
                 <magic>)]}'</magic>
         </server>
+	<server type="Jenkins" name="JK83">
+	        <url>http://10.75.10.83:8080/</url>
+	        <user>allen</user>
+	        <pass type="basic"></pass>
+	</server>
 </jirrit>

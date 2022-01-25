@@ -137,9 +137,32 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 	return issue.ToSlc()
 }
 
-func gerritParseFileList(m map[string]interface{},
-	issues issueInfoSlc, issue *issueInfos) issueInfoSlc {
-	return nil
+func gerritParseAuthor(i interface{}, issues issueInfoSlc) issueInfoSlc {
+	if i == nil {
+		return issues
+	}
+	m, ok := i.(map[string]interface{})
+	if !ok {
+		eztools.Log("non string map in author " +
+			reflect.TypeOf(i).String())
+		return issues
+	}
+	ni := m[IssueinfoStrName]
+	if ni == nil {
+		eztools.Log("no name in author", m)
+		return issues
+	}
+	ns, ok := ni.(string)
+	if !ok {
+		eztools.Log("not string of name in author " +
+			reflect.TypeOf(ni).String())
+		return issues
+	}
+	if issues == nil {
+		issues = make(issueInfoSlc, 1)
+	}
+	issues[len(issues)-1][IssueinfoStrAuthor] = ns
+	return issues
 }
 
 // no ID will return, since not in replies
@@ -158,6 +181,38 @@ func gerritGetDetails(url, magic string, authInfo eztools.AuthInfo) (
 		magic, authInfo,
 		func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
 			return gerritParseIssuesOrReviews(m, issues, issueDetailsTxt, nil)
+		})
+}
+
+func gerritGetHistory(url, magic string, authInfo eztools.AuthInfo) (
+	issueInfoSlc, error) {
+	return gerritGetIssuesOrReviews(eztools.METHOD_GET, url,
+		magic, authInfo,
+		func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
+			i := m["messages"]
+			if i == nil {
+				eztools.Log("no history")
+				return nil
+			}
+			a, ok := i.([]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(i).String() +
+					" got instead of slice")
+				return nil
+			}
+			var ret issueInfoSlc
+			for _, i := range a {
+				m, ok := i.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				ret = gerritParseIssuesOrReviews(m, ret, issueHistoryTxt, nil)
+				// taking it as granted that a new piece is generated
+				//   and added to the end of the slice
+				ret = gerritParseAuthor(m[IssueinfoStrAuthor], ret)
+			}
+			eztools.ShowSthln(ret)
+			return ret
 		})
 }
 
@@ -252,6 +307,17 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritQuery1(svr, authInfo, issueInfo, "&o=CURRENT_REVISION")
+}
+
+func gerritHistory(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) (issueInfoSlc, error) {
+	if len(issueInfo[IssueinfoStrID]) < 1 {
+		return nil, eztools.ErrInvalidInput
+	}
+	const RestAPIStr = "changes/"
+	return gerritGetHistory(svr.URL+RestAPIStr+
+		issueInfo[IssueinfoStrID]+"/detail",
+		svr.Magic, authInfo)
 }
 
 type scores2Marshal map[string]int
@@ -966,7 +1032,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			// if neither got, we need to check scores with more details
 		}
 		//if inf[0][IssueinfoStrSubmittable] == ""
-		//gerritDetails and check
+		//get details and check
 		/*labels:map[
 		  Code-Review:map[
 		          approved:map  for OK

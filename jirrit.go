@@ -25,6 +25,8 @@ const (
 	CategoryJira = "JIRA"
 	// CategoryGerrit Gerrit server in xml
 	CategoryGerrit = "Gerrit"
+	// CategoryJenkins Jenkins server in xml
+	CategoryJenkins = "Jenkins"
 	// PassBasic plain text password in xml
 	PassBasic = "basic"
 	// PassPlain BASE64ed password in xml
@@ -75,6 +77,7 @@ type svrs struct {
 	URL  string `xml:"url"`
 	// IP is informational only
 	IP    string    `xml:"ip"`
+	User  string    `xml:"user"`
 	Pass  passwords `xml:"pass"`
 	Magic string    `xml:"magic"`
 	State []states  `xml:"state"`
@@ -107,11 +110,11 @@ func main() {
 		extGram
 		extSrvr
 	)
-	svrTypes = []string{CategoryJira, CategoryGerrit}
+	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins}
 	var (
 		paramH, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
-		paramR, paramA, paramW, paramK, paramF,
+		paramR, paramA, paramW, paramK, paramF, paramZ,
 		paramI, paramB, paramCfg, paramLog,
 		paramHD, paramP, paramL, paramC string
 	)
@@ -131,10 +134,10 @@ func main() {
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
 	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
-	flag.StringVar(&paramK, "k", "", "key or description")
+	flag.StringVar(&paramK, "k", "", "key or description, or build for Jenkins")
 	flag.StringVar(&paramI, "i", "",
-		"ID of issue, change, commit or assignee")
-	flag.StringVar(&paramB, "b", "", "branch")
+		"ID of issue, change, commit or assignee, or job for Jenkins")
+	flag.StringVar(&paramB, "b", "", "branch for JIRA and Gerrit")
 	flag.StringVar(&paramHD, "hd", "",
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
@@ -146,6 +149,7 @@ func main() {
 	flag.StringVar(&paramL, "l", "",
 		"linked issue when linking issues")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
+	flag.StringVar(&paramZ, "z", "", "number limit to show Jenkins builds")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
@@ -335,6 +339,7 @@ func main() {
 			{paramB, IssueinfoStrBranch},
 			{paramL, IssueinfoStrLink},
 			{paramF, IssueinfoStrFile},
+			{paramZ, IssueinfoStrSize},
 			{paramC, IssueinfoStrComments}}
 		for _, i := range matrix {
 			if len(i[0]) > 0 {
@@ -418,7 +423,7 @@ func main() {
 					}
 					return inf, err
 				})
-			if choices == nil { // no loop
+			if choices == nil || len(choices) < 2 { // no loop
 				break
 			}
 		}
@@ -644,6 +649,8 @@ func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
 		eztools.ShowStrln(pref + svrType + ", " + PassDigest + affi)
 	case CategoryJira:
 		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
+	case CategoryJenkins:
+		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
 	}
 	typeInd, _ := eztools.ChooseStrings(passTypes)
 	if typeInd == eztools.InvalidID {
@@ -792,6 +799,9 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 		pass = cfg.Pass
 	}
 	authInfo = eztools.AuthInfo{User: cfg.User}
+	if len(svr.User) > 0 {
+		authInfo.User = svr.User
+	}
 	switch pass.Type {
 	case PassDigest:
 		authInfo.Type = eztools.AUTH_DIGEST
@@ -880,7 +890,12 @@ func chooseAct(svr *svrs, choices []string, funcs []action2Func,
 		noInteractionAllowed()
 		return "", nil, issueInfo
 	}
-	if len(choices) > 1 {
+	switch len(choices) {
+	case 0:
+		eztools.LogPrint("NO available actions found for a server")
+	case 1:
+		eztools.Log("only action for a server: " + choices[0])
+	default:
 		eztools.ShowStrln(" Choose an action")
 		fi, _ = eztools.ChooseStrings(choices)
 		if fi == eztools.InvalidID {
@@ -1119,10 +1134,24 @@ const (
 	IssueinfoStrOldPath = "old_path"
 	// IssueinfoStrCherry cherry pick string of download for gerrit
 	IssueinfoStrCherry = "Cherry Pick"
+	// IssueinfoStrDate date string of history for gerrit
+	IssueinfoStrDate = "date"
+	// IssueinfoStrMsg message string of history for gerrit
+	IssueinfoStrMsg = "message"
+	// IssueinfoStrAuthor author string of history for gerrit
+	IssueinfoStrAuthor = "author"
 	// IssueinfoStrLink is the JIRA link string in config of a project, gerrit
 	IssueinfoStrLink = "link"
 	// IssueinfoStrMatch is the JIRA match pattern string in config of a project, gerrit
 	IssueinfoStrMatch = "match"
+	// IssueinfoStrJob job string for Jenkins
+	IssueinfoStrJob = "jobs"
+	// IssueinfoStrUrl url string for Jenkins
+	IssueinfoStrUrl = "url"
+	// IssueinfoStrBld builds string for Jenkins
+	IssueinfoStrBld = "builds"
+	// IssueinfoStrNmb number string for Jenkins
+	IssueinfoStrNmb = "number"
 )
 
 type issueInfos map[string]string
@@ -1162,6 +1191,8 @@ var issueInfoTxt = []string{
 var issueDetailsTxt = []string{
 	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
+var issueHistoryTxt = []string{
+	IssueinfoStrID, IssueinfoStrDate, IssueinfoStrMsg}
 var issueRevsTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType}
@@ -1500,6 +1531,17 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 		case "list config of a project":
 			useInputOrPrompt(svr, inf, IssueinfoStrProj)
 		}
+	case CategoryJenkins:
+		switch action {
+		case "list builds":
+			useInputOrPromptStr(svr, inf, IssueinfoStrSize, "max number of results")
+			/*case "show details of a build":
+			useInputOrPromptStr(svr, inf, IssueinfoStrID, "job")
+			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "build")
+			break*/
+		case "get log of a build":
+			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "log file name to save as")
+		}
 	default:
 		eztools.LogPrint("Server type unknown: " + svr.Type)
 	}
@@ -1539,6 +1581,7 @@ func makeCat2Act() cat2Act {
 			{"list all my open revisions/commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
 			{"show details of a submit", gerritDetailOnCurrRev},
+			{"show history of a submit", gerritHistory},
 			{"show reviewers of a submit", gerritReviews},
 			{"show current revision/commit of a submit", gerritRev},
 			{"rebase a submit", gerritRebase},
@@ -1553,5 +1596,11 @@ func makeCat2Act() cat2Act {
 			{"revert a submit", gerritRevert},
 			{"list files of a submit", gerritListFiles},
 			{"list files of a submit by revision", gerritListFilesByRev},
-			{"list config of a project", gerritListPrj}}}
+			{"list config of a project", gerritListPrj}},
+		CategoryJenkins: []action2Func{
+			{"list jobs", jenkinsListJobs},
+			{"show details of a build", jenkinsDetailOnBld},
+			{"get log of a build", jenkinsLogOfBld},
+			{"list builds", jenkinsListBlds}},
+	}
 }
