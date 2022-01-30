@@ -35,4 +35,5 @@ compile:
     - GOOS=windows go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
   artifacts:
     paths:
-      - mybinary
+      - jirrit
+      - jirrit.exe
