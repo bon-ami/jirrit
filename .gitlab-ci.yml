@@ -31,8 +31,8 @@ format:
 compile:
   stage: build
   script:
-    - go build -race -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/mybinary
-    - GOOS=windows go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/mybinary
+    - go build -race -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
+    - GOOS=windows go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
   artifacts:
     paths:
       - mybinary
