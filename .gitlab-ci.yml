@@ -31,11 +31,11 @@ format:
 compile:
   stage: build
   script:
-    - go build -race -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
-    - GOARCH=386 go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32
-    - GOOS=windows go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
-    - ver=${MAJOR}.${MINOR}.${REVISION} GOOS=windows GOARCH=386 go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32.exe
-    - GOOS=darwin go build -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirritMac
+    - go build -race -ldflags "-X main.ver=${MAJOR}.${MINOR}.${REVISION}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
+    - GOARCH=386 go build -ldflags "-X main.ver=${MAJOR}.${MINOR}.${REVISION}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32
+    - GOOS=windows go build -ldflags "-X main.ver=${MAJOR}.${MINOR}.${REVISION}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
+    - GOOS=windows GOARCH=386 go build -ldflags "-X main.ver=${MAJOR}.${MINOR}.${REVISION}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32.exe
+    - GOOS=darwin go build -ldflags "-X main.ver=${MAJOR}.${MINOR}.${REVISION}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirritMac
   artifacts:
     paths:
       - jirrit
