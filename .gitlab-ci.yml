@@ -31,12 +31,12 @@ format:
 compile:
   stage: build
   script:
-    - echo ${CI_COMMIT_TAG}
-    - go build -race -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
-    - GOARCH=386 go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32
-    - GOOS=windows go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
-    - GOOS=windows GOARCH=386 go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32.exe
-    - GOOS=darwin go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirritMac
+    - echo ${CI_COMMIT_TAG} - ${CI_COMMIT_REF_NAME} - ${CI_COMMIT_SHORT_SHA}
+    #- go build -race -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
+    #- GOARCH=386 go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32
+    #- GOOS=windows go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit.exe
+    #- GOOS=windows GOARCH=386 go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32.exe
+    #- GOOS=darwin go build -ldflags "-X main.bld=${CI_COMMIT_REF}" -ldflags "-X main.ver=${CI_COMMIT_TAG}" -ldflags "-extldflags '-static'" -o $CI_PROJECT_DIR/jirritMac
   artifacts:
     paths:
       - jirrit
