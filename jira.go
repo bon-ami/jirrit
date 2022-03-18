@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v2"
+	"gitee.com/bon-ami/eztools/v3"
 )
 
 const RestAPIStr = "rest/api/latest/issue/"
@@ -386,10 +386,10 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restMap(eztools.METHOD_PUT,
+	_, err = restSth(eztools.METHOD_PUT,
 		svr.URL+RestAPIStr+issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
-	// TODO: parse result
+	// result/body is []uint8, if success
 	return nil, err
 }
 

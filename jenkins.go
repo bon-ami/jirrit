@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"gitee.com/bon-ami/eztools/v2"
+	"gitee.com/bon-ami/eztools/v3"
 )
 
 // jenkinsParseBlds get "name" & "url" from "jobs" or sth.
@@ -328,7 +328,7 @@ func jenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	if len(issueInfo[IssueinfoStrFile]) > 0 {
 		err = eztools.FileWrite(issueInfo[IssueinfoStrFile],
-			bodyBytes, true)
+			bodyBytes)
 		if err == nil {
 			return nil, err
 		}

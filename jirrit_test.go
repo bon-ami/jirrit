@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"gitee.com/bon-ami/eztools/v2"
+	"gitee.com/bon-ami/eztools/v3"
 )
 
 const debugging = 0
@@ -13,8 +13,11 @@ func runFunc(fun action2Func, svr *svrs, cfg jirrit) (string, bool) {
 	if err != nil {
 		return "NO password configured for " + svr.Name, false
 	}
+	if len(authInfo.User) < 1 {
+		return "NO user configured for authinfo", false
+	}
 	eztools.ShowStrln("Server " + svr.Name + ", Func " + fun.n)
-	var issueInfo issueInfos
+	issueInfo := make(issueInfos)
 	_ /*issues*/, err = fun.f(svr, authInfo, issueInfo)
 	if err != nil {
 		//return runtime.FuncForPC(reflect.ValueOf(fun).Pointer()).Name() + " failed", false
@@ -30,7 +33,7 @@ func runFunc(fun action2Func, svr *svrs, cfg jirrit) (string, bool) {
 }
 
 func test1(t *testing.T, cat, fun string) {
-	_, err := eztools.XMLsReadDefaultNoCreate("", module, &cfg)
+	_, err := eztools.XMLReadDefault("", module, &cfg)
 
 	if err != nil {
 		eztools.ShowStrln("no config file found")
@@ -86,7 +89,7 @@ func testGerritMyOpen(t *testing.T) {
 
 func TestSave(t *testing.T) {
 	var err error
-	cfgFile, err = eztools.XMLsReadDefaultNoCreate("", module, &cfg)
+	cfgFile, err = eztools.XMLReadDefault("", module, &cfg)
 
 	if err != nil {
 		eztools.ShowStrln("no config file found")

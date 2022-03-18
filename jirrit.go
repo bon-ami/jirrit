@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"flag"
 	"io"
@@ -15,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v2"
+	"gitee.com/bon-ami/eztools/v3"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -193,7 +192,7 @@ func main() {
 	}
 	cats := makeCat2Act()
 	var err error
-	cfgFile, err = eztools.XMLsReadDefaultNoCreate(paramCfg, module, &cfg)
+	cfgFile, err = eztools.XMLReadDefault(paramCfg, module, &cfg)
 	if err != nil {
 		eztools.LogErrPrintWtInfo("failed to open config file", err)
 		if len(paramCfg) > 0 {
@@ -774,17 +773,17 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 		}
 	}
 	var (
-		db  *sql.DB
+		db  *eztools.Dbs
 		err error
 	)
 	if len(eztoolscfg) > 0 {
-		db, err = eztools.ConnectWtPath(eztoolscfg)
+		db, _, err = eztools.MakeDbsWtCfgFile(eztoolscfg, "")
 		if err != nil {
 			eztoolscfg = ""
 		}
 	}
 	if len(eztoolscfg) == 0 {
-		db, err = eztools.Connect()
+		db, _, err = eztools.MakeDbs()
 		if err != nil {
 			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
 				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
@@ -796,7 +795,7 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 	}
 	defer db.Close()
 	upch <- true
-	eztools.AppUpgrade(db, module, ver, nil, upch)
+	db.AppUpgrade(db.GetTblDef(), module, ver, nil, upch)
 	return
 }
 
