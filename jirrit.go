@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	ver, cfgFile         string
+	ver, bld, cfgFile         string
 	cfg                  jirrit
 	uiSilent             bool
 	step                 int
@@ -154,8 +154,11 @@ func main() {
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
+	if strings.HasPrefix(ver, "v") || strings.HasPrefix(ver, "V") {
+		ver = ver[1:]
+	}
 	if paramH {
-		eztools.ShowStrln(module + " v" + ver)
+		eztools.ShowStrln(module + " v" + ver + " build "+bld)
 		eztools.ShowStrln("::Return values::")
 		eztools.ShowStrln("", "0", "no error")
 		eztools.ShowStrln("", extCfg, "config error")
