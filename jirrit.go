@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	ver, bld, cfgFile         string
+	Ver, Bld, cfgFile    string
 	cfg                  jirrit
 	uiSilent             bool
 	step                 int
@@ -154,11 +154,8 @@ func main() {
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
-	if strings.HasPrefix(ver, "v") || strings.HasPrefix(ver, "V") {
-		ver = ver[1:]
-	}
 	if paramH {
-		eztools.ShowStrln(module + " v" + ver + " build "+bld)
+		eztools.ShowStrln(module + " v" + Ver + " bld " + Bld)
 		eztools.ShowStrln("::Return values::")
 		eztools.ShowStrln("", "0", "no error")
 		eztools.ShowStrln("", extCfg, "config error")
@@ -798,7 +795,7 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 	}
 	defer db.Close()
 	upch <- true
-	db.AppUpgrade(db.GetTblDef(), module, ver, nil, upch)
+	db.AppUpgrade(db.GetTblDef(), module, Ver, nil, upch)
 	return
 }
 
