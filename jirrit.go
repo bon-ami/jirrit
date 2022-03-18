@@ -155,7 +155,7 @@ func main() {
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
 	if paramH {
-		eztools.ShowStrln(module + " v" + Ver + " bld " + Bld)
+		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
 		eztools.ShowStrln("::Return values::")
 		eztools.ShowStrln("", "0", "no error")
 		eztools.ShowStrln("", extCfg, "config error")
