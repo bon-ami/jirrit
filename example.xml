@@ -9,6 +9,7 @@
                 <!-- A basic password is BASE64'ed from a plain one.
                 A digest password is from Gerrit settings. --></pass>
         <server type="JIRA" name="BJ">
+                <!-- transitions to reject/close will try all these actions. -->
                 <url>http://jira.com:8080/</url>
                 <state type="not open">Closed</state>
                 <state type="transition reject">"Reopen"</state>
@@ -21,10 +22,10 @@
         <server type="JIRA" name="CN">
                 <url>http://jira.com/</url>
                 <fields>
-                        <rejectrsn>customfield_10502</rejectrsn>
-                        <testpre>customfield_10900</testpre>
-                        <teststep>customfield_10901</teststep>
-                        <testexp>customfield_10902</testexp>
+                        <rejectrsn><!-- reject reason field to reject an issue -->customfield_10502</rejectrsn>
+                        <testpre><!-- test precondition field to close an issue -->customfield_10900</testpre>
+                        <teststep><!-- test steps field to close an issue -->customfield_10901</teststep>
+                        <testexp><!-- test expectation field to close an issue -->customfield_10902</testexp>
                 </fields>
         </server>
         <server type="Gerrit" name="common">
@@ -41,6 +42,6 @@
 	<server type="Jenkins" name="JK83">
 	        <url>http://10.75.10.83:8080/</url>
 	        <user>allen</user>
-	        <pass type="basic"></pass>
+	        <pass type="basic"><!-- if no password defined, the one in general config will be used --></pass>
 	</server>
 </jirrit>
