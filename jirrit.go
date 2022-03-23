@@ -301,7 +301,7 @@ func main() {
 	}
 
 	// self upgrade
-	upch := make(chan bool)
+	upch := make(chan bool, 2)
 	go chkUpdate(cfg.EzToolsCfg, upch)
 
 	var (
