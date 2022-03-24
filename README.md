@@ -122,4 +122,4 @@ Be aware Change IDs are same among cherrypicks.
 Input ".+\-[0-9]+[,][,][0-9]+", or "X-0,,1", or "0,,1", to be easier to read, to batch process all the ID's between, and including, the two numbers.<BR>
 Input "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.)
 
-[![screenshot](https://ezproject.sourceforge.io/sc_jirrit.png)][https://ezproject.sourceforge.io/sc_jirrit.png)
+[![screenshot](https://ezproject.sourceforge.io/sc_jirrit.png)](https://ezproject.sourceforge.io/sc_jirrit.png)
