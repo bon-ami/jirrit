@@ -14,8 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v3"
-	_ "github.com/go-sql-driver/mysql"
+	"gitee.com/bon-ami/eztools/v4"
 )
 
 const (
@@ -912,7 +911,8 @@ func chooseAct(svr *svrs, choices []string, funcs []action2Func,
 	return funcs[fi].n, funcs[fi].f, issueInfo
 }
 
-func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
+func chkErrRest(bodyBytes []byte, body interface{},
+	errno int, err error) (interface{}, error) {
 	var (
 		dnsErr *net.DNSError
 		urlErr *url.Error
@@ -942,54 +942,40 @@ func chkErrRest(body interface{}, errno int, err error) (interface{}, error) {
 		}
 	}
 	if err != nil {
-		eztools.LogErrPrintWtInfo("REST error" /*strconv.Itoa(errno) */, err)
-		if body != nil {
-			bodyBytes, ok := body.([]byte)
-			if !ok {
-				eztools.LogPrint("REST response type " +
-					"not byte slice for error " +
-					reflect.TypeOf(body).String())
-				if eztools.Debugging && eztools.Verbose > 1 {
-					eztools.ShowStrln(body)
-				}
-			} else {
-				//eztools.ShowSthln(bodyBytes)
-				eztools.LogPrint("REST body=" + string(bodyBytes))
-			}
+		eztools.LogErrPrintWtInfo("REST error", err)
+		eztools.LogPrint("REST body=", string(bodyBytes))
+	} else {
+		if eztools.Debugging && eztools.Verbose > 2 {
+			eztools.LogPrint("REST body=", string(bodyBytes))
 		}
 	}
 	return body, err
 }
 
 func restFile(method, url string, authInfo eztools.AuthInfo,
-	fType, fName string, hdrs map[string]string, magic string) (body interface{}, err error) {
-	return chkErrRest(eztools.RestGetOrPostWtMagicNFileNHdr(method,
-		url, authInfo, []byte(magic), fType, fName, hdrs))
+	fType, fName string, hdrs map[string]string,
+	magic string) (body interface{}, err error) {
+	resp, err := eztools.RestSendFileNHdr(method, url,
+		authInfo, fType, fName, hdrs)
+	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
+		"", &body, []byte(magic))
+	return chkErrRest(bodyBytes, body, errInt, err)
 }
 
 // return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
 	if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
-		eztools.ShowSthln(bodyReq)
+		eztools.LogPrint(bodyReq)
 	}
-	body, err = chkErrRest(eztools.RestGetOrPostWtMagic(method,
-		url, authInfo, bodyReq, []byte(magic)))
-	if eztools.Debugging && eztools.Verbose > 2 {
-		eztools.ShowSthln(body)
-	} else {
-		showRspBody(err, body)
-	}
-	return body, err
-}
-
-func showRspBody(err error, body interface{}) {
+	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
 	if err != nil {
-		if eztools.Debugging && eztools.Verbose > 1 {
-			eztools.ShowStrln("failure with body:")
-			eztools.ShowSthln(body)
-		}
+		return nil, err
 	}
+	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
+		"", &body, []byte(magic))
+	body, err = chkErrRest(bodyBytes, body, errInt, err)
+	return body, err
 }
 
 func restSlc(method, url string, authInfo eztools.AuthInfo,
@@ -1003,7 +989,6 @@ func restSlc(method, url string, authInfo eztools.AuthInfo,
 		eztools.LogPrint("REST response type error for slice " +
 			reflect.TypeOf(body).String())
 	}
-	//showRspBody(err, body)
 	return
 }
 
@@ -1018,8 +1003,6 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 	if !ok {
 		eztools.LogPrint("REST response type error for map " +
 			reflect.TypeOf(body).String())
-		/*} else {
-		showRspBody(err, body)*/
 	}
 	return
 }

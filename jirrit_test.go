@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"gitee.com/bon-ami/eztools/v3"
+	"gitee.com/bon-ami/eztools/v4"
 )
 
 const debugging = 0

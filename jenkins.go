@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"gitee.com/bon-ami/eztools/v3"
+	"gitee.com/bon-ami/eztools/v4"
 )
 
 // jenkinsParseBlds get "name" & "url" from "jobs" or sth.

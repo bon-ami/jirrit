@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v3"
+	"gitee.com/bon-ami/eztools/v4"
 )
 
 const RestAPIStr = "rest/api/latest/issue/"
@@ -1336,9 +1336,21 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo[IssueinfoStrFile] = filepath.Join(issueInfo[IssueinfoStrFile],
 			issueInfo[IssueinfoStrName])
 	}
-	errNo, err := eztools.RestGetOrPostSaveFile(eztools.METHOD_GET,
-		issueInfo[IssueinfoStrLink], authInfo, []byte(svr.Magic),
-		issueInfo[IssueinfoStrFile])
+	resp, err := eztools.RestSend(eztools.METHOD_GET,
+		issueInfo[IssueinfoStrLink], authInfo, nil)
+	if err != nil {
+		return nil, err
+	}
+	recognized, bodyType, bodyBytes, errNo, err := eztools.RestParseBody(resp,
+		issueInfo[IssueinfoStrFile], nil, []byte(svr.Magic))
+	if err == nil {
+		if recognized != eztools.BODY_TYPE_FILE {
+			eztools.FileWrite(issueInfo[IssueinfoStrFile], bodyBytes)
+			if eztools.Debugging && eztools.Verbose > 0 {
+				eztools.Log("body type", bodyType, "forced to be saved as file!")
+			}
+		}
+	}
 	issueInfo[IssueinfoStrState] = strconv.Itoa(errNo)
 	return issueInfo.ToSlc(), err
 }
