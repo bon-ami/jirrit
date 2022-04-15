@@ -388,7 +388,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 		for v := range valueMap {
 			i, err := strconv.Atoi(strings.TrimSpace(v))
 			if err != nil {
-				eztools.LogErrPrintWtInfo(v+
+				eztools.LogPrint(v+
 					" got instead of int for "+
 					labelName, err)
 				continue
@@ -743,7 +743,7 @@ func gerritProcRevLoopMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	for _, issueInfo := range issues {
 		inf, err := gerritRev(svr, authInfo, issueInfo)
 		if err != nil {
-			eztools.LogErrPrint(err)
+			eztools.LogPrint(err)
 			continue
 		}
 		if len(inf) != 1 {
@@ -866,7 +866,7 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 		jsonValue, err = json.Marshal(map[string]scores2Marshal{
 			IssueinfoStrLabels: score1})
 		if err != nil {
-			eztools.LogErr(err)
+			eztools.Log(err)
 			break
 		}
 		//eztools.ShowStrln(string(jsonValue))
@@ -1048,7 +1048,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			rejected, _, err = gerritScoreNGetRej(svr, authInfo, rev[0])
 			scored = true
 			if err != nil {
-				eztools.LogErrWtInfo(
+				eztools.Log(
 					"failed to score and wait for it to be scored elsewhere", err)
 				err = nil
 			} else {

@@ -193,7 +193,7 @@ func main() {
 	var err error
 	cfgFile, err = eztools.XMLReadDefault(paramCfg, module, &cfg)
 	if err != nil {
-		eztools.LogErrPrintWtInfo("failed to open config file", err)
+		eztools.LogPrint("failed to open config file", err)
 		if len(paramCfg) > 0 {
 			cfgFile = paramCfg
 		} else {
@@ -226,7 +226,7 @@ func main() {
 			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err == nil {
 			if err = eztools.InitLogger(logger); err != nil {
-				eztools.LogErrPrint(err)
+				eztools.LogPrint(err)
 			}
 		} else {
 			eztools.LogPrint("Failed to open log file " + cfg.Log)
@@ -387,7 +387,7 @@ func main() {
 		var authInfo eztools.AuthInfo
 		authInfo, err = cfg2AuthInfo(*svr, cfg)
 		if err != nil {
-			eztools.LogErr(err)
+			eztools.Log(err)
 			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
@@ -416,7 +416,7 @@ func main() {
 								eztools.LogPrint("NO valid results!")
 							}
 						} else {
-							eztools.LogErr(err)
+							eztools.Log(err)
 						}
 					} else {
 						issues.Print(dispResultOutputFunc)
@@ -743,7 +743,7 @@ func saveProj(svr *svrs, proj string) bool {
 
 func saveCfg() bool {
 	if err := eztools.XMLWriteNoCreate(cfgFile, cfg, "\t"); err != nil {
-		eztools.LogErrPrint(err)
+		eztools.LogPrint(err)
 		return false
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {
@@ -787,7 +787,7 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
 				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
 			}
-			eztools.LogErrPrint(err)
+			eztools.LogPrint(err)
 			upch <- false
 			return
 		}
@@ -942,7 +942,7 @@ func chkErrRest(bodyBytes []byte, body interface{},
 		}
 	}
 	if err != nil {
-		eztools.LogErrPrintWtInfo("REST error", err)
+		eztools.LogPrint("REST error", err)
 		eztools.LogPrint("REST body=", string(bodyBytes))
 	} else {
 		if eztools.Debugging && eztools.Verbose > 2 {

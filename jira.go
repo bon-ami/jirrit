@@ -741,7 +741,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 			field, err := jiraEditMeta(svr, authInfo, issueInfo[IssueinfoStrID],
 				svr.Flds.RejectRsn)
 			if err != nil {
-				eztools.LogErr(err)
+				eztools.Log(err)
 			} else {
 				issueInfo[IssueinfoStrDesc] = getValuesFromMaps("value", field)
 			}
@@ -796,7 +796,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 			if len(issueInfo[IssueinfoStrComments]) > 0 {
 				_, err := jiraAddComment1(svr, authInfo, issueInfo)
 				if err != nil {
-					eztools.LogErrPrint(err)
+					eztools.LogPrint(err)
 				}
 			}
 			/* senarios

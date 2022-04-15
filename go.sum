@@ -1,5 +1,5 @@
-gitee.com/bon-ami/eztools/v4 v4.0.2 h1:nlseuOvYV9LOHY/bJ5Ik/LzRphSRkPO7Ja5BBY7yyds=
-gitee.com/bon-ami/eztools/v4 v4.0.2/go.mod h1:/MuqlvVuH/fhqcl/9VbH6P2H5r4rtXosMXmxvnLIXrA=
+gitee.com/bon-ami/eztools/v4 v4.1.0 h1:8q/F+bHqjiKvI18JyLc2TlB4cBkyfw8A78R9KjH2uTg=
+gitee.com/bon-ami/eztools/v4 v4.1.0/go.mod h1:/MuqlvVuH/fhqcl/9VbH6P2H5r4rtXosMXmxvnLIXrA=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c h1:/IBSNwUN8+eKzUzbJPqhK839ygXJ82sde8x3ogr6R28=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c/go.mod h1:chxPXzSsl7ZWRAuOIE23GDNzjWuZquvFlgA8xmpunjU=
 github.com/bon-ami/go-http-digest-auth-client v0.6.1 h1:x7tfCCIs4YsLK3T+NAdQDaaUhobXowv1ExuPhxK6jQk=
