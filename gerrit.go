@@ -470,7 +470,7 @@ func gerritParseFiles(body map[string]interface{}) issueInfoSlc {
 
 func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	if len(issueInfo[IssueinfoStrID]) < 1 || len(issueInfo[IssueinfoStrHead]) < 1 {
+	if len(issueInfo[IssueinfoStrID]) < 1 || len(issueInfo[IssueinfoStrSummary]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "changes/"
@@ -975,7 +975,7 @@ func gerritChooseMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 		var choices []string
 		for _, v := range inf {
 			choices = append(choices,
-				v[IssueinfoStrHead]+" <-> "+
+				v[IssueinfoStrSummary]+" <-> "+
 					v[IssueinfoStrBranch]+
 					" ("+v[IssueinfoStrID]+")")
 		}

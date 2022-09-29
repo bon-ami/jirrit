@@ -3,12 +3,21 @@
         <!-- Empty values are default. When saved by jirrit,
         this config file will be re-structured with valid elements only.
         All comments under one level of elements will be grouped together.
-        <log>jirrit.log</log> -->
+	<eztoolscfg></eztoolscfg>
+	<appup>
+		<interval>0</interval>
+		<previous>20210927</previous>
+	</appup>
+        <log>d:\jirrit.log</log> -->
         <user>Allen</user>
         <pass type="basic">
                 <!-- A basic password is BASE64'ed from a plain one.
                 A digest password is from Gerrit settings. --></pass>
-        <server type="JIRA" name="BJ">
+        <server type="JIRA" name="J">
+                <!-- transitions to reject/close will try all these actions. -->
+                <url>http://jira.com/</url>
+        </server>
+        <server type="JIRA" name="JR">
                 <!-- transitions to reject/close will try all these actions. -->
                 <url>http://jira.com:8080/</url>
                 <state type="not open">Closed</state>
@@ -18,9 +27,6 @@
                 <state type="transition close">"Reopen"</state>
                 <state type="transition close">"Assign owner"</state>
                 <state type="transition close">"Resolved"</state>
-        </server>
-        <server type="JIRA" name="CN">
-                <url>http://jira.com/</url>
                 <fields>
                         <rejectrsn><!-- reject reason field to reject an issue -->customfield_10502</rejectrsn>
                         <testpre><!-- test precondition field to close an issue -->customfield_10900</testpre>
@@ -28,20 +34,26 @@
                         <testexp><!-- test expectation field to close an issue -->customfield_10902</testexp>
                 </fields>
         </server>
-        <server type="Gerrit" name="common">
+        <server type="Gerrit" name="gr">
                 <pass type="digest">Allen</pass>
                 <url>http://gerrit.com:8080/a/</url>
                 <ip>1.1.1.1</ip>
-                <magic>)]}'</magic>
+                <magic>)]}&#39;</magic>
         </server>
-        <server type="Gerrit" name="BJ">
-                <pass type="plain">Allen</pass>
-                <url>http://gerrit.bj:8080/a/</url>
-                <magic>)]}'</magic>
-        </server>
-	<server type="Jenkins" name="JK83">
-	        <url>http://10.75.10.83:8080/</url>
+	<server type="Jenkins" name="JK">
+	        <url>http://jk:8080/</url>
 	        <user>allen</user>
 	        <pass type="basic"><!-- if no password defined, the one in general config will be used --></pass>
+	</server>
+	<server type="Bugzilla" name="BZ">
+	        <url>https://bz/bugzilla/</url>
+	        <ip>10.10.1.1</ip>
+	        <user></user>
+	        <pass type="token"></pass>
+		<state type="not open">CLOSED</state>
+		<state type="not open">REJECTED</state>
+		<state type="not open">POSTPONED</state>
+		<state type="transition reject">REJECTED</state>
+		<state type="transition close">RESOLVED</state>
 	</server>
 </jirrit>

@@ -7,13 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"gitee.com/bon-ami/eztools/v4"
 )
 
-const RestAPIStr = "rest/api/latest/issue/"
+const RestAPIJRStr = "rest/api/latest/issue/"
 
 func custFld(jsonStr, fldKey, fldVal string) string {
 	if len(fldKey) > 0 {
@@ -27,87 +28,74 @@ func custFld(jsonStr, fldKey, fldVal string) string {
 	return jsonStr
 }
 
-/*
-loop map.
-	If key matches keyStr, put value into keyVal
-		in case of string or skip otherwise.
-	If key does not match mustStr, skip.
-Invoke fun with key and value.
-Both return values of fun and this means whether
-	any item ever processed successfully.
-*/
-func loopStringMap(m map[string]interface{},
-	mustStr string, keyStr []string,
-	fun func(string, interface{}) bool) (keyVal []string, ret bool) {
-	if len(keyStr) > 0 {
-		keyVal = make([]string, len(keyStr))
-	} else {
-		keyVal = nil
+const typicalJiraSeparator = "-"
+
+// changeTypicalJiraNum changes abbreviated input into full numbers
+func changeTypicalJiraNum(svr *svrs, num, base string, smart, changes bool) (string, bool) {
+	if baseI, sNum, changesI, ok := parseTypicalJiraNum(svr, num); ok {
+		smart = true // there is a reference for smart affix
+		num = sNum
+		base = baseI
+		changes = changes || changesI
+		//eztools.ShowStrln("not int previously")
 	}
-	for i, v := range m {
-		if eztools.Debugging && eztools.Verbose > 1 {
-			eztools.ShowStrln("looping " + i)
+	if smart {
+		if _, err := strconv.Atoi(num); err != nil {
+			smart = false
+			//eztools.ShowStrln("not int currently")
+			// we do not care what this number is
 		}
-		if len(keyStr) > 0 {
-			matched := false
-			for j, key1 := range keyStr {
-				if i == key1 {
-					matched = true
-					id, ok := v.(string)
-					if !ok {
-						eztools.LogPrint(
-							reflect.TypeOf(v).String() +
-								" got instead of string")
-						break
+	}
+	if smart {
+		inf := base + num
+		if changes {
+			//if eztools.Verbose > 0 {
+			eztools.ShowStrln("Auto changed to " + inf)
+			//}
+		}
+		return inf, true
+	}
+	return "", false
+}
+
+// return values
+//	whether input is in exact x-0 or -0 format.
+//		in case of -0, if previous project (x part) found, it is taken.
+//		otherwise, false is returned.
+//	the non digit part. this is saved as project.
+//	the digit part
+func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
+	digit string, changes, parsed bool) {
+	if len(num) < 1 {
+		return "", "", false, false
+	}
+	re := regexp.MustCompile(`^[^-,]+[-][\d]+$`)
+	//eztools.ShowStrln("parsing " + num + " 2 typical JIRA")
+	pref := re.FindStringSubmatch(num)
+	if pref != nil { // "A-1"
+		parts := strings.Split(pref[0], typicalJiraSeparator)
+		if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
+			saveProj(svr, parts[0])
+			return parts[0] + typicalJiraSeparator, parts[1], false, true
+		}
+	} else {
+		if len(svr.Proj) > 0 { // "-1", "1"
+			re = regexp.MustCompile(`^[-][\d]+$`)
+			pref = re.FindStringSubmatch(num)
+			if pref != nil {
+				parts := strings.Split(pref[0], typicalJiraSeparator)
+				// parts[0]=""
+				if len(parts) == 2 && len(parts[1]) > 0 {
+					if eztools.Debugging && eztools.Verbose > 1 {
+						eztools.ShowStrln("Auto changing to " +
+							svr.Proj + typicalJiraSeparator + parts[1])
 					}
-					ret = true
-					keyVal[j] = id
-					if fun == nil {
-						break
-					}
-					//eztools.ShowStrln("id=" + id)
-					break
+					return svr.Proj + typicalJiraSeparator, parts[1], true, true
 				}
 			}
-			if matched {
-				continue
-			}
-		}
-		if len(mustStr) > 0 && i != mustStr {
-			//eztools.ShowStrln("skipping " + i)
-			continue
-		}
-		if fun != nil {
-			ret = fun(i, v) || ret
-		}
+		} // "A-1,B-2" not handled
 	}
-	return keyVal, ret
-}
-
-func chkNLoopStringMap(m interface{},
-	mustStr string, keyStr []string) []string {
-	sub, ok := m.(map[string]interface{})
-	if !ok {
-		eztools.LogPrint(reflect.TypeOf(m).String() +
-			" got instead of map[string]interface{}")
-		return nil
-	}
-	res, _ := loopStringMap(sub, mustStr, keyStr, nil)
-	return res
-}
-
-func chkNSetIssueInfo(v interface{}, i string) string {
-	if v == nil {
-		eztools.Log("nil got, not string")
-		return ""
-	}
-	str, ok := v.(string)
-	if !ok {
-		eztools.LogPrint(reflect.TypeOf(v).String() +
-			" got instead of string")
-		return ""
-	}
-	return str
+	return "", "", false, false
 }
 
 // check map type before looping it
@@ -117,6 +105,7 @@ func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
 		if v == nil {
 			continue
 		}
+		//eztools.ShowStrln(i, "-->", v)
 		/*if len(svr.Flds.Desc) > 0 && i == svr.Flds.Desc {
 			changed = chkNSetIssueInfo(v, issueInfo,
 				ISSUEINFO_IND_DESC) || changed
@@ -136,11 +125,9 @@ func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
 				[]string{IssueinfoStrName})
 			issueInfoOut[IssueinfoStrState] = val[0]
 		case IssueinfoStrSummary:
-			issueInfoOut[IssueinfoStrHead] = chkNSetIssueInfo(v,
-				IssueinfoStrHead)
+			issueInfoOut[IssueinfoStrSummary] = chkNSetIssueInfo(v)
 		case IssueinfoStrDesc:
-			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v,
-				IssueinfoStrDesc)
+			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v)
 		}
 	}
 	return
@@ -152,7 +139,7 @@ func jiraParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 		[]string{IssueinfoStrKey},
 		func(i string, v interface{}) bool {
 			// id, self ignored
-			//eztools.ShowStrln("1issue " + i)
+			//eztools.ShowStrln("1issue "+i, v)
 			fields, ok := v.(map[string]interface{})
 			if !ok {
 				eztools.LogPrint(reflect.TypeOf(v).String() +
@@ -228,41 +215,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 }
 
 func jiraParseIssues(m map[string]interface{}) issueInfoSlc {
-	/*if eztools.Debugging && eztools.Verbose > 1 {
-		eztools.ShowSthln(strs)
-	}*/
-	results := make(issueInfoSlc, 0)
-	loopStringMap(m, "issues", nil,
-		func(i string, v interface{}) bool {
-			// https://docs.atlassian.com/software/jira/docs/api/REST/8.12.0/#api/2/search-search
-			//eztools.ShowStrln("func " + i)
-			issues, ok := v.([]interface{})
-			if !ok {
-				eztools.LogPrint(reflect.TypeOf(v).String() +
-					" got instead of " +
-					"[]interface{} for " + i)
-				return false
-			}
-			for _, v := range issues {
-				//eztools.ShowStrln("Ticket")
-				issue, ok := v.(map[string]interface{})
-				if !ok {
-					eztools.LogPrint(reflect.TypeOf(v).String() +
-						" got instead of " +
-						"map[string]interface{}")
-					continue
-				}
-				if issueInfo := jiraParse1Issue(issue); issueInfo != nil {
-					//eztools.ShowSthln(issueInfo)
-					results = append(results, issueInfo)
-				}
-			}
-			return true
-		})
-	if len(results) < 1 {
-		return nil
-	}
-	return results
+	return parseIssues("issues", m, jiraParse1Issue)
 }
 
 // jiraParse1Cmt parses
@@ -330,7 +283,7 @@ func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
 func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
-		len(issueInfo[IssueinfoStrHead]) < 1 {
+		len(issueInfo[IssueinfoStrSummary]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	type insets struct {
@@ -368,12 +321,12 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		is.Name = issueInfo[IssueinfoStrComments]
 		ss.Set = append(ss.Set, is)
 		upCA.Update.Components = []setss{ss}
-		s.Set.Name = issueInfo[IssueinfoStrHead]
+		s.Set.Name = issueInfo[IssueinfoStrSummary]
 		upCA.Update.Assignee = []sets{s}
 		jsonStr, err = json.Marshal(upCA)
 	} else {
 		var upA updateA
-		s.Set.Name = issueInfo[IssueinfoStrHead]
+		s.Set.Name = issueInfo[IssueinfoStrSummary]
 		upA.Update.Assignee = []sets{s}
 		jsonStr, err = json.Marshal(upA)
 	}
@@ -387,7 +340,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		svr.URL+RestAPIStr+issueInfo[IssueinfoStrID],
+		svr.URL+RestAPIJRStr+issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// result/body is []uint8, if success
 	return nil, err
@@ -522,7 +475,7 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraGetTransExpanded(svr *svrs, authInfo eztools.AuthInfo,
 	id, exp string) (bodyMap map[string]interface{}, err error) {
-	return restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	return restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		id+"/transitions"+exp, authInfo, nil, svr.Magic)
 }
 
@@ -568,6 +521,7 @@ func jiraChooseTran(tranName string, tranNames, tranIDs []string) (string, error
 	return tranID, nil
 }
 
+// jiraTranExec transition issue {id} to state {tranID}
 func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 	id, tranID string) (err error) {
 	type tranJsons struct {
@@ -587,7 +541,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	_, err = restSth(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
 		id+"/transitions", authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
 	// replies to transitions contains no body
@@ -605,55 +559,28 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
 	fun func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) error) error {
-	if len(issueInfo[IssueinfoStrID]) < 1 {
-		slc, err := jiraMyOpen(svr, authInfo, issueInfo)
-		var choices []string
-		if err == nil {
-			if len(slc) > 0 {
-				for _, v := range slc {
-					choices = append(choices,
-						v[IssueinfoStrID]+":"+v[IssueinfoStrHead])
-				}
-			}
-		}
-		i, s := eztools.ChooseStrings(choices)
-		if i == eztools.InvalidID {
-			if s == "" {
-				return eztools.ErrInvalidInput
-			}
-			issueInfo[IssueinfoStrID] = s
-		} else {
-			issueInfo[IssueinfoStrID] = slc[i][IssueinfoStrID]
-		}
-
-	}
-	if len(issueInfo[IssueinfoStrID]) < 1 {
-		return eztools.ErrInvalidInput
-	}
+		issueInfo issueInfos) error) (err error) {
 	if fun != nil {
-		if err := fun(svr, authInfo, issueInfo); err != nil {
+		if err = fun(svr, authInfo, issueInfo); err != nil {
 			return err
 		}
 
 	}
-	var (
-		tranNames, tranIDs []string
-		err                error
-		//res                issueInfoSlc
-	)
+	var tranNames, tranIDs []string
 	for i, tran := range steps {
 		if eztools.Debugging && eztools.Verbose > 1 {
 			eztools.ShowStrln("Trying " + tran)
 		}
-		if len(tranNames) < 1 || len(tranIDs) < 1 {
+		if tranNames == nil || tranIDs == nil ||
+			len(tranNames) < 1 || len(tranIDs) < 1 {
 			tranNames, tranIDs, err = jiraGetTrans(svr, authInfo,
 				issueInfo[IssueinfoStrID])
 			if err != nil {
 				return err
 			}
 		}
-		if len(tranNames) < 1 || len(tranIDs) < 1 {
+		if tranNames == nil || tranIDs == nil ||
+			len(tranNames) < 1 || len(tranIDs) < 1 {
 			eztools.LogPrint("NO available transitions")
 			return eztools.ErrNoValidResults
 		}
@@ -680,7 +607,6 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			return err
 		}
-		//res = append(res, inf)
 	}
 	return err
 }
@@ -701,7 +627,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	//eztools.ShowStrln(jsonStr)
 	_, err := restSth(eztools.METHOD_PUT,
-		svr.URL+RestAPIStr+
+		svr.URL+RestAPIJRStr+
 			issueInfo[IssueinfoStrID],
 		authInfo, strings.NewReader(jsonStr),
 		svr.Magic)
@@ -709,7 +635,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (interface{}, error) {
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		id+"/editmeta", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -733,6 +659,7 @@ func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (inte
 	return fF(bodyMap), nil
 }
 
+// jiraEditMeta get possible reject reasons
 func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (jsonStr string) {
 	if len(svr.Flds.RejectRsn) > 0 {
@@ -747,7 +674,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			if len(issueInfo[IssueinfoStrDesc]) < 1 {
 				eztools.Log("NO choices found for " + svr.Flds.RejectRsn)
-				cfmInputOrPromptStr(svr, issueInfo,
+				useInputOrPromptStr(svr, issueInfo,
 					IssueinfoStrDesc, "reject reason")
 			}
 		}
@@ -770,20 +697,9 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-func jiraMakeStates(svr *svrs, tp string) (ret []string) {
-	for _, v := range svr.State {
-		if v.Type == tp {
-			if len(v.Text) > 0 {
-				ret = append(ret, v.Text)
-			}
-		}
-	}
-	return
-}
-
 func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	Steps := jiraMakeStates(svr, "transition reject")
+	Steps := makeStates(svr, "transition reject")
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
@@ -821,7 +737,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
-	Steps := jiraMakeStates(svr, "transition close")
+	Steps := makeStates(svr, "transition close")
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
@@ -904,22 +820,30 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo[IssueinfoStrID] {
 		return nil, eztools.ErrInvalidInput
 	}
-	if uiSilent { // TODO: command params
-		noInteractionAllowed()
-		return nil, eztools.ErrInvalidInput
-	}
-	linkType := eztools.ChooseStringsWtIDs(
-		func() int {
-			return len(linkChoices)
-		},
-		func(i int) int {
-			return i
-		},
-		func(i int) string {
-			return linkChoices[i].name
-		}, "link type")
-	if linkType == eztools.InvalidID {
-		return nil, eztools.ErrInvalidInput
+	var linkType int
+	switch len(linkChoices) {
+	case 0:
+		return nil, eztools.ErrOutOfBound
+	case 1:
+		linkType = 0
+	default:
+		if uiSilent { // TODO: command params
+			noInteractionAllowed()
+			return nil, eztools.ErrInvalidInput
+		}
+		linkType = eztools.ChooseStringsWtIDs(
+			func() int {
+				return len(linkChoices)
+			},
+			func(i int) int {
+				return i
+			},
+			func(i int) string {
+				return linkChoices[i].name
+			}, "link type")
+		if linkType == eztools.InvalidID {
+			return nil, eztools.ErrInvalidInput
+		}
 	}
 	type ils struct {
 		Add struct {
@@ -951,7 +875,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	//eztools.ShowByteln(jsonStr)
-	_, err = restMap(eztools.METHOD_PUT, svr.URL+RestAPIStr+
+	_, err = restMap(eztools.METHOD_PUT, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// TODO: parse result
@@ -990,7 +914,7 @@ func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	_, err = restMap(eztools.METHOD_PUT,
-		svr.URL+RestAPIStr+issueInfo[IssueinfoStrID]+"/comment/"+
+		svr.URL+RestAPIJRStr+issueInfo[IssueinfoStrID]+"/comment/"+
 			issueInfo[IssueinfoStrKey], authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
 	// TODO: parse result
@@ -1004,7 +928,7 @@ func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrKey]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIStr+
+	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/comment/"+issueInfo[IssueinfoStrKey],
 		authInfo, nil, svr.Magic)
 	// TODO: parse result
@@ -1034,7 +958,7 @@ func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
 	if eztools.Debugging && eztools.Verbose > 0 {
 		eztools.ShowByteln(jsonStr)
 	}
-	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
 		id+"/"+urlSuffix,
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
@@ -1064,7 +988,7 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/comment",
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -1078,7 +1002,7 @@ func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID], authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1125,7 +1049,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1160,7 +1084,7 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1184,7 +1108,7 @@ func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	_, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/watchers",
 		authInfo, strings.NewReader("\""+cfg.User+"\""), svr.Magic)
 	return nil, err
@@ -1195,7 +1119,7 @@ func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIStr+
+	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/watchers?username="+cfg.User,
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -1262,7 +1186,7 @@ func jiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrFile]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restFile(eztools.METHOD_POST, svr.URL+RestAPIStr+
+	_, err := restFile(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
 		issueInfo[IssueinfoStrID]+"/attachments",
 		authInfo, "file", issueInfo[IssueinfoStrFile],
 		map[string]string{"X-Atlassian-Token": "nocheck"}, svr.Magic)

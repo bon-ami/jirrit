@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -25,6 +24,8 @@ const (
 	CategoryGerrit = "Gerrit"
 	// CategoryJenkins Jenkins server in xml
 	CategoryJenkins = "Jenkins"
+	// CategoryBugzilla Bugzilla server in xml
+	CategoryBugzilla = "Bugzilla"
 	// PassNone no password in xml
 	PassNone = "none"
 	// PassBasic plain text password in xml
@@ -33,6 +34,8 @@ const (
 	PassPlain = "plain"
 	// PassDigest HTTP password in xml
 	PassDigest = "digest"
+	// password token for headers in xml
+	PassToken = "token"
 	// intGerritMerge is interval between each status check to merge a submit, in seconds
 	intGerritMerge = 15
 )
@@ -110,7 +113,7 @@ func main() {
 		extGram
 		extSrvr
 	)
-	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins}
+	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
 	var (
 		paramH, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
@@ -334,7 +337,7 @@ func main() {
 		matrix := [...][]string{
 			{paramI, IssueinfoStrID},
 			{paramK, IssueinfoStrKey},
-			{paramHD, IssueinfoStrHead},
+			{paramHD, IssueinfoStrSummary},
 			{paramP, IssueinfoStrProj},
 			{paramB, IssueinfoStrBranch},
 			{paramL, IssueinfoStrLink},
@@ -398,7 +401,8 @@ func main() {
 		}
 		for ; ; fun = nil { // reset fun among loops
 			if fun == nil {
-				funParam, fun, issueInfo = chooseAct(svr, choices, cats[svr.Type],
+				funParam, fun, issueInfo = chooseAct(svr,
+					authInfo, choices, cats[svr.Type],
 					mkIssueinfo())
 				if fun == nil {
 					break
@@ -642,7 +646,8 @@ func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
 		PassNone + " - no password",
 		PassBasic + " - plain text",
 		PassPlain + " - base64'ed",
-		PassDigest + " - HTTP password, such as from Settings of Gerrit"}
+		PassDigest + " - HTTP password, such as from Settings of Gerrit",
+		PassToken + " - token password, such as from API Key settings of Bugzilla"}
 	const (
 		pref = "Since this server is "
 		affi = " is recommended."
@@ -650,10 +655,10 @@ func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
 	switch svrType {
 	case CategoryGerrit:
 		eztools.ShowStrln(pref + svrType + ", " + PassDigest + affi)
-	case CategoryJira:
+	case CategoryJira, CategoryJenkins:
 		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
-	case CategoryJenkins:
-		eztools.ShowStrln(pref + svrType + ", " + PassBasic + affi)
+	case CategoryBugzilla:
+		eztools.ShowStrln(pref + svrType + ", " + PassToken + affi)
 	}
 	typeInd, _ := eztools.ChooseStrings(passTypes)
 	if typeInd == eztools.InvalidID {
@@ -814,13 +819,13 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 		authInfo.Type = eztools.AUTH_PLAIN
 	case PassBasic:
 		authInfo.Type = eztools.AUTH_BASIC
-	default:
+	default: //PassToken
 		authInfo.Type = eztools.AUTH_NONE
-		authInfo.Pass = ""
-		return
+		//authInfo.Pass = ""
+		//return
 	}
 	authInfo.Pass = pass.Pass
-	if len(authInfo.Pass) < 1 {
+	if authInfo.Type != eztools.AUTH_NONE && len(authInfo.Pass) < 1 {
 		err = errors.New("NO password configured")
 	}
 	return
@@ -888,8 +893,9 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 	return choices
 }
 
-func chooseAct(svr *svrs, choices []string, funcs []action2Func,
-	issueInfo issueInfos) (string, actionFunc, issueInfos) {
+func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
+	funcs []action2Func, issueInfo issueInfos) (string,
+	actionFunc, issueInfos) {
 	var fi int
 	if uiSilent && len(choices) > 1 {
 		noInteractionAllowed()
@@ -907,7 +913,9 @@ func chooseAct(svr *svrs, choices []string, funcs []action2Func,
 			return "", nil, issueInfo
 		}
 	}
-	inputIssueInfo4Act(svr, funcs[fi].n, issueInfo)
+	if inputIssueInfo4Act(svr, authInfo, funcs[fi].n, issueInfo) {
+		return "", nil, nil
+	}
 	return funcs[fi].n, funcs[fi].f, issueInfo
 }
 
@@ -1066,6 +1074,142 @@ func getValuesFromMaps(name string, field interface{}) string {
 	return ""
 }
 
+/*
+loop map.
+	If key matches keyStr, put value into keyVal
+		in case of string or skip otherwise.
+	If key does not match mustStr, skip.
+Invoke fun with key and value.
+Both return values of fun and this means whether
+	any item ever processed successfully.
+*/
+func loopStringMap(m map[string]interface{},
+	mustStr string, keyStr []string,
+	fun func(string, interface{}) bool) (keyVal []string, ret bool) {
+	if len(keyStr) > 0 {
+		keyVal = make([]string, len(keyStr))
+	} else {
+		keyVal = nil
+	}
+	for i, v := range m {
+		/*if eztools.Debugging && eztools.Verbose > 1 {
+			eztools.ShowStrln("looping " + i)
+		}*/
+		if len(keyStr) > 0 {
+			matched := false
+			for j, key1 := range keyStr {
+				if i == key1 {
+					matched = true
+					id, ok := v.(string)
+					if !ok {
+						eztools.LogPrint(
+							reflect.TypeOf(v).String() +
+								" got instead of string")
+						break
+					}
+					ret = true
+					keyVal[j] = id
+					if fun == nil {
+						break
+					}
+					//eztools.ShowStrln("id=" + id)
+					break
+				}
+			}
+			if matched {
+				continue
+			}
+		}
+		if len(mustStr) > 0 && i != mustStr {
+			//eztools.ShowStrln("skipping " + i)
+			continue
+		}
+		if fun != nil {
+			ret = fun(i, v) || ret
+		}
+	}
+	return keyVal, ret
+}
+
+func chkNSetIssueInfo(v interface{}) string {
+	if v == nil {
+		eztools.Log("nil got, not string")
+		return ""
+	}
+	str, ok := v.(string)
+	if !ok {
+		flt, ok := v.(float64)
+		if !ok {
+			eztools.LogPrint(reflect.TypeOf(v).String() +
+				" got instead of string or float64")
+			return ""
+		}
+		str = strconv.FormatFloat(flt, 'f', -1, 64)
+	}
+	return str
+}
+
+func chkNLoopStringMap(m interface{},
+	mustStr string, keyStr []string) []string {
+	sub, ok := m.(map[string]interface{})
+	if !ok {
+		eztools.LogPrint(reflect.TypeOf(m).String() +
+			" got instead of map[string]interface{}")
+		return nil
+	}
+	res, _ := loopStringMap(sub, mustStr, keyStr, nil)
+	return res
+}
+
+func parseIssues(issueKey string, m map[string]interface{},
+	fun func(map[string]interface{}) issueInfos) issueInfoSlc {
+	/*if eztools.Debugging && eztools.Verbose > 1 {
+		eztools.ShowSthln(strs)
+	}*/
+	results := make(issueInfoSlc, 0)
+	loopStringMap(m, issueKey, nil,
+		func(i string, v interface{}) bool {
+			//eztools.ShowStrln("func " + i)
+			issues, ok := v.([]interface{})
+			if !ok {
+				eztools.LogPrint(reflect.TypeOf(v).String() +
+					" got instead of " +
+					"[]interface{} for " + i)
+				return false
+			}
+			for _, v := range issues {
+				//eztools.ShowStrln("Ticket")
+				issue, ok := v.(map[string]interface{})
+				if !ok {
+					eztools.LogPrint(reflect.TypeOf(v).String() +
+						" got instead of " +
+						"map[string]interface{}")
+					continue
+				}
+				if issueInfo := fun(issue); issueInfo != nil {
+					//eztools.ShowSthln(issueInfo)
+					results = append(results, issueInfo)
+				}
+			}
+			return true
+		})
+	if len(results) < 1 {
+		return nil
+	}
+	return results
+}
+
+func makeStates(svr *svrs, tp string) (ret []string) {
+	for _, v := range svr.State {
+		if v.Type == tp {
+			if len(v.Text) > 0 {
+				ret = append(ret, v.Text)
+			}
+		}
+	}
+	return
+}
+
 const (
 	// IssueinfoStrVal value string for common usages
 	IssueinfoStrVal = "value"
@@ -1078,18 +1222,24 @@ const (
 	IssueinfoStrKey = "key"
 	// IssueinfoStrAssignee assignee string
 	IssueinfoStrAssignee = "assignee"
+	// IssueinfoStrAssigned2 assignee string
+	IssueinfoStrAssigned2 = "assigned_to_detail"
+	// IssueinfoStrRealName real name string
+	IssueinfoStrRealName = "real_name"
 	// IssueinfoStrName name string
 	IssueinfoStrName = "name"
-	// IssueinfoStrHead subject string
-	IssueinfoStrHead = "subject"
-	// IssueinfoStrSummary summary string
+	// IssueinfoStrSummar summary string
 	IssueinfoStrSummary = "summary"
+	// IssueinfoStrSolution solution string
+	IssueinfoStrSolution = "cf_analysis_solution"
 	// IssueinfoStrDesc description string
 	IssueinfoStrDesc = "description"
 	// IssueinfoStrRevCur current revision string
 	IssueinfoStrRevCur = "current_revision"
 	// IssueinfoStrVerified verified string
 	IssueinfoStrVerified = "Verified"
+	// IssueinfoStrProd product string
+	IssueinfoStrProd = "product"
 	// IssueinfoStrProj project string
 	IssueinfoStrProj = "project"
 	// IssueinfoStrCodereview code review string
@@ -1141,6 +1291,16 @@ const (
 	IssueinfoStrBld = "builds"
 	// IssueinfoStrNmb number string for Jenkins
 	IssueinfoStrNmb = "number"
+	// IssueinfoStrCreator creator string for bugzilla
+	IssueinfoStrCreator = "creator"
+	// IssueinfoStrTxt text string for bugzilla
+	IssueinfoStrTxt = "text"
+	// IssueinfoStrCreatTm creation time string for bugzilla
+	IssueinfoStrCreatTm = "creation_time"
+	// IssueinfoStrFileNm file name string for bugzilla
+	IssueinfoStrFileNm = "file_name"
+	// IssueinfoStrData data string for bugzilla
+	IssueinfoStrData = "data"
 )
 
 type issueInfos map[string]string
@@ -1175,10 +1335,10 @@ func (inf issueInfoSlc) ToMapSlc() (res []map[string]string) {
 }*/
 
 var issueInfoTxt = []string{
-	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrHead,
+	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrSummary,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState}
 var issueDetailsTxt = []string{
-	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
+	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSummary,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
 var issueHistoryTxt = []string{
 	IssueinfoStrID, IssueinfoStrDate, IssueinfoStrMsg}
@@ -1186,7 +1346,7 @@ var issueRevsTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType}
 var issueDldCmds = []string{
-	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrHead,
+	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSummary,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
 var reviewInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrVerified,
@@ -1199,47 +1359,7 @@ ISSUEINFO_STR_STATE}*/
 ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
 ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
 
-const typicalJiraSeparator = "-"
-
-// return values
-//	whether input is in exact x-0 or -0 format.
-//		in case of -0, if previous project (x part) found, it is taken.
-//		otherwise, false is returned.
-//	the non digit part. this is saved as project.
-//	the digit part
-func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
-	digit string, changes, parsed bool) {
-	if len(num) < 1 {
-		return "", "", false, false
-	}
-	re := regexp.MustCompile(`^[^-,]+[-][\d]+$`)
-	//eztools.ShowStrln("parsing " + num + " 2 typical JIRA")
-	pref := re.FindStringSubmatch(num)
-	if pref != nil { // "A-1"
-		parts := strings.Split(pref[0], typicalJiraSeparator)
-		if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
-			saveProj(svr, parts[0])
-			return parts[0] + typicalJiraSeparator, parts[1], false, true
-		}
-	} else {
-		if len(svr.Proj) > 0 { // "-1", "1"
-			re = regexp.MustCompile(`^[-][\d]+$`)
-			pref = re.FindStringSubmatch(num)
-			if pref != nil {
-				parts := strings.Split(pref[0], typicalJiraSeparator)
-				// parts[0]=""
-				if len(parts) == 2 && len(parts[1]) > 0 {
-					if eztools.Debugging && eztools.Verbose > 1 {
-						eztools.ShowStrln("Auto changing to " +
-							svr.Proj + typicalJiraSeparator + parts[1])
-					}
-					return svr.Proj + typicalJiraSeparator, parts[1], true, true
-				}
-			}
-		} // "A-1,B-2" not handled
-	}
-	return "", "", false, false
-}
+const issueSeparator = ","
 
 // loopIssues runs a function on all numbers between, inclusively,
 // X-0 and X-1, or 0,1 from input in format of X-0,1 or 0,1
@@ -1250,14 +1370,13 @@ func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
 // while other fields use the former values returned from function fun
 func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	issueInfos, error)) (issueInfoOut issueInfoSlc, err error) {
-	const separator = ","
 	printID := func() {
 		if err == nil {
 			eztools.Log("Done with " + issueInfo[IssueinfoStrID])
 		}
 	}
 	//eztools.Log(strings.Count(issueInfo[IssueinfoStrID], separator))
-	switch strings.Count(issueInfo[IssueinfoStrID], separator) {
+	switch strings.Count(issueInfo[IssueinfoStrID], issueSeparator) {
 	case 0: // single ID
 		if prefix, lowerBoundStr, _, ok := parseTypicalJiraNum(svr,
 			issueInfo[IssueinfoStrID]); ok {
@@ -1267,13 +1386,13 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		printID()
 		return issueInfoSlc{issueInfo}, err
 	case 2: // x,,y or x,y,z
-		parts := strings.Split(issueInfo[IssueinfoStrID], separator)
+		parts := strings.Split(issueInfo[IssueinfoStrID], issueSeparator)
 		//eztools.Log(parts)
 		if len(parts) != 2 || len(parts[0]) < 1 || len(parts[2]) < 1 {
 			if len(parts) != 3 {
 				eztools.LogPrint("range format needs both parts aside with two \"" +
-					separator + "\"" + " or multiple parts, deliminated by \"" +
-					separator + "\"")
+					issueSeparator + "\"" + " or multiple parts, deliminated by \"" +
+					issueSeparator + "\"")
 				return nil, eztools.ErrInvalidInput
 			}
 		}
@@ -1321,7 +1440,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		}
 	}
 	// x,y[,...]
-	parts := strings.Split(issueInfo[IssueinfoStrID], separator)
+	parts := strings.Split(issueInfo[IssueinfoStrID], issueSeparator)
 	var (
 		prefix, prefixNew, currentNo string
 		ok                           bool
@@ -1378,62 +1497,43 @@ func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 // parse JIRA number format for JIRA servers and ID strings
 // return value: whether anything new is input
 func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
-	if uiSilent {
-		noInteractionAllowed()
-		return false
-	}
 	const linefeed = " (end with \\ to input multi lines)"
 	var def, base string
 	var changes, smart bool // no smart affix available by default
-	if svr.Type == CategoryJira && ind == IssueinfoStrID && len(inf[ind]) > 0 {
-		var ok bool
-		if base, _, changes, ok = parseTypicalJiraNum(svr, inf[ind]); ok {
-			smart = true // there is a reference for smart affix
-			//eztools.ShowStrln("not int previously")
+	if ind == IssueinfoStrID && len(inf[ind]) > 0 {
+		switch {
+		case svr.Type == CategoryBugzilla:
+			def = "=" + inf[ind]
+		case svr.Type == CategoryJira:
+			var ok bool
+			if base, _, changes, ok = parseTypicalJiraNum(svr,
+				inf[ind]); ok {
+				smart = true // there is a reference for smart affix
+				//eztools.ShowStrln("not int previously")
+			}
+			def = "=" + inf[ind]
 		}
-		def = "=" + inf[ind]
 	}
 	s := eztools.PromptStr(prompt + linefeed + def)
 	if len(s) < 1 || s == inf[ind] {
 		return false
 	}
-	var (
-		ok, changesI bool
-		sNum, baseI  string
-	)
-	if svr.Type == CategoryJira && ind == IssueinfoStrID {
-		if baseI, sNum, changesI, ok = parseTypicalJiraNum(svr, s); ok {
-			smart = true // there is a reference for smart affix
-			s = sNum
-			base = baseI
-			changes = changes || changesI
-			//eztools.ShowStrln("not int previously")
-		}
-		if smart {
-			if _, err := strconv.Atoi(s); err != nil {
-				smart = false
-				//eztools.ShowStrln("not int currently")
-				// we do not care what this number is
+	if ind == IssueinfoStrID {
+		switch svr.Type {
+		case CategoryJira:
+			if sChg, ok := changeTypicalJiraNum(svr, s, base, smart, changes); ok {
+				inf[ind] = sChg
+				return true
 			}
 		}
 	}
-	if !smart {
-		// input not a number or no previous input to refer to
-		if s[len(s)-1] == '\\' {
-			inf[ind] = s[:len(s)-1] + "\n"
-			cfmInputOrPromptStrMultiLines(inf, ind, prompt)
-			return true
-		}
-		inf[ind] = s
+	// input not a number or no previous input to refer to
+	if s[len(s)-1] == '\\' {
+		inf[ind] = s[:len(s)-1] + "\n"
+		cfmInputOrPromptStrMultiLines(inf, ind, prompt)
 		return true
 	}
-	// smart affix
-	inf[ind] = base + s
-	if changes {
-		//if eztools.Verbose > 0 {
-		eztools.ShowStrln("Auto changed to " + inf[ind])
-		//}
-	}
+	inf[ind] = s
 	return true
 }
 
@@ -1452,9 +1552,56 @@ func useInputOrPrompt(svr *svrs, inf issueInfos, ind string) {
 	useInputOrPromptStr(svr, inf, ind, ind)
 }
 
-func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
+// Parameters: fun=function to list issues for user to choose from
+// Return value: true=no ID input; false=sth. input
+func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos, fun func(svr *svrs, authInfo eztools.AuthInfo,
+		issueInfo issueInfos) (issueInfoSlc, error)) bool {
+	if len(issueInfo[IssueinfoStrID]) > 0 {
+		return false
+	}
+	if fun == nil {
+		useInputOrPrompt(svr, issueInfo, IssueinfoStrID)
+	} else {
+		slc, err := fun(svr, authInfo, issueInfo)
+		var choices []string
+		if err == nil {
+			if len(slc) > 0 {
+				for _, v := range slc {
+					//eztools.ShowStrln(v)
+					choices = append(choices,
+						v[IssueinfoStrID]+":"+v[IssueinfoStrSummary])
+				}
+			}
+		}
+		i, s := eztools.ChooseStrings(choices)
+		if i == eztools.InvalidID {
+			if s == "" {
+				return true
+			}
+			issueInfo[IssueinfoStrID] = s
+		} else {
+			issueInfo[IssueinfoStrID] = slc[i][IssueinfoStrID]
+		}
+	}
+	if len(issueInfo[IssueinfoStrID]) < 1 {
+		return true
+	}
+	return false
+}
+
+func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
+	action string, inf issueInfos) bool {
+	var listFunc func(svr *svrs, authInfo eztools.AuthInfo,
+		issueInfo issueInfos) (issueInfoSlc, error)
 	switch svr.Type {
 	case CategoryJira:
+		listFunc = jiraMyOpen
+	case CategoryBugzilla:
+		listFunc = bugzillaMyOpen
+	}
+	switch svr.Type {
+	case CategoryJira, CategoryBugzilla:
 		switch action {
 		case "move status of a case",
 			"show details of a case",
@@ -1463,36 +1610,61 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 			"list watchers of a case",
 			"check whether watching a case",
 			"watch a case",
-			"unwatch a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			"unwatch a case",
+			"close a case to resolved from any known statuses",
+			"close a case with default design as steps",
+			"close a case with general requirement as steps":
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 		case "link a case to another":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrLink,
-				"ID to be linked to")
+				"ID (not indexes above, if any) this issue blocks")
 		case "remove a file attached to a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
 		case "add a file to a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPrompt(svr, inf, IssueinfoStrFile)
+			switch svr.Type {
+			case CategoryBugzilla:
+				useInputOrPromptStr(svr, inf, IssueinfoStrKey, "description")
+			}
 		case "get a file to a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
 			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "file to be saved as")
 		case "change a comment from a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
 			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "comment body")
 		case "delete a comment from a case":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
 		case "add a comment to a case",
 			"reject a case from any known statuses":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
 			useInputOrPrompt(svr, inf, IssueinfoStrComments)
 		case "transfer a case to someone":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
-			useInputOrPromptStr(svr, inf, IssueinfoStrHead, "assignee")
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
+			useInputOrPromptStr(svr, inf, IssueinfoStrSummary, "assignee")
 			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "component")
 		}
 	case CategoryGerrit:
@@ -1501,9 +1673,13 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 			"show reviewers of a submit",
 			"show current revision/commit of a submit",
 			"list files of a submit":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
+				return true
+			}
 		case "list files of a submit by revision":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
+				return true
+			}
 			useInputOrPrompt(svr, inf, IssueinfoStrRevCur)
 		case "cherry pick all my open":
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
@@ -1514,7 +1690,9 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 				IssueinfoStrID, IssueinfoStrAssignee)
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "cherry pick a submit":
-			useInputOrPrompt(svr, inf, IssueinfoStrID)
+			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
+				return true
+			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur, "revision(empty for current)")
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list config of a project":
@@ -1533,8 +1711,10 @@ func inputIssueInfo4Act(svr *svrs, action string, inf issueInfos) {
 		}
 	default:
 		eztools.LogPrint("Server type unknown: " + svr.Type)
+		return true
 	}
 	//eztools.ShowSthln(inf)
+	return false
 }
 
 func makeCat2Act() cat2Act {
@@ -1591,5 +1771,21 @@ func makeCat2Act() cat2Act {
 			{"show details of a build", jenkinsDetailOnBld},
 			{"get log of a build", jenkinsLogOfBld},
 			{"list builds", jenkinsListBlds}},
-	}
+		CategoryBugzilla: []action2Func{
+			{"transfer a case to someone", bugzillaTransfer},
+			{"move status of a case", bugzillaTransition},
+			{"show details of a case", bugzillaDetail},
+			{"list comments of a case", bugzillaComments},
+			{"add a comment to a case", bugzillaAddComment},
+			{"list my open cases", bugzillaMyOpen},
+			{"link a case to another", bugzillaLink},
+			{"list watchers of a case", bugzillaWatcherList},
+			{"watch a case", bugzillaWatcherAdd},
+			{"unwatch a case", bugzillaWatcherDel},
+			{"add a file to a case", bugzillaAddFile},
+			{"list files attached to a case", bugzillaListFile},
+			{"get a file to a case", bugzillaGetFile},
+			{"reject a case from any known statuses", bugzillaReject},
+			{"close a case to resolved from any known statuses", bugzillaClose},
+		}}
 }
