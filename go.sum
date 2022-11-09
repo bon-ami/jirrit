@@ -1,5 +1,5 @@
-gitee.com/bon-ami/eztools/v4 v4.9.0 h1:i/UdUy05nw1KTMOELPQGvnUKk0GewoDfR7CJSlEn56A=
-gitee.com/bon-ami/eztools/v4 v4.9.0/go.mod h1:j0QIhysNF0vv+zyKaF+Qzu3LFHa3y5JLrJO0mcOLNqk=
+gitee.com/bon-ami/eztools/v4 v4.10.0 h1:Pp38HW+uTrLQO6I5pkL7+ugtkrE69w5e4qczbZRxsNk=
+gitee.com/bon-ami/eztools/v4 v4.10.0/go.mod h1:j0QIhysNF0vv+zyKaF+Qzu3LFHa3y5JLrJO0mcOLNqk=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c h1:/IBSNwUN8+eKzUzbJPqhK839ygXJ82sde8x3ogr6R28=
 github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c/go.mod h1:chxPXzSsl7ZWRAuOIE23GDNzjWuZquvFlgA8xmpunjU=
 github.com/BurntSushi/toml v1.0.0/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=

@@ -55,5 +55,18 @@
 		<state type="not open">POSTPONED</state>
 		<state type="transition reject">REJECTED</state>
 		<state type="transition close">RESOLVED</state>
+		<state type="resolved">FIXED</state>
+		<state type="rejected">INVALID</state>
+		<state type="rejected">WONTFIX</state>
+		<state type="rejected">NON-REPRODUCE</state>
+		<state type="rejected">WORKASDESIGN</state>
+		<fields>
+			<solution>[1.Root Cause        ]: </solution>
+			<solution>
+			
+[2.Resolution        ]: </solution>
+		</fields>
+		<project></project>
+		<watch></watch>
 	</server>
 </jirrit>

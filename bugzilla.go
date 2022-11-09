@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,7 +16,9 @@ import (
 
 const RestAPIBZStr = "rest/bug/"
 
-// return values
+// parseTypicalBZNum not used yet
+//
+//	Return values
 //	whether input is in exact x-0 or -0 format.
 //		in case of -0, if previous project (x part) found, it is taken.
 //		otherwise, false is returned.
@@ -64,28 +65,17 @@ func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrSummary]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	type updateA struct {
-		Assignee string `json:"assigned_to"`
-	}
-	type updateCA struct {
-		Components string `json:"product"`
-		Assignee   string `json:"assigned_to"`
-	}
 
 	var (
 		jsonStr []byte
 		err     error
 	)
+	updateMap := map[string]string{
+		"assigned_to": issueInfo[IssueinfoStrSummary]}
 	if len(issueInfo[IssueinfoStrComments]) > 0 {
-		var upCA updateCA
-		upCA.Components = issueInfo[IssueinfoStrComments]
-		upCA.Assignee = issueInfo[IssueinfoStrSummary]
-		jsonStr, err = json.Marshal(upCA)
-	} else {
-		var upA updateA
-		upA.Assignee = issueInfo[IssueinfoStrSummary]
-		jsonStr, err = json.Marshal(upA)
+		updateMap["component"] = issueInfo[IssueinfoStrComments]
 	}
+	jsonStr, err = json.Marshal(updateMap)
 	if err != nil {
 		return nil, err
 	}
@@ -103,45 +93,82 @@ func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func bugzillaChooseTran(tranName string, tranNames []string) (string, error) {
-	var tranID string
+func bugzillaChooseState(svr *svrs, state string) string {
+	resos := makeStates(svr, state)
+	var reso string
+	switch len(resos) {
+	case 0:
+		break
+	case 1:
+		reso = resos[0]
+	default:
+		if indx, res := eztools.ChooseStrings(resos); indx != eztools.InvalidID {
+			reso = res
+		}
+	}
+	return reso
+}
+
+// bugzillaChooseTran uses user input or ask user to choose from a slice
+//
+//	Parameters:
+//	string user input
+//	comment required matching user's input
+//	a slice to choose from, if not input already
+//	comment required matching the slice. must be of same size as the slice
+//
+// Return values: selected string and bool, and error
+func bugzillaChooseTran(tranName string, tranCmt bool,
+	tranNames []string, tranCmts []bool) (string, bool, error) {
+	var (
+		tranID     string
+		tranCmtReq bool
+	)
 	if len(tranNames) > 0 {
 		if len(tranName) > 0 {
 			for _, v := range tranNames {
 				//eztools.ShowStrln(v + "=" + tranName + "?")
 				if tranName == v {
-					tranID = v
-					//eztools.ShowStrln("tran ID=" + tranID)
-					return tranID, nil
+					return tranName, tranCmt, nil
 				}
 			}
-			return tranID, eztools.ErrNoValidResults
+			return tranID, tranCmt, eztools.ErrNoValidResults
 		} else {
 			if uiSilent {
 				noInteractionAllowed()
-				return "", eztools.ErrInvalidInput
+				return "", false, eztools.ErrInvalidInput
 			}
 			eztools.ShowStrln(
 				"There are following transitions available.")
 			i, _ := eztools.ChooseStrings(tranNames)
 			if i == eztools.InvalidID {
-				return "", eztools.ErrInvalidInput
+				return "", false, eztools.ErrInvalidInput
 			}
 			tranID = tranNames[i]
+			tranCmtReq = tranCmts[i]
 		}
 	}
-	return tranID, nil
+	return tranID, tranCmtReq, nil
 }
 
 // bugzillaTranExec transition issue {id} to state {tranID}
 func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
-	id, tranID string) (err error) {
-	type tranJsons struct {
-		Stt string `json:"status"`
+	id, cmt, tranID string, cmtReq bool, body any) (err error) {
+	if body == nil {
+		if cmtReq {
+			var cmt string
+			if len(cmt) < 1 {
+				cmt = eztools.PromptStr(IssueinfoStrComments)
+				if len(cmt) < 1 {
+					return eztools.ErrInvalidInput
+				}
+			}
+			body = map[string]string{"status": tranID, "comment": cmt}
+		} else {
+			body = map[string]string{"status": tranID}
+		}
 	}
-	var tranJSON tranJsons
-	tranJSON.Stt = tranID
-	jsonStr, err := json.Marshal(tranJSON)
+	jsonStr, err := json.Marshal(body)
 	if err != nil {
 		return
 	}
@@ -161,24 +188,27 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 // bugzillaFuncNTran is transitions for reject & close
 func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
-	fun func(svr *svrs, authInfo eztools.AuthInfo,
+	funcBody func(tranID string, tranCmtReq bool) any,
+	funcPre func(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo issueInfos) error) (err error) {
-	if fun != nil {
-		if err = fun(svr, authInfo, issueInfo); err != nil {
+	if funcPre != nil {
+		if err = funcPre(svr, authInfo, issueInfo); err != nil {
 			return err
 		}
 
 	}
 	var (
-		tranNames []string
-		stt       string
+		tranNames   []string
+		tranCmtReqs []bool
+		stt         string
 	)
 	for i, tran := range steps {
 		if eztools.Debugging && eztools.Verbose > 1 {
 			eztools.ShowStrln("Trying " + tran)
 		}
 		if tranNames == nil || len(tranNames) < 1 {
-			stt, tranNames, err = bugzillaGetTrans(svr, authInfo, issueInfo, stt)
+			stt, tranNames, tranCmtReqs, err =
+				bugzillaGetTrans(svr, authInfo, issueInfo, stt)
 			if err != nil {
 				return err
 			}
@@ -187,7 +217,8 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.LogPrint("NO available transitions")
 			return eztools.ErrNoValidResults
 		}
-		tranID, err := bugzillaChooseTran(tran, tranNames)
+		tranID, tranCmtReq, err := bugzillaChooseTran(tran,
+			false, tranNames, tranCmtReqs)
 		if err != nil {
 			if i == len(steps)-1 {
 				// return error if the last step fails,
@@ -200,8 +231,15 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			continue
 		}
 		tranNames = nil
-		err = bugzillaTranExec(svr, authInfo,
-			issueInfo[IssueinfoStrID], tranID)
+		if funcBody == nil {
+			err = bugzillaTranExec(svr, authInfo,
+				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
+				tranID, tranCmtReq, nil)
+		} else {
+			err = bugzillaTranExec(svr, authInfo,
+				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
+				tranID, tranCmtReq, funcBody(tranID, tranCmtReq))
+		}
 		if err != nil {
 			/*if err == errGram {
 				jiraGetTransMustFlds(svr, authInfo,
@@ -214,36 +252,104 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	return err
 }
 
+func bugzillaReqCmt(issueInfo issueInfos, must bool) string {
+	cmt := issueInfo[IssueinfoStrComments]
+	if must {
+		if len(cmt) < 1 {
+			cmt = eztools.PromptStr(IssueinfoStrComments)
+		}
+	}
+	return cmt
+}
+
 // bugzillaReject rejects an issue
+//
+//	If there are multiple steps, and comment is provided,
+//	it is added during all steps!
 func bugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	Steps := makeStates(svr, "transition reject")
+	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
 	}
+	reso := bugzillaChooseState(svr, StateTypeResolutionRej)
+	var makeBody func(string, bool) any
+	if len(reso) > 0 {
+		var solu string
+		switch {
+		case len(issueInfo[IssueinfoStrKey]) > 0:
+			solu = issueInfo[IssueinfoStrKey]
+		case len(svr.Flds.Solution) > 0:
+			solu = inputMultiple(svr.Flds.Solution)
+		}
+		makeBody = func(tranID string, cmtReq bool) any {
+			return bugzillaBody4Tran(issueInfo, reso, solu, tranID, cmtReq)
+		}
+	}
 	return nil, bugzillaFuncNTran(svr, authInfo, issueInfo, Steps,
-		func(svr *svrs, authInfo eztools.AuthInfo,
-			issueInfo issueInfos) error {
-			if len(issueInfo[IssueinfoStrComments]) > 0 {
-				_, err := bugzillaAddComment1(svr, authInfo, issueInfo)
-				if err != nil {
-					eztools.LogPrint(err)
-				}
-			}
-			return nil
-		})
+		makeBody, nil)
+}
+
+func inputMultiple(cfg []string) (ret string) {
+	for _, cfg1 := range cfg {
+		ret += cfg1
+		ret += eztools.PromptStr("what to append to \"" + cfg1 + "\"")
+	}
+	return
+}
+
+func bugzillaBody4Tran(issueInfo issueInfos, reso, solu string,
+	tranID string, cmtReq bool) any {
+	cmt := bugzillaReqCmt(issueInfo, cmtReq)
+	if len(cmt) < 1 {
+		return map[string]string{
+			"status":               tranID,
+			"resolution":           reso,
+			"cf_analysis_solution": solu}
+	}
+	type tranJsons struct {
+		Stt     string `json:"status"`
+		Reso    string `json:"resolution"`
+		Solu    string `json:"cf_analysis_solution"`
+		Comment struct {
+			Body string `json:"body"`
+		} `json:"comment"`
+	}
+	var tranJSON tranJsons
+	tranJSON.Stt = tranID
+	tranJSON.Reso = reso
+	tranJSON.Solu = solu
+	tranJSON.Comment.Body = cmt
+	return tranJSON
 }
 
 // bugzillaClose closes an issue
+//
+//	If there are multiple steps, and comment is provided,
+//	it is added during all steps!
 func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	Steps := makeStates(svr, "transition close")
+	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
 	}
-	return nil, bugzillaFuncNTran(svr, authInfo, issueInfo, Steps, nil)
+	reso := bugzillaChooseState(svr, StateTypeResolutionRes)
+	var makeBody func(string, bool) any
+	if len(reso) > 0 {
+		var solu string
+		switch {
+		case len(issueInfo[IssueinfoStrKey]) > 0:
+			solu = issueInfo[IssueinfoStrKey]
+		case len(svr.Flds.Solution) > 0:
+			solu = inputMultiple(svr.Flds.Solution)
+		}
+		makeBody = func(tranID string, cmtReq bool) any {
+			return bugzillaBody4Tran(issueInfo, reso, solu, tranID, cmtReq)
+		}
+	}
+	return nil, bugzillaFuncNTran(svr, authInfo, issueInfo, Steps, makeBody, nil)
 }
 
 // bugzillaTransition transitions an issue to a state
@@ -252,17 +358,18 @@ func bugzillaTransition(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, names, err := bugzillaGetTrans(svr, authInfo,
+	_, names, cmtReqs, err := bugzillaGetTrans(svr, authInfo,
 		issueInfo, "")
 	if err != nil {
 		return nil, err
 	}
-	tranID, err := bugzillaChooseTran("", names)
+	tranID, cmtReq, err := bugzillaChooseTran("", false, names, cmtReqs)
 	if err != nil {
 		return nil, err
 	}
 	return nil, bugzillaTranExec(svr, authInfo,
-		issueInfo[IssueinfoStrID], tranID)
+		issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
+		tranID, cmtReq, nil)
 }
 
 // bugzillaLink links two issues
@@ -322,11 +429,8 @@ func bugzillaAddComment(svr *svrs, authInfo eztools.AuthInfo,
 // bugzillaAddComment1 adds a comment to an issue, with no input checking
 func bugzillaAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
-	var tranJSON struct {
-		Comment string `json:"comment"`
-	}
-	tranJSON.Comment = issueInfo[IssueinfoStrComments]
-	jsonStr, err := json.Marshal(tranJSON)
+	jsonStr, err := json.Marshal(map[string]string{
+		"comment": issueInfo[IssueinfoStrComments]})
 	if err != nil {
 		return nil, eztools.ErrOutOfBound
 	}
@@ -359,17 +463,24 @@ func bugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
 	return bugzillaParseComments(bodyMap), nil
 }
 
+// bugzillaGetTrans get transferable states
+//
+//	Return values:
+//		current state
+//		available states
+//		whether comment required of a state
+//		error
 func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, stt string) (string, []string, error) {
+	issueInfo issueInfos, stt string) (string, []string, []bool, error) {
 	if len(stt) < 1 {
 		var ok bool
 		slcInf, err := bugzillaDetail(svr, authInfo, issueInfo)
 		if err != nil || slcInf == nil || len(slcInf) != 1 {
-			return "", nil, eztools.ErrOutOfBound
+			return "", nil, nil, eztools.ErrOutOfBound
 		}
 		stt, ok = slcInf[0][IssueinfoStrState]
 		if !ok || len(stt) < 1 {
-			return "", nil, eztools.ErrOutOfBound
+			return "", nil, nil, eztools.ErrOutOfBound
 		}
 	}
 	const RestAPIBZStr = "rest/field/bug/"
@@ -378,21 +489,24 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 			"bug_status?", "", authInfo),
 		authInfo, nil, svr.Magic)
 	if err != nil {
-		return stt, nil, err
+		return stt, nil, nil, err
 	}
 	fldsAny, ok := bodyMap["fields"]
 	if !ok {
-		return stt, nil, eztools.ErrOutOfBound
+		return stt, nil, nil, eztools.ErrOutOfBound
 	}
 	fldSlc, ok := fldsAny.([]any)
 	if !ok {
-		return stt, nil, eztools.ErrOutOfBound
+		return stt, nil, nil, eztools.ErrOutOfBound
 	}
-	var ret []string
+	var (
+		retStates []string
+		retCmts   []bool
+	)
 	for _, fld1Any := range fldSlc {
 		fld1Map, ok := fld1Any.(map[string]interface{})
 		if !ok {
-			return stt, nil, eztools.ErrOutOfBound
+			return stt, nil, nil, eztools.ErrOutOfBound
 		}
 		/*var (
 			name string
@@ -442,6 +556,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 					if !ok || chg1Map == nil {
 						continue
 					}
+
 					nm1Any, ok := chg1Map["name"]
 					if !ok {
 						continue
@@ -453,16 +568,29 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 							"string")
 						continue
 					}
-					ret = append(ret, nm1Str)
+					retStates = append(retStates, nm1Str)
+
+					var cmt1Bool bool
+					cmt1Any, ok := chg1Map["comment_required"]
+					if ok {
+						cmt1Bool, ok = cmt1Any.(bool)
+						if !ok {
+							eztools.LogPrint(reflect.TypeOf(cmt1Any).String() +
+								" got instead of " +
+								"bool")
+						}
+					}
+					retCmts = append(retCmts, cmt1Bool)
 				}
 			}
 			return false
 		})
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {
-		eztools.LogPrint("can change to", ret)
+		eztools.LogPrint("can change to", retStates,
+			"comment required", retCmts)
 	}
-	return stt, ret, nil
+	return stt, retStates, retCmts, nil
 }
 
 func bugzillaDetailExec(svr *svrs, authInfo eztools.AuthInfo,
@@ -504,8 +632,8 @@ func bugzillaUriWtToken(addr, prm string, authInfo eztools.AuthInfo) string {
 	if len(prm) > 0 {
 		sep = "&"
 	}
-	eztools.ShowStrln(addr + /*url.QueryEscape*/
-		("Bugzilla_api_key=" + authInfo.Pass + sep + prm))
+	// eztools.ShowStrln(addr + /*url.QueryEscape*/
+	// 	("Bugzilla_api_key=" + authInfo.Pass + sep + prm))
 	return addr + /*url.QueryEscape*/ ("Bugzilla_api_key=" +
 		authInfo.Pass + sep + prm)
 }
@@ -563,8 +691,31 @@ func bugzillaParse1Comment(m map[string]interface{}) (issueInfoOut issueInfos) {
 	return
 }
 
+// bugzillaParseComments only processes 1 bug
 func bugzillaParseComments(m map[string]interface{}) issueInfoSlc {
-	return parseIssues("comments", m, bugzillaParse1Comment)
+	if m == nil || m["bugs"] == nil {
+		return nil
+	}
+	bugsI := m["bugs"]
+	bugsM, ok := bugsI.(map[string]any)
+	if !ok {
+		eztools.LogPrint(reflect.TypeOf(bugsI).String() +
+			" got instead of " +
+			"map[string]any for bugs")
+		return nil
+	}
+	for _, bug1I := range bugsM {
+		bug1M, ok := bug1I.(map[string]any)
+		if !ok {
+			eztools.LogPrint(reflect.TypeOf(bug1I).String() +
+				" got instead of " +
+				"map[string]any for bug1")
+			return nil
+		}
+		return parseIssues("comments", bug1M, bugzillaParse1Comment)
+		// only 1 processed
+	}
+	return nil
 }
 
 // bugzillaMyOpen list all open issues of configured user
@@ -573,7 +724,7 @@ func bugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	const RestAPIBZStr = "rest/bug?"
 	var states string
 	for _, v := range svr.State {
-		if v.Type == "not open" {
+		if v.Type == StateTypeNotOpn {
 			if len(v.Text) > 0 {
 				states += "&status!=" + v.Text
 			}
@@ -696,7 +847,7 @@ func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 	tranJSON.FN = issueInfo[IssueinfoStrFile]
 	tranJSON.Type = eztools.FileType(issueInfo[IssueinfoStrFile])
 
-	buf, err := ioutil.ReadFile(issueInfo[IssueinfoStrFile])
+	buf, err := os.ReadFile(issueInfo[IssueinfoStrFile])
 	if err != nil {
 		return nil, eztools.ErrAccess
 	}

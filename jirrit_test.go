@@ -6,8 +6,6 @@ import (
 	"gitee.com/bon-ami/eztools/v4"
 )
 
-const debugging = 0
-
 func runFunc(fun action2Func, svr *svrs, cfg jirrit) (string, bool) {
 	authInfo, err := cfg2AuthInfo(*svr, cfg)
 	if err != nil {
@@ -102,6 +100,6 @@ func TestSave(t *testing.T) {
 		if res && len(prjOld) > 0 {
 			saveProj(&cfg.Svrs[i], prjOld)
 		}
-		break
+		//break
 	}
 }

@@ -59,6 +59,7 @@ func changeTypicalJiraNum(svr *svrs, num, base string, smart, changes bool) (str
 }
 
 // return values
+//
 //	whether input is in exact x-0 or -0 format.
 //		in case of -0, if previous project (x part) found, it is taken.
 //		otherwise, false is returned.
@@ -219,6 +220,7 @@ func jiraParseIssues(m map[string]interface{}) issueInfoSlc {
 }
 
 // jiraParse1Cmt parses
+//
 //	IssueinfoStrComments
 //	IssueinfoStrBranch=date
 //	IssueinfoStrID
@@ -699,7 +701,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	Steps := makeStates(svr, "transition reject")
+	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
@@ -737,7 +739,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
-	Steps := makeStates(svr, "transition close")
+	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
 		eztools.LogPrint("No transitions configured for this server!")
 		return nil, errCfg
@@ -1029,7 +1031,7 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	const RestAPIStr = "rest/api/latest/search?jql="
 	var states string
 	for _, v := range svr.State {
-		if v.Type == "not open" {
+		if v.Type == StateTypeNotOpn {
 			if len(v.Text) > 0 {
 				states += "&status!=" + v.Text
 			}

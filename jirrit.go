@@ -47,11 +47,11 @@ var (
 	step                 int
 	dispResultOutputFunc func(...interface{})
 	svrTypes             []string
-	errAuth              = errors.New("Auth failure")
-	errConn              = errors.New("Conn failure")
-	errCfg               = errors.New("Cfg failure")
-	errGram              = errors.New("Request failure in grammar")
-	errSrvr              = errors.New("Server error")
+	errAuth              = errors.New("auth failure")
+	errConn              = errors.New("conn failure")
+	errCfg               = errors.New("cfg failure")
+	errGram              = errors.New("request failure in grammar")
+	errSrvr              = errors.New("server error")
 )
 
 type passwords struct {
@@ -61,11 +61,12 @@ type passwords struct {
 }
 
 type fields struct {
-	Cmt       string `xml:",comment"`
-	RejectRsn string `xml:"rejectrsn"`
-	TstPre    string `xml:"testpre"`
-	TstStep   string `xml:"teststep"`
-	TstExp    string `xml:"testexp"`
+	Cmt       string   `xml:",comment"`
+	RejectRsn string   `xml:"rejectrsn"`
+	TstPre    string   `xml:"testpre"`
+	TstStep   string   `xml:"teststep"`
+	TstExp    string   `xml:"testexp"`
+	Solution  []string `xml:"solution"`
 }
 
 type states struct {
@@ -115,7 +116,7 @@ func main() {
 	)
 	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
 	var (
-		paramH, paramV, paramVV, paramVVV,
+		paramH, paramVer, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
 		paramR, paramA, paramW, paramK, paramF, paramZ,
 		paramI, paramB, paramCfg, paramLog,
@@ -123,6 +124,8 @@ func main() {
 	)
 	const cfgSvrOpt = "setsvrcfg"
 	flag.BoolVar(&paramH, "h", false, "help message")
+	flag.BoolVar(&paramVer, "ver", false, "version info")
+	flag.BoolVar(&paramVer, "version", false, "version info")
 	flag.BoolVar(&paramV, "v", false,
 		"log file output")
 	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
@@ -137,7 +140,8 @@ func main() {
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
 	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
-	flag.StringVar(&paramK, "k", "", "key or description, or build for Jenkins")
+	flag.StringVar(&paramK, "k", "", "key or description, "+
+		"or build for Jenkins, or solution for bugzilla closure")
 	flag.StringVar(&paramI, "i", "",
 		"ID of issue, change, commit or assignee, or job for Jenkins")
 	flag.StringVar(&paramB, "b", "", "branch for JIRA and Gerrit")
@@ -148,7 +152,7 @@ func main() {
 		"project for JIRA issues")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
-			"or (test step) comment for JIRA (closure)")
+			"or (test step) comment for JIRA and bugzilla (closure)")
 	flag.StringVar(&paramL, "l", "",
 		"linked issue when linking issues")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
@@ -156,8 +160,11 @@ func main() {
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
 	flag.Parse()
-	if paramH {
+	if paramVer {
 		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
+		return
+	}
+	if paramH {
 		eztools.ShowStrln("::Return values::")
 		eztools.ShowStrln("", "0", "no error")
 		eztools.ShowStrln("", extCfg, "config error")
@@ -439,14 +446,16 @@ func main() {
 	if eztools.Debugging {
 		eztools.ShowStrln("waiting for update check...")
 	}
-	if <-upch && <-upch {
-		if eztools.Debugging {
-			eztools.ShowStrln("waiting for update check to end...")
-		}
+	if <-upch {
 		if <-upch {
-			if cfg.AppUp.Interval > 0 {
-				cfg.AppUp.Previous = eztools.TranDate("")
-				saveCfg()
+			if eztools.Debugging {
+				eztools.ShowStrln("waiting for update check to end...")
+			}
+			if <-upch {
+				if cfg.AppUp.Interval > 0 {
+					cfg.AppUp.Previous = eztools.TranDate("")
+					saveCfg()
+				}
 			}
 		}
 	}
@@ -759,6 +768,7 @@ func saveCfg() bool {
 
 /*
 upch <-      | false                               | true
+
 	1st. | no check                            | to check
 	2nd. | wrong update server config          |
 	3rd. | wrong other config or check failure |
@@ -800,7 +810,6 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 	defer db.Close()
 	upch <- true
 	db.AppUpgrade(db.GetTblDef(), module, Ver, nil, upch)
-	return
 }
 
 func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
@@ -831,7 +840,9 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 	return
 }
 
-/*                   action name -> actionFunc
+/*
+	action name -> actionFunc
+
 category name -> []action2Func
 cat2Act
 */
@@ -965,6 +976,9 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 	magic string) (body interface{}, err error) {
 	resp, err := eztools.RestSendFileNHdr(method, url,
 		authInfo, fType, fName, hdrs)
+	if err != nil {
+		return
+	}
 	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
 		"", &body, []byte(magic))
 	return chkErrRest(bodyBytes, body, errInt, err)
@@ -978,25 +992,11 @@ func restSth(method, url string, authInfo eztools.AuthInfo,
 	}
 	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
 	if err != nil {
-		return nil, err
+		return
 	}
 	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
 		"", &body, []byte(magic))
 	body, err = chkErrRest(bodyBytes, body, errInt, err)
-	return body, err
-}
-
-func restSlc(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (bodySlc []interface{}, err error) {
-	body, err := restSth(method, url, authInfo, bodyReq, magic)
-	if err != nil || body == nil {
-		return
-	}
-	bodySlc, ok := body.([]interface{})
-	if !ok {
-		eztools.LogPrint("REST response type error for slice " +
-			reflect.TypeOf(body).String())
-	}
 	return
 }
 
@@ -1015,15 +1015,17 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 	return
 }
 
-/* get all values from
-sth. {
-	name: value
-	[
+/*
+get all values from
+
 	sth. {
 		name: value
+		[
+		sth. {
+			name: value
+		}
+		]
 	}
-	]
-}
 */
 func getValuesFromMaps(name string, field interface{}) string {
 	//eztools.ShowSthln(field)
@@ -1076,11 +1078,14 @@ func getValuesFromMaps(name string, field interface{}) string {
 
 /*
 loop map.
+
 	If key matches keyStr, put value into keyVal
 		in case of string or skip otherwise.
 	If key does not match mustStr, skip.
+
 Invoke fun with key and value.
 Both return values of fun and this means whether
+
 	any item ever processed successfully.
 */
 func loopStringMap(m map[string]interface{},
@@ -1198,6 +1203,14 @@ func parseIssues(issueKey string, m map[string]interface{},
 	}
 	return results
 }
+
+const (
+	StateTypeTranRej       = "transition reject"
+	StateTypeTranCls       = "transition close"
+	StateTypeNotOpn        = "not open"
+	StateTypeResolutionRes = "resolved"
+	StateTypeResolutionRej = "rejected"
+)
 
 func makeStates(svr *svrs, tp string) (ret []string) {
 	for _, v := range svr.State {
@@ -1345,9 +1358,12 @@ var issueHistoryTxt = []string{
 var issueRevsTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType}
-var issueDldCmds = []string{
-	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSummary,
-	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
+
+/*
+	 var issueDldCmds = []string{
+		IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSummary,
+		IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
+*/
 var reviewInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrVerified,
 	IssueinfoStrCodereview, IssueinfoStrDispname, IssueinfoStrApprovals}

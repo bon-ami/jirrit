@@ -229,7 +229,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 			continue
 		}
 		parSlc, ok := parInt.([]interface{})
-		if parSlc == nil {
+		if !ok || parSlc == nil {
 			eztools.Log("parameters NOT a slice")
 			continue
 		}

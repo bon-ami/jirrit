@@ -294,9 +294,7 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 
 			if len(issues) != 1 || len(dlds) != 1 {
 				eztools.LogPrint("Invalid number of revision/downloads!")
-				for _, i := range dlds {
-					issues = append(issues, i)
-				}
+				issues = append(issues, dlds...)
 			} else {
 				issues[0][IssueinfoStrMergeable] = dlds[0][IssueinfoStrMergeable]
 			}
@@ -436,7 +434,7 @@ func gerritParseFiles(body map[string]interface{}) issueInfoSlc {
 		}
 
 		for i, v := range fldSlc {
-			fldSlc[i].value, ok = func(m map[string]interface{}, str string) (string, bool) {
+			fldSlc[i].value, _ = func(m map[string]interface{}, str string) (string, bool) {
 				if m[str] == nil {
 					return "", true
 				}
@@ -557,9 +555,7 @@ func gerritParseRecursively(m map[string]interface{}, str []string, // issues is
 		if !ok {
 			continue
 		}
-		for _, i := range gerritParseRecursively(fm, str, fun) {
-			issues = append(issues, i)
-		}
+		issues = append(issues, gerritParseRecursively(fm, str, fun)...)
 	}
 	return issues
 }
@@ -806,7 +802,7 @@ func gerritActOn1WtAnyID(svr *svrs, authInfo eztools.AuthInfo,
 // gerritActOn1 POST changes/ID/action
 // param: issueInfo[ISSUEINFO_IND_ID] unique ID
 // TODO: should returned slice mean anything when input slice is nil?
-//	Currently all discarded
+// Currently all discarded
 func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, issues issueInfoSlc,
 	action string) (issueInfoSlc, error) {
@@ -915,6 +911,7 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 
 // gerritScore add unapproved scores
 // return values:
+//
 //	inf = nil if success
 //	inf = info of current revision if more than one / no revisions found?
 //	inf = rejected fields that needs to approve but failed
@@ -1056,7 +1053,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 			}
 		} else {
 			scores, rejects, err = gerritGetScores(svr, authInfo, rev[0])
-			if rejects != nil {
+			/* 			if rejects != nil {
 				for i := range rejects {
 					if _, ok := rejected[i]; !ok {
 						eztools.LogPrint(i +
@@ -1067,7 +1064,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 							eztools.ErrAccess
 					}
 				}
-			}
+			} */
 			if scores != nil {
 				if rejects != nil {
 					for _, i := range scores {

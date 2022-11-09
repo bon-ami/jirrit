@@ -2,7 +2,7 @@ module gitlab.com/bon-ami/jirrit
 
 go 1.18
 
-require gitee.com/bon-ami/eztools/v4 v4.9.0
+require gitee.com/bon-ami/eztools/v4 v4.10.0
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
