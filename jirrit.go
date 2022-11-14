@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -40,8 +41,20 @@ const (
 	intGerritMerge = 15
 )
 
+type sliceFlag []string
+
+func (f *sliceFlag) String() string {
+	return fmt.Sprintf("%v", []string(*f))
+}
+
+func (f *sliceFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
+}
+
 var (
 	Ver, Bld, cfgFile    string
+	paramS               sliceFlag
 	cfg                  jirrit
 	uiSilent             bool
 	step                 int
@@ -115,6 +128,7 @@ func main() {
 		extSrvr
 	)
 	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
+
 	var (
 		paramH, paramVer, paramV, paramVV, paramVVV,
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
@@ -141,7 +155,7 @@ func main() {
 	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
 	flag.StringVar(&paramK, "k", "", "key or description, "+
-		"or build for Jenkins, or solution for bugzilla closure")
+		"or build for Jenkins")
 	flag.StringVar(&paramI, "i", "",
 		"ID of issue, change, commit or assignee, or job for Jenkins")
 	flag.StringVar(&paramB, "b", "", "branch for JIRA and Gerrit")
@@ -149,16 +163,23 @@ func main() {
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
 	flag.StringVar(&paramP, "p", "",
-		"project for JIRA issues")
+		"project for JIRA issues, or state to trasit to for bugzilla")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
 			"or (test step) comment for JIRA and bugzilla (closure)")
 	flag.StringVar(&paramL, "l", "",
-		"linked issue when linking issues")
+		"linked issue when linking issues, "+
+			"or resolution of transition in bugzilla")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
 	flag.StringVar(&paramZ, "z", "", "number limit to show Jenkins builds")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
 	flag.StringVar(&paramLog, "log", "", "log file")
+	flag.Var(&paramS, "s", "solution for bugzilla closure. "+
+		"If solution field defined in config, one string overrides all, "+
+		"while multiple strings are appended to each field definition, "+
+		"such as \"-s 'guten morgen; bonne soirée'\" is similar to "+
+		"\"-s morgen -s tag\" if \"guten\" & \"bonne\" "+
+		"defined in config as in example.xml.")
 	flag.Parse()
 	if paramVer {
 		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
@@ -351,6 +372,7 @@ func main() {
 			{paramF, IssueinfoStrFile},
 			{paramZ, IssueinfoStrSize},
 			{paramC, IssueinfoStrComments}}
+		// paramS to be handled when needed
 		for _, i := range matrix {
 			if len(i[0]) > 0 {
 				inf[i[1]] = i[0]
@@ -407,7 +429,7 @@ func main() {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
 		for ; ; fun = nil { // reset fun among loops
-			if fun == nil {
+			if fun == nil { // reset issueInfo among loops
 				funParam, fun, issueInfo = chooseAct(svr,
 					authInfo, choices, cats[svr.Type],
 					mkIssueinfo())

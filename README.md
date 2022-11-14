@@ -22,7 +22,7 @@
  - `-k string` provide a key, a description, a build or a solution.
  - `-l string` provide a linked issue.
  - `-p string` provide a project.
- - `-s string` provide ID of a linked issue.
+ - `-s []string` provide multiple parts to be used with field configurations, or one complete solution for closure in bugzilla.
  - `-w string` provide JIRA ID to store. To be used together with "-r".
  - `-z int` provide max number of buils to show for Jenkins.
 
