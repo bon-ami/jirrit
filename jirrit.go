@@ -803,7 +803,7 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 	if len(cfg.AppUp.Previous) > 0 {
 		diff, ok := eztools.DiffDate(cfg.AppUp.Previous,
 			eztools.TranDate(""))
-		if ok && diff <= cfg.AppUp.Interval {
+		if ok == nil && diff <= cfg.AppUp.Interval {
 			upch <- false
 			return
 		}
@@ -1010,7 +1010,7 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
 	if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
-		eztools.LogPrint(bodyReq)
+		eztools.LogPrint("resting", bodyReq)
 	}
 	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
 	if err != nil {
