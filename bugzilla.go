@@ -80,7 +80,7 @@ func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log(issueInfo[IssueinfoStrID] + " in transition")
+		Log(false, false, issueInfo[IssueinfoStrID]+" in transition")
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -177,7 +177,7 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 		return
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log(id + " in transition")
+		Log(false, false, id+" in transition")
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -218,7 +218,7 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 			}
 		}
 		if tranNames == nil || len(tranNames) < 1 {
-			eztools.LogPrint("NO available transitions")
+			Log(true, false, "NO available transitions")
 			return eztools.ErrNoValidResults
 		}
 		tranID, tranCmtReq, err := bugzillaChooseTran(tran,
@@ -228,7 +228,7 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 				// return error if the last step fails,
 				// since it is a key one
 				if err == eztools.ErrNoValidResults {
-					eztools.LogPrint("No available transitions. Check permission!")
+					Log(true, false, "No available transitions. Check permission!")
 				}
 				return err
 			}
@@ -274,7 +274,7 @@ func bugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
-		eztools.LogPrint("No transitions configured for this server!")
+		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
 	reso := bugzillaChooseState(svr, issueInfo, StateTypeResolutionRej)
@@ -387,7 +387,7 @@ func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
-		eztools.LogPrint("No transitions configured for this server!")
+		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
 	reso := bugzillaChooseState(svr, issueInfo, StateTypeResolutionRes)
@@ -450,7 +450,7 @@ func bugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrOutOfBound
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log(issueInfo[IssueinfoStrID] + " in transition")
+		Log(false, false, issueInfo[IssueinfoStrID]+" in transition")
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -485,7 +485,7 @@ func bugzillaAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrOutOfBound
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log("commenting", issueInfo[IssueinfoStrID])
+		Log(false, false, "commenting", issueInfo[IssueinfoStrID])
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -566,16 +566,16 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 		loopStringMap(fld1Map, "values", nil, func(key string, val any) bool {
 			valSlc, ok := val.([]any)
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(val).String() +
-					" got instead of " +
+				Log(true, false, reflect.TypeOf(val).String()+
+					" got instead of "+
 					"[]interface{}")
 				return false
 			}
 			for _, val1Any := range valSlc {
 				val1Map, ok := val1Any.(map[string]any)
 				if !ok {
-					eztools.LogPrint(reflect.TypeOf(val1Any).String() +
-						" got instead of " +
+					Log(true, false, reflect.TypeOf(val1Any).String()+
+						" got instead of "+
 						"map[string]interface{}")
 					continue
 				}
@@ -585,8 +585,8 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 				}
 				nmStr, ok := nmAny.(string)
 				if !ok {
-					eztools.LogPrint(reflect.TypeOf(nmAny).String() +
-						" got instead of " +
+					Log(true, false, reflect.TypeOf(nmAny).String()+
+						" got instead of "+
 						"string")
 					continue
 				}
@@ -613,8 +613,8 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 					}
 					nm1Str, ok := nm1Any.(string)
 					if !ok {
-						eztools.LogPrint(reflect.TypeOf(nm1Any).String() +
-							" got instead of " +
+						Log(true, false, reflect.TypeOf(nm1Any).String()+
+							" got instead of "+
 							"string")
 						continue
 					}
@@ -625,8 +625,8 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 					if ok {
 						cmt1Bool, ok = cmt1Any.(bool)
 						if !ok {
-							eztools.LogPrint(reflect.TypeOf(cmt1Any).String() +
-								" got instead of " +
+							Log(true, false, reflect.TypeOf(cmt1Any).String()+
+								" got instead of "+
 								"bool")
 						}
 					}
@@ -637,7 +637,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 		})
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {
-		eztools.LogPrint("can change to", retStates,
+		Log(true, false, "can change to", retStates,
 			"comment required", retCmts)
 	}
 	return stt, retStates, retCmts, nil
@@ -749,16 +749,16 @@ func bugzillaParseComments(m map[string]interface{}) issueInfoSlc {
 	bugsI := m["bugs"]
 	bugsM, ok := bugsI.(map[string]any)
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(bugsI).String() +
-			" got instead of " +
+		Log(true, false, reflect.TypeOf(bugsI).String()+
+			" got instead of "+
 			"map[string]any for bugs")
 		return nil
 	}
 	for _, bug1I := range bugsM {
 		bug1M, ok := bug1I.(map[string]any)
 		if !ok {
-			eztools.LogPrint(reflect.TypeOf(bug1I).String() +
-				" got instead of " +
+			Log(true, false, reflect.TypeOf(bug1I).String()+
+				" got instead of "+
 				"map[string]any for bug1")
 			return nil
 		}
@@ -831,7 +831,7 @@ func bugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrOutOfBound
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log("watching", issueInfo[IssueinfoStrID])
+		Log(false, false, "watching", issueInfo[IssueinfoStrID])
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -862,7 +862,7 @@ func bugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrOutOfBound
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log("unwatching", issueInfo[IssueinfoStrID])
+		Log(false, false, "unwatching", issueInfo[IssueinfoStrID])
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -908,7 +908,7 @@ func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrOutOfBound
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log("attaching to", issueInfo[IssueinfoStrID])
+		Log(false, false, "attaching to", issueInfo[IssueinfoStrID])
 		/*if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}*/
@@ -939,12 +939,12 @@ func bugzillaListFile(svr *svrs, authInfo eztools.AuthInfo,
 func bugzillaParseAttachments(bodyMap map[string]interface{}, tp string, dataNeeded bool) (issues issueInfoSlc) {
 	bodyInt := bodyMap[tp]
 	if bodyInt == nil {
-		eztools.LogPrint("NO bugs to parse")
+		Log(true, false, "NO bugs to parse")
 		return
 	}
 	bugAny, ok := bodyInt.(map[string]any)
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(bodyInt).String() +
+		Log(true, false, reflect.TypeOf(bodyInt).String()+
 			" got instead of map[string]any")
 		return
 	}
@@ -960,27 +960,27 @@ func bugzillaParseAttachments(bodyMap map[string]interface{}, tp string, dataNee
 			}
 			keyF, ok := file1Map[IssueinfoStrID].(float64)
 			if !ok {
-				eztools.LogPrint("skipping id for an attachment",
+				Log(true, false, "skipping id for an attachment",
 					reflect.TypeOf(file1Map[IssueinfoStrID]).String())
 				continue
 			}
 			key := strconv.Itoa(int(keyF))
 			sizeF, ok := file1Map[IssueinfoStrSize].(float64)
 			if !ok {
-				eztools.LogPrint("skipping size for an attachment",
+				Log(true, false, "skipping size for an attachment",
 					reflect.TypeOf(file1Map[IssueinfoStrSize]).String())
 				continue
 			}
 			size := eztools.TranSize(int64(sizeF), 0, false)
 			file, ok := file1Map[IssueinfoStrFileNm].(string)
 			if !ok {
-				eztools.LogPrint("skipping file for an attachment",
+				Log(true, false, "skipping file for an attachment",
 					reflect.TypeOf(file1Map[IssueinfoStrFileNm]).String())
 				continue
 			}
 			desc, ok := file1Map[IssueinfoStrSummary].(string)
 			if !ok {
-				eztools.LogPrint("skipping desc for an attachment",
+				Log(true, false, "skipping desc for an attachment",
 					reflect.TypeOf(file1Map[IssueinfoStrSummary]).String())
 				continue
 			}
@@ -1037,7 +1037,7 @@ func bugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
 	if err == nil || !os.IsNotExist(err) {
 		if !fi.IsDir() {
-			eztools.LogPrint(issueInfo[IssueinfoStrFile] + " in EXISTENCE and will NOT be overwritten!")
+			Log(true, false, issueInfo[IssueinfoStrFile]+" in EXISTENCE and will NOT be overwritten!")
 			return nil, err
 		}
 		isDir = true
@@ -1070,16 +1070,16 @@ func bugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
 		bufO := make([]byte, len(bufI))
 		ln, err := base64.StdEncoding.Decode(bufO, bufI)
 		if err != nil {
-			eztools.LogPrint("failed to parse for", f1[IssueinfoStrFile])
+			Log(true, false, "failed to parse for", f1[IssueinfoStrFile])
 			continue
 		}
 		err = eztools.FileWrite(f1[IssueinfoStrFile], bufO[:ln])
 		if err != nil {
-			eztools.LogPrint("failed to save", f1[IssueinfoStrFile])
+			Log(true, false, "failed to save", f1[IssueinfoStrFile])
 			continue
 		}
 		if eztools.Debugging && eztools.Verbose > 0 {
-			eztools.Log(f1[IssueinfoStrFile], "saved")
+			Log(false, false, f1[IssueinfoStrFile], "saved")
 		}
 		delete(f1, IssueinfoStrVal)
 		ret = append(ret, f1)

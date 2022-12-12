@@ -10,12 +10,12 @@ import (
 // jenkinsParseBlds get "name" & "url" from "jobs" or sth.
 func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 	if i == nil {
-		eztools.Log("NO builds got")
+		Log(false, false, "NO builds got")
 		return nil, nil
 	}
 	a, ok := i.([]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(i).String() +
+		Log(true, false, reflect.TypeOf(i).String()+
 			" got instead of slice!")
 		return nil, nil
 	}
@@ -23,29 +23,29 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 	for _, e := range a {
 		m, ok := e.(map[string]interface{})
 		if !ok {
-			eztools.Log(reflect.TypeOf(e).String() +
+			Log(false, false, reflect.TypeOf(e).String()+
 				" got instead of map string to interface!")
 			continue
 		}
 		ni := m[IssueinfoStrNmb]
 		if ni == nil {
-			eztools.Log("NO " + IssueinfoStrNmb + " found")
+			Log(false, false, "NO "+IssueinfoStrNmb+" found")
 			continue
 		}
 		ns, ok := ni.(float64)
 		if !ok {
-			eztools.Log(reflect.TypeOf(ni).String() +
+			Log(false, false, reflect.TypeOf(ni).String()+
 				" got instead of string!")
 			continue
 		}
 		ui := m[IssueinfoStrUrl]
 		if ui == nil {
-			eztools.Log("NO " + IssueinfoStrUrl + " found")
+			Log(false, false, "NO "+IssueinfoStrUrl+" found")
 			continue
 		}
 		us, ok := ui.(string)
 		if !ok {
-			eztools.Log(reflect.TypeOf(ui).String() +
+			Log(false, false, reflect.TypeOf(ui).String()+
 				" got instead of string!")
 			continue
 		}
@@ -136,12 +136,12 @@ func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 // jenkinsParseJobs get "name" & "url" from "jobs" or sth.
 func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 	if i == nil {
-		eztools.Log("NO jobs got")
+		Log(false, false, "NO jobs got")
 		return nil, nil
 	}
 	a, ok := i.([]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(i).String() +
+		Log(true, false, reflect.TypeOf(i).String()+
 			" got instead of slice!")
 		return nil, nil
 	}
@@ -149,29 +149,29 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 	for _, e := range a {
 		m, ok := e.(map[string]interface{})
 		if !ok {
-			eztools.Log(reflect.TypeOf(e).String() +
+			Log(false, false, reflect.TypeOf(e).String()+
 				" got instead of map string to interface!")
 			continue
 		}
 		ni := m[IssueinfoStrName]
 		if ni == nil {
-			eztools.Log("NO " + IssueinfoStrName + " found")
+			Log(false, false, "NO "+IssueinfoStrName+" found")
 			continue
 		}
 		ns, ok := ni.(string)
 		if !ok {
-			eztools.Log(reflect.TypeOf(ni).String() +
+			Log(false, false, reflect.TypeOf(ni).String()+
 				" got instead of string!")
 			continue
 		}
 		ui := m[IssueinfoStrUrl]
 		if ui == nil {
-			eztools.Log("NO " + IssueinfoStrUrl + " found")
+			Log(false, false, "NO "+IssueinfoStrUrl+" found")
 			continue
 		}
 		us, ok := ui.(string)
 		if !ok {
-			eztools.Log(reflect.TypeOf(ui).String() +
+			Log(false, false, reflect.TypeOf(ui).String()+
 				" got instead of string!")
 			continue
 		}
@@ -197,12 +197,12 @@ func jenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 	actInt := bodyMap["actions"]
 	if actInt == nil {
-		eztools.Log("NO actions found")
+		Log(false, false, "NO actions found")
 		return nil, eztools.ErrNoValidResults
 	}
 	actSlc, ok := actInt.([]interface{})
 	if !ok {
-		eztools.Log("actions NOT a slice!")
+		Log(false, false, "actions NOT a slice!")
 		return nil, eztools.ErrNoValidResults
 	}
 	issueInfo := make(issueInfos)
@@ -217,7 +217,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 		}
 		clsStr, ok := clsInt.(string)
 		if !ok {
-			eztools.Log("class NOT a string!")
+			Log(false, false, "class NOT a string!")
 			continue
 		}
 		if clsStr != "hudson.model.ParametersAction" {
@@ -225,12 +225,12 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 		}
 		parInt := act1Map["parameters"]
 		if parInt == nil {
-			eztools.Log("parameters NOT found")
+			Log(false, false, "parameters NOT found")
 			continue
 		}
 		parSlc, ok := parInt.([]interface{})
 		if !ok || parSlc == nil {
-			eztools.Log("parameters NOT a slice")
+			Log(false, false, "parameters NOT a slice")
 			continue
 		}
 		for _, par1Int := range parSlc {
@@ -245,7 +245,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 			}
 			clsStr, ok := clsInt.(string)
 			if !ok {
-				eztools.Log("class NOT a string!")
+				Log(false, false, "class NOT a string!")
 				continue
 			}
 			if clsStr != "hudson.model.StringParameterValue" {
@@ -258,7 +258,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 			}
 			nmStr, ok := clsInt.(string)
 			if !ok {
-				eztools.Log("name NOT a string!")
+				Log(false, false, "name NOT a string!")
 				continue
 			}
 			if nmStr == "" {
@@ -271,7 +271,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 			}
 			vlStr, ok := clsInt.(string)
 			if !ok {
-				eztools.Log("value NOT a string!")
+				Log(false, false, "value NOT a string!")
 				continue
 			}
 			if vlStr != "" {
@@ -322,7 +322,7 @@ func jenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	bodyBytes, ok := body.([]byte)
 	if !ok {
-		eztools.Log(reflect.TypeOf(body).String() +
+		Log(false, false, reflect.TypeOf(body).String()+
 			" got instead of slice of bytes!")
 		return nil, eztools.ErrOutOfBound
 	}

@@ -53,18 +53,17 @@ func (f *sliceFlag) Set(value string) error {
 }
 
 var (
-	Ver, Bld, cfgFile    string
-	paramS               sliceFlag
-	cfg                  jirrit
-	uiSilent             bool
-	step                 int
-	dispResultOutputFunc func(...interface{})
-	svrTypes             []string
-	errAuth              = errors.New("auth failure")
-	errConn              = errors.New("conn failure")
-	errCfg               = errors.New("cfg failure")
-	errGram              = errors.New("request failure in grammar")
-	errSrvr              = errors.New("server error")
+	Ver, Bld, cfgFile string
+	paramS            sliceFlag
+	cfg               jirrit
+	uiSilent          bool
+	step              int
+	svrTypes          []string
+	errAuth           = errors.New("auth failure")
+	errConn           = errors.New("conn failure")
+	errCfg            = errors.New("cfg failure")
+	errGram           = errors.New("request failure in grammar")
+	errSrvr           = errors.New("server error")
 )
 
 type passwords struct {
@@ -114,6 +113,32 @@ type jirrit struct {
 	User string    `xml:"user"`
 	Pass passwords `xml:"pass"`
 	Svrs []svrs    `xml:"server"`
+}
+
+func Log(onscreen, wttime bool, inf ...any) {
+	if len(cfg.Log) < 1 {
+		switch onscreen {
+		case true:
+			eztools.ShowStrln(inf)
+		}
+		return
+	}
+	switch onscreen {
+	case true:
+		switch wttime {
+		case true:
+			eztools.LogPrintWtTime(inf)
+		case false:
+			eztools.LogPrint(inf)
+		}
+	case false:
+		switch wttime {
+		case true:
+			eztools.LogWtTime(inf)
+		case false:
+			eztools.Log(inf)
+		}
+	}
 }
 
 func main() {
@@ -224,7 +249,7 @@ func main() {
 	var err error
 	cfgFile, err = eztools.XMLReadDefault(paramCfg, module, &cfg)
 	if err != nil {
-		eztools.LogPrint("failed to open config file", err)
+		Log(true, false, "failed to open config file", err)
 		if len(paramCfg) > 0 {
 			cfgFile = paramCfg
 		} else {
@@ -257,19 +282,19 @@ func main() {
 			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err == nil {
 			if err = eztools.InitLogger(logger); err != nil {
-				eztools.LogPrint(err)
+				Log(true, false, err)
 			}
 		} else {
-			eztools.LogPrint("Failed to open log file " + cfg.Log)
+			Log(true, false, "Failed to open log file "+cfg.Log)
 		}
 	}
 
 	if paramGetSvrCfg {
-		eztools.LogPrint("user:" + cfg.User)
+		Log(true, false, "user:"+cfg.User)
 		for _, svr := range cfg.Svrs {
-			eztools.LogPrint("type:" + svr.Type + ", name:" +
-				svr.Name + ", url:" + svr.URL +
-				", ip:" + svr.IP)
+			Log(true, false, "type:"+svr.Type+", name:"+
+				svr.Name+", url:"+svr.URL+
+				", ip:"+svr.IP)
 		}
 		return
 	}
@@ -301,8 +326,8 @@ func main() {
 		case 0:
 			for _, svr := range cfg.Svrs {
 				if len(svr.Watch) > 0 {
-					eztools.LogPrint("type:" + svr.Type + ", name:" +
-						svr.Name + ", watch:" + svr.Watch)
+					Log(true, false, "type:"+svr.Type+", name:"+
+						svr.Name+", watch:"+svr.Watch)
 				}
 			}
 		default:
@@ -338,11 +363,6 @@ func main() {
 		fun     actionFunc
 		choices []string
 	)
-	//if eztools.Debugging && eztools.Verbose > 0 {
-	dispResultOutputFunc = eztools.LogPrint
-	//} else {
-	//op = eztools.ShowStrln
-	//}
 	switch len(cfg.Svrs) {
 	case 0:
 		eztools.LogFatal("NO server configured!")
@@ -357,7 +377,7 @@ func main() {
 			}
 		}
 		if svr == nil {
-			eztools.LogPrint("Unknown server " + paramR)
+			Log(true, false, "Unknown server "+paramR)
 		}
 	}
 	mkIssueinfo := func() issueInfos {
@@ -394,16 +414,16 @@ func main() {
 				}
 			}
 			if fun == nil {
-				eztools.LogPrint("\"" + paramA +
+				Log(true, false, "\""+paramA+
 					"\" NOT recognized as a command")
 			}
 		}
 		svrParam = svr.Name
 	}
 	eztools.AUTH_INSECURE_TLS = true
-	eztools.Log("runtime params: server=" +
-		svrParam + ", action=" + funParam + ", info array:")
-	eztools.Log(issueInfo)
+	Log(false, false, "runtime params: server="+
+		svrParam+", action="+funParam+", info array:")
+	Log(false, false, issueInfo)
 	if paramReverse {
 		step = -1
 	} else {
@@ -420,7 +440,7 @@ func main() {
 		var authInfo eztools.AuthInfo
 		authInfo, err = cfg2AuthInfo(*svr, cfg)
 		if err != nil {
-			eztools.Log(err)
+			Log(false, false, err)
 			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
@@ -440,20 +460,20 @@ func main() {
 			}
 			_, err = loopIssues(svr, issueInfo,
 				func(inf issueInfos) (issueInfos, error) {
-					eztools.LogWtTime(svr.Name, funParam, inf)
+					Log(false, true, svr.Name, funParam, inf)
 					issues, err := fun(svr, authInfo, inf)
 					if err != nil {
 						if err == eztools.ErrNoValidResults {
 							if uiSilent {
-								eztools.Log("NO valid results!")
+								Log(false, false, "NO valid results!")
 							} else {
-								eztools.LogPrint("NO valid results!")
+								Log(true, false, "NO valid results!")
 							}
 						} else {
-							eztools.Log(err)
+							Log(false, false, err)
 						}
 					} else {
-						issues.Print(dispResultOutputFunc)
+						issues.Print()
 					}
 					return inf, err
 				})
@@ -484,7 +504,7 @@ func main() {
 	}
 	if err != nil {
 		if eztools.Debugging {
-			eztools.LogPrint("exit with \"" + err.Error() + "\"")
+			Log(true, false, "exit with \""+err.Error()+"\"")
 		}
 		switch err {
 		case eztools.ErrInvalidInput:
@@ -506,9 +526,9 @@ func main() {
 	}
 }
 
-func (issues issueInfoSlc) Print(fun func(...interface{})) {
+func (issues issueInfoSlc) Print() {
 	if issues == nil {
-		fun("No results.")
+		Log(true, false, "No results.")
 	} else {
 		var i int
 		if step < 1 {
@@ -520,18 +540,18 @@ func (issues issueInfoSlc) Print(fun func(...interface{})) {
 			if len(issues[i]) < 1 {
 				continue
 			}
-			fun("Issue/Reviewer/Comment/File " +
+			Log(true, false, "Issue/Reviewer/Comment/File "+
 				strconv.Itoa(i+1))
 			for i1, v1 := range issues[i] {
-				fun(i1 + "=" + v1)
+				Log(true, false, i1+"="+v1)
 			}
 		}
 	}
 }
 
 func failSvrCfg(cfgSvrOpt string) {
-	eztools.LogPrint("NO servers defined. Run with param -" +
-		cfgSvrOpt + " to add some!")
+	Log(true, false, "NO servers defined. Run with param -"+
+		cfgSvrOpt+" to add some!")
 }
 
 func chooseSvrByType(svr []svrs, tp string) *svrs {
@@ -562,7 +582,7 @@ func matchSvr(svr []svrs, name string) *svrs {
 }
 
 func noInteractionAllowed() {
-	eztools.LogPrint("NO interaction allowed in silent mode to provide information!")
+	Log(true, false, "NO interaction allowed in silent mode to provide information!")
 }
 
 func chkUsr(user string, save bool) string {
@@ -780,7 +800,7 @@ func saveProj(svr *svrs, proj string) bool {
 
 func saveCfg() bool {
 	if err := eztools.XMLWriteNoCreate(cfgFile, cfg, "\t"); err != nil {
-		eztools.LogPrint(err)
+		Log(true, false, err)
 		return false
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {
@@ -825,7 +845,7 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
 				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
 			}
-			eztools.LogPrint(err)
+			Log(true, false, err)
 			upch <- false
 			return
 		}
@@ -937,9 +957,9 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 	}
 	switch len(choices) {
 	case 0:
-		eztools.LogPrint("NO available actions found for a server")
+		Log(true, false, "NO available actions found for a server")
 	case 1:
-		eztools.Log("only action for a server: " + choices[0])
+		Log(false, false, "only action for a server: "+choices[0])
 	default:
 		eztools.ShowStrln(" Choose an action")
 		fi, _ = eztools.ChooseStrings(choices)
@@ -984,11 +1004,11 @@ func chkErrRest(bodyBytes []byte, body interface{},
 		}
 	}
 	if err != nil {
-		eztools.LogPrint("REST error", err)
-		eztools.LogPrint("REST body=", string(bodyBytes))
+		Log(true, false, "REST error", err)
+		Log(true, false, "REST body=", string(bodyBytes))
 	} else {
 		if eztools.Debugging && eztools.Verbose > 2 {
-			eztools.LogPrint("REST body=", string(bodyBytes))
+			Log(true, false, "REST body=", string(bodyBytes))
 		}
 	}
 	return body, err
@@ -1011,7 +1031,7 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
 	if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
-		eztools.LogPrint("resting", bodyReq)
+		Log(true, false, "resting", bodyReq)
 	}
 	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
 	if err != nil {
@@ -1032,7 +1052,7 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 	}
 	bodyMap, ok := body.(map[string]interface{})
 	if !ok {
-		eztools.LogPrint("REST response type error for map " +
+		Log(true, false, "REST response type error for map "+
 			reflect.TypeOf(body).String())
 	}
 	return
@@ -1054,7 +1074,7 @@ func getValuesFromMaps(name string, field interface{}) string {
 	//eztools.ShowSthln(field)
 	fieldMap, ok := field.(map[string]interface{})
 	if !ok {
-		eztools.Log(reflect.TypeOf(field).String() +
+		Log(false, false, reflect.TypeOf(field).String()+
 			" got instead of map[string]interface{}")
 		return ""
 	}
@@ -1066,7 +1086,7 @@ func getValuesFromMaps(name string, field interface{}) string {
 			if i == name {
 				child, ok := v.(string)
 				if !ok {
-					eztools.Log(reflect.TypeOf(v).String() +
+					Log(false, false, reflect.TypeOf(v).String()+
 						" got instead of string")
 					continue
 				}
@@ -1130,8 +1150,8 @@ func loopStringMap(m map[string]interface{},
 					matched = true
 					id, ok := v.(string)
 					if !ok {
-						eztools.LogPrint(
-							reflect.TypeOf(v).String() +
+						Log(true, false,
+							reflect.TypeOf(v).String()+
 								" got instead of string")
 						break
 					}
@@ -1161,14 +1181,14 @@ func loopStringMap(m map[string]interface{},
 
 func chkNSetIssueInfo(v interface{}) string {
 	if v == nil {
-		eztools.Log("nil got, not string")
+		Log(false, false, "nil got, not string")
 		return ""
 	}
 	str, ok := v.(string)
 	if !ok {
 		flt, ok := v.(float64)
 		if !ok {
-			eztools.LogPrint(reflect.TypeOf(v).String() +
+			Log(true, false, reflect.TypeOf(v).String()+
 				" got instead of string or float64")
 			return ""
 		}
@@ -1181,7 +1201,7 @@ func chkNLoopStringMap(m interface{},
 	mustStr string, keyStr []string) []string {
 	sub, ok := m.(map[string]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(m).String() +
+		Log(true, false, reflect.TypeOf(m).String()+
 			" got instead of map[string]interface{}")
 		return nil
 	}
@@ -1200,17 +1220,17 @@ func parseIssues(issueKey string, m map[string]interface{},
 			//eztools.ShowStrln("func " + i)
 			issues, ok := v.([]interface{})
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(v).String() +
-					" got instead of " +
-					"[]interface{} for " + i)
+				Log(true, false, reflect.TypeOf(v).String()+
+					" got instead of "+
+					"[]interface{} for "+i)
 				return false
 			}
 			for _, v := range issues {
 				//eztools.ShowStrln("Ticket")
 				issue, ok := v.(map[string]interface{})
 				if !ok {
-					eztools.LogPrint(reflect.TypeOf(v).String() +
-						" got instead of " +
+					Log(true, false, reflect.TypeOf(v).String()+
+						" got instead of "+
 						"map[string]interface{}")
 					continue
 				}
@@ -1411,10 +1431,10 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	issueInfos, error)) (issueInfoOut issueInfoSlc, err error) {
 	printID := func() {
 		if err == nil {
-			eztools.Log("Done with " + issueInfo[IssueinfoStrID])
+			Log(false, false, "Done with "+issueInfo[IssueinfoStrID])
 		}
 	}
-	//eztools.Log(strings.Count(issueInfo[IssueinfoStrID], separator))
+	//Log(false, false,strings.Count(issueInfo[IssueinfoStrID], separator))
 	switch strings.Count(issueInfo[IssueinfoStrID], issueSeparator) {
 	case 0: // single ID
 		if prefix, lowerBoundStr, _, ok := parseTypicalJiraNum(svr,
@@ -1426,12 +1446,12 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		return issueInfoSlc{issueInfo}, err
 	case 2: // x,,y or x,y,z
 		parts := strings.Split(issueInfo[IssueinfoStrID], issueSeparator)
-		//eztools.Log(parts)
+		//Log(false, false,parts)
 		if len(parts) != 2 || len(parts[0]) < 1 || len(parts[2]) < 1 {
 			if len(parts) != 3 {
-				eztools.LogPrint("range format needs both parts aside with two \"" +
-					issueSeparator + "\"" + " or multiple parts, deliminated by \"" +
-					issueSeparator + "\"")
+				Log(true, false, "range format needs both parts aside with two \""+
+					issueSeparator+"\""+" or multiple parts, deliminated by \""+
+					issueSeparator+"\"")
 				return nil, eztools.ErrInvalidInput
 			}
 		}
@@ -1444,22 +1464,22 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 			if err != nil {
 				var ok bool
 				if prefix, lowerBoundStr, _, ok = parseTypicalJiraNum(svr, parts[0]); !ok {
-					eztools.LogPrint("the former part must be in the form of X-0 or 0")
+					Log(true, false, "the former part must be in the form of X-0 or 0")
 					return
 				}
 				lowerBound, err = strconv.Atoi(lowerBoundStr)
 				if err != nil {
-					eztools.LogPrint(lowerBoundStr + " is NOT a number!")
+					Log(true, false, lowerBoundStr+" is NOT a number!")
 					return
 				}
 			}
 			upperBound, err = strconv.Atoi(parts[2])
 			if err != nil {
-				eztools.LogPrint("the latter part must be a number")
+				Log(true, false, "the latter part must be a number")
 				return
 			}
 			if lowerBound >= upperBound {
-				eztools.LogPrint("the number in the latter part must be greater than the one in the former part")
+				Log(true, false, "the number in the latter part must be greater than the one in the former part")
 				return
 			}
 			for i := lowerBound; i <= upperBound; i++ {
@@ -1749,7 +1769,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "log file name to save as")
 		}
 	default:
-		eztools.LogPrint("Server type unknown: " + svr.Type)
+		Log(true, false, "Server type unknown: "+svr.Type)
 		return true
 	}
 	//eztools.ShowSthln(inf)

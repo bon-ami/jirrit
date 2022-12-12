@@ -143,8 +143,8 @@ func jiraParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 			//eztools.ShowStrln("1issue "+i, v)
 			fields, ok := v.(map[string]interface{})
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(v).String() +
-					" got instead of " +
+				Log(true, false, reflect.TypeOf(v).String()+
+					" got instead of "+
 					"map[string]interface{}")
 				return false
 			}
@@ -162,25 +162,25 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 		func(i string, v interface{}) bool {
 			arrI, ok := v.([]interface{})
 			if !ok {
-				eztools.LogPrint(
-					reflect.TypeOf(v).String() +
+				Log(true, false,
+					reflect.TypeOf(v).String()+
 						" got instead of []interface{}")
 				return false
 			}
 			for _, arr1 := range arrI {
 				tran1, ok := arr1.(map[string]interface{})
 				if !ok {
-					eztools.LogPrint(
+					Log(true, false,
 						reflect.TypeOf(arr1).
-							String() +
-							" got instead of " +
+							String()+
+							" got instead of "+
 							"map[string]interface{}")
 					continue
 				}
 				/*to, ok := tran1["to"].(map[string]interface{})
 				if !ok { // to contains description, id, name and statusCategory=id+key+name
 					// TODO: dynamically calculate path to resolved status
-					eztools.LogPrint(
+					Log(true, false,
 						reflect.TypeOf(tran1["to"]).
 							String() +
 							" got instead of string")
@@ -188,17 +188,17 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 				}*/
 				tranN, ok := tran1["name"].(string)
 				if !ok {
-					eztools.LogPrint(
+					Log(true, false,
 						reflect.TypeOf(tran1["name"]).
-							String() +
+							String()+
 							" got instead of string")
 					return false
 				}
 				tranI, ok := tran1["id"].(string)
 				if !ok {
-					eztools.LogPrint(
+					Log(true, false,
 						reflect.TypeOf(tran1["id"]).
-							String() +
+							String()+
 							" got instead of string")
 					return false
 				}
@@ -256,23 +256,23 @@ func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
 		func(i string, v interface{}) bool {
 			cmts, ok := v.([]interface{})
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(v).String() +
-					" got instead of " +
+				Log(true, false, reflect.TypeOf(v).String()+
+					" got instead of "+
 					"[]interface{}")
 				return false
 			}
 			for _, s := range cmts {
 				cmt, ok := s.(map[string]interface{})
 				if !ok {
-					eztools.LogPrint(reflect.TypeOf(s).String() +
-						" got instead of " +
+					Log(true, false, reflect.TypeOf(s).String()+
+						" got instead of "+
 						"map[string]interface{}")
 					continue
 				}
 				issue1, err := jiraParse1Cmt(cmt)
 				if err != nil {
 					// not parsed error only
-					eztools.Log("No detail of comment found")
+					Log(false, false, "No detail of comment found")
 					continue
 				}
 				issues = append(issues, issue1)
@@ -336,7 +336,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log(issueInfo[IssueinfoStrID] + " in transition")
+		Log(false, false, issueInfo[IssueinfoStrID]+" in transition")
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -356,26 +356,26 @@ type mustFlds struct {
 func jiraParseAllowedVal(vals interface{}) (musts []mustFlds) {
 	valsSlc, ok := vals.([]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(vals).String() +
+		Log(true, false, reflect.TypeOf(vals).String()+
 			" got instead of slice")
 		return
 	}
 	for _, val1 := range valsSlc {
 		val1Map, ok := val1.(map[string]interface{})
 		if !ok {
-			eztools.LogPrint(reflect.TypeOf(val1).String() +
+			Log(true, false, reflect.TypeOf(val1).String()+
 				" got instead of map of string to interface")
 			continue
 		}
 		for _, i := range [...]string{"id", "value"} {
 			val1Any := val1Map[i]
 			if val1Any == nil {
-				eztools.LogPrint("NO " + i + " found")
+				Log(true, false, "NO "+i+" found")
 				break
 			}
 			val1Str, ok := val1Any.(string)
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(val1Any).String() +
+				Log(true, false, reflect.TypeOf(val1Any).String()+
 					" got instead of string")
 				break
 			}
@@ -398,30 +398,30 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 			//eztools.ShowStrln("1issue " + i)
 			arrI, ok := v.([]interface{})
 			if !ok {
-				eztools.LogPrint(
-					reflect.TypeOf(v).String() +
+				Log(true, false,
+					reflect.TypeOf(v).String()+
 						" got instead of []interface{}")
 				return false
 			}
 			for _, arr1 := range arrI {
 				arr1Map, ok := arr1.(map[string]interface{})
 				if !ok {
-					eztools.LogPrint(
+					Log(true, false,
 						reflect.TypeOf(arr1).
-							String() +
-							" got instead of " +
+							String()+
+							" got instead of "+
 							"map[string]interface{}")
 					continue
 				}
 				fields := arr1Map["fields"]
 				if fields == nil {
-					eztools.Log("NO fields got in reply of expanded fields!")
+					Log(false, false, "NO fields got in reply of expanded fields!")
 					return false
 				}
 				fieldMap, ok := fields.(map[string]interface{})
 				if !ok {
-					eztools.LogPrint(reflect.TypeOf(fieldMap).String() +
-						" got instead of " +
+					Log(true, false, reflect.TypeOf(fieldMap).String()+
+						" got instead of "+
 						"map[string]interface{}")
 					return false
 				}
@@ -430,8 +430,8 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 					//eztools.ShowStrln(fldName)
 					fldValMap, ok := fldVal.(map[string]interface{})
 					if !ok {
-						eztools.LogPrint(reflect.TypeOf(fldVal).String() +
-							" got instead of " +
+						Log(true, false, reflect.TypeOf(fldVal).String()+
+							" got instead of "+
 							"map[string]interface{}")
 						continue
 					}
@@ -441,8 +441,8 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 					}
 					fldReqBl, ok := fldReq.(bool)
 					if !ok {
-						eztools.LogPrint(reflect.TypeOf(fldReq).String() +
-							" got instead of " + "bool")
+						Log(true, false, reflect.TypeOf(fldReq).String()+
+							" got instead of "+"bool")
 						continue
 					}
 					if !fldReqBl {
@@ -455,8 +455,8 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 						case "name":
 							fld1ValStr, ok := fld1Val.(string)
 							if !ok {
-								eztools.LogPrint(reflect.TypeOf(fld1Val).String() +
-									" got instead of " + "string for " + fld1Name)
+								Log(true, false, reflect.TypeOf(fld1Val).String()+
+									" got instead of "+"string for "+fld1Name)
 								continue FLD_MAP_IN_TRAN_MUST_FLDS
 							}
 							mustFld1.name = fld1ValStr
@@ -538,7 +538,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 		return
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log(id + " in transition")
+		Log(false, false, id+" in transition")
 		if eztools.Verbose > 1 {
 			eztools.ShowByteln(jsonStr)
 		}
@@ -583,7 +583,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		if tranNames == nil || tranIDs == nil ||
 			len(tranNames) < 1 || len(tranIDs) < 1 {
-			eztools.LogPrint("NO available transitions")
+			Log(true, false, "NO available transitions")
 			return eztools.ErrNoValidResults
 		}
 		tranID, err := jiraChooseTran(tran, tranNames, tranIDs)
@@ -592,7 +592,7 @@ func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 				// return error if the last step fails,
 				// since it is a key one
 				if err == eztools.ErrNoValidResults {
-					eztools.LogPrint("No available transitions. Check permission!")
+					Log(true, false, "No available transitions. Check permission!")
 				}
 				return err
 			}
@@ -625,7 +625,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, jsonInner string) error {
 	jsonStr := jiraConstructFields(jsonInner)
 	if eztools.Debugging && eztools.Verbose > 0 {
-		eztools.Log("Processing " + issueInfo[IssueinfoStrID])
+		Log(false, false, "Processing "+issueInfo[IssueinfoStrID])
 	}
 	//eztools.ShowStrln(jsonStr)
 	_, err := restSth(eztools.METHOD_PUT,
@@ -670,12 +670,12 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 			field, err := jiraEditMeta(svr, authInfo, issueInfo[IssueinfoStrID],
 				svr.Flds.RejectRsn)
 			if err != nil {
-				eztools.Log(err)
+				Log(false, false, err)
 			} else {
 				issueInfo[IssueinfoStrDesc] = getValuesFromMaps("value", field)
 			}
 			if len(issueInfo[IssueinfoStrDesc]) < 1 {
-				eztools.Log("NO choices found for " + svr.Flds.RejectRsn)
+				Log(false, false, "NO choices found for "+svr.Flds.RejectRsn)
 				useInputOrPromptStr(svr, issueInfo,
 					IssueinfoStrDesc, "reject reason")
 			}
@@ -686,7 +686,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 				jsonStr = custFld(jsonStr, i, v)
 			}
 			if len(jsonStr) < 1 {
-				eztools.LogPrint("NO RejectRsn field " +
+				Log(true, false, "NO RejectRsn field "+
 					"defined for this server")
 				issueInfo[IssueinfoStrDesc] = ""
 			} else {
@@ -703,7 +703,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
-		eztools.LogPrint("No transitions configured for this server!")
+		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
 	var jsonStr string
@@ -714,7 +714,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 			if len(issueInfo[IssueinfoStrComments]) > 0 {
 				_, err := jiraAddComment1(svr, authInfo, issueInfo)
 				if err != nil {
-					eztools.LogPrint(err)
+					Log(true, false, err)
 				}
 			}
 			/* senarios
@@ -741,7 +741,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
-		eztools.LogPrint("No transitions configured for this server!")
+		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
 	if !uiSilent {
@@ -759,7 +759,7 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		jsonStr = custFld(jsonStr, i, v)
 	}
 	if len(jsonStr) < 1 {
-		eztools.LogPrint("NO Tst* fields defined for this server")
+		Log(true, false, "NO Tst* fields defined for this server")
 	}
 	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
 		func(svr *svrs, authInfo eztools.AuthInfo,
@@ -1061,8 +1061,8 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 		func(_ string, watchersI interface{}) bool {
 			watchersS, ok := watchersI.([]interface{})
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(watchersS).String() +
-					" got instead of " +
+				Log(true, false, reflect.TypeOf(watchersS).String()+
+					" got instead of "+
 					"[]interface{}")
 				return false
 			}
@@ -1095,8 +1095,8 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	watchingI := bodyMap["isWatching"]
 	watching, ok := watchingI.(bool)
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(watchingI).String() +
-			" got instead of " +
+		Log(true, false, reflect.TypeOf(watchingI).String()+
+			" got instead of "+
 			"bool")
 		return nil, err
 	}
@@ -1133,29 +1133,29 @@ func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) {
 	bodyInt := bodyMap["fields"]
 	if bodyInt == nil {
-		eztools.LogPrint("NO fields to parse")
+		Log(true, false, "NO fields to parse")
 		return
 	}
 	bodyFlds, ok := bodyInt.(map[string]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(bodyInt).String() +
+		Log(true, false, reflect.TypeOf(bodyInt).String()+
 			" got instead of map of string to interface{}")
 		return
 	}
 	if bodyFlds["attachment"] == nil {
-		eztools.Log("NO attachment to parse")
+		Log(false, false, "NO attachment to parse")
 		return
 	}
 	bodySlc, ok := bodyFlds["attachment"].([]interface{})
 	if !ok {
-		eztools.LogPrint(reflect.TypeOf(bodyFlds["attachment"]).String() +
+		Log(true, false, reflect.TypeOf(bodyFlds["attachment"]).String()+
 			" got instead of slice of interface{}")
 		return
 	}
 	for _, slc1 := range bodySlc {
 		map1, ok := slc1.(map[string]interface{})
 		if !ok {
-			eztools.LogPrint(reflect.TypeOf(slc1).String() +
+			Log(true, false, reflect.TypeOf(slc1).String()+
 				" got instead of map of string to interface{}")
 			continue
 		}
@@ -1165,7 +1165,7 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 		if map1[IssueinfoStrSize] != nil {
 			szI, ok := map1[IssueinfoStrSize].(float64)
 			if !ok {
-				eztools.LogPrint(reflect.TypeOf(map1[IssueinfoStrSize]).String() +
+				Log(true, false, reflect.TypeOf(map1[IssueinfoStrSize]).String()+
 					" got instead of float64")
 			} else {
 				sz = eztools.TranSize(int64(szI), 1, false)
@@ -1246,7 +1246,7 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
 	if err == nil || !os.IsNotExist(err) {
 		if !fi.IsDir() {
-			eztools.LogPrint(issueInfo[IssueinfoStrFile] + " in EXISTENCE and will NOT be overwritten!")
+			Log(true, false, issueInfo[IssueinfoStrFile]+" in EXISTENCE and will NOT be overwritten!")
 			return nil, err
 		}
 		isDir = true
@@ -1273,7 +1273,7 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 		if recognized != eztools.BODY_TYPE_FILE {
 			eztools.FileWrite(issueInfo[IssueinfoStrFile], bodyBytes)
 			if eztools.Debugging && eztools.Verbose > 0 {
-				eztools.Log("body type", bodyType, "forced to be saved as file!")
+				Log(false, false, "body type", bodyType, "forced to be saved as file!")
 			}
 		}
 	}
