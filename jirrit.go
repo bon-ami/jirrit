@@ -119,7 +119,7 @@ func Log(onscreen, wttime bool, inf ...any) {
 	if len(cfg.Log) < 1 {
 		switch onscreen {
 		case true:
-			eztools.ShowStrln(inf)
+			eztools.ShowStrln(inf...)
 		}
 		return
 	}
@@ -127,16 +127,16 @@ func Log(onscreen, wttime bool, inf ...any) {
 	case true:
 		switch wttime {
 		case true:
-			eztools.LogPrintWtTime(inf)
+			eztools.LogPrintWtTime(inf...)
 		case false:
-			eztools.LogPrint(inf)
+			eztools.LogPrint(inf...)
 		}
 	case false:
 		switch wttime {
 		case true:
-			eztools.LogWtTime(inf)
+			eztools.LogWtTime(inf...)
 		case false:
-			eztools.Log(inf)
+			eztools.Log(inf...)
 		}
 	}
 }
