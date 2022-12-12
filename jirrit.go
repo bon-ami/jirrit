@@ -400,6 +400,7 @@ func main() {
 		}
 		svrParam = svr.Name
 	}
+	eztools.AUTH_INSECURE_TLS = true
 	eztools.Log("runtime params: server=" +
 		svrParam + ", action=" + funParam + ", info array:")
 	eztools.Log(issueInfo)
