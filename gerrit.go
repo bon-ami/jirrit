@@ -972,7 +972,7 @@ func gerritChooseMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 		var choices []string
 		for _, v := range inf {
 			choices = append(choices,
-				v[IssueinfoStrSummary]+" <-> "+
+				v[IssueinfoStrSubject]+" <-> "+
 					v[IssueinfoStrBranch]+
 					" ("+v[IssueinfoStrID]+")")
 		}

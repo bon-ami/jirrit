@@ -1284,8 +1284,10 @@ const (
 	IssueinfoStrRealName = "real_name"
 	// IssueinfoStrName name string
 	IssueinfoStrName = "name"
-	// IssueinfoStrSummar summary string
+	// IssueinfoStrSummary summary string
 	IssueinfoStrSummary = "summary"
+	// IssueinfoStrSubject subject string
+	IssueinfoStrSubject = "subject"
 	// IssueinfoStrSolution solution string
 	IssueinfoStrSolution = "cf_analysis_solution"
 	// IssueinfoStrDesc description string
@@ -1391,10 +1393,10 @@ func (inf issueInfoSlc) ToMapSlc() (res []map[string]string) {
 }*/
 
 var issueInfoTxt = []string{
-	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrSummary,
+	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrSubject,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState}
 var issueDetailsTxt = []string{
-	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSummary,
+	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSubject,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
 var issueHistoryTxt = []string{
 	IssueinfoStrID, IssueinfoStrDate, IssueinfoStrMsg}
@@ -1629,7 +1631,7 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 				for _, v := range slc {
 					//eztools.ShowStrln(v)
 					choices = append(choices,
-						v[IssueinfoStrID]+":"+v[IssueinfoStrSummary])
+						v[IssueinfoStrID]+":"+v[IssueinfoStrSummary]+v[IssueinfoStrSubject])
 				}
 			}
 		}
