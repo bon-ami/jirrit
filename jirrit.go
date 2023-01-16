@@ -543,7 +543,8 @@ func (issues issueInfoSlc) Print() {
 			Log(true, false, "Issue/Reviewer/Comment/File "+
 				strconv.Itoa(i+1))
 			for i1, v1 := range issues[i] {
-				Log(true, false, i1+"="+v1)
+				Log(true, false, "\t", i1+"="+
+					strings.ReplaceAll(v1, "\n", "\n\t\t"))
 			}
 		}
 	}
