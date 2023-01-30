@@ -15,8 +15,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 	}
 	a, ok := i.([]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(i).String()+
-			" got instead of slice!")
+		LogTypeErr(i, "slice")
 		return nil, nil
 	}
 	var issues issueInfoSlc
@@ -38,9 +37,9 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 				" got instead of string!")
 			continue
 		}
-		ui := m[IssueinfoStrUrl]
+		ui := m[IssueinfoStrURL]
 		if ui == nil {
-			Log(false, false, "NO "+IssueinfoStrUrl+" found")
+			Log(false, false, "NO "+IssueinfoStrURL+" found")
 			continue
 		}
 		us, ok := ui.(string)
@@ -51,7 +50,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 		}
 		issues = append(issues, issueInfos{
 			IssueinfoStrKey: strconv.FormatFloat(ns, 'f', 0, 64),
-			IssueinfoStrUrl: us,
+			IssueinfoStrURL: us,
 		})
 	}
 	return issues, nil
@@ -141,8 +140,7 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 	}
 	a, ok := i.([]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(i).String()+
-			" got instead of slice!")
+		LogTypeErr(i, "slice")
 		return nil, nil
 	}
 	var issues issueInfoSlc
@@ -164,9 +162,9 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 				" got instead of string!")
 			continue
 		}
-		ui := m[IssueinfoStrUrl]
+		ui := m[IssueinfoStrURL]
 		if ui == nil {
-			Log(false, false, "NO "+IssueinfoStrUrl+" found")
+			Log(false, false, "NO "+IssueinfoStrURL+" found")
 			continue
 		}
 		us, ok := ui.(string)
@@ -177,7 +175,7 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 		}
 		issues = append(issues, issueInfos{
 			IssueinfoStrName: ns,
-			IssueinfoStrUrl:  us,
+			IssueinfoStrURL:  us,
 		})
 	}
 	return issues, nil

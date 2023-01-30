@@ -35,7 +35,7 @@ const (
 	PassPlain = "plain"
 	// PassDigest HTTP password in xml
 	PassDigest = "digest"
-	// password token for headers in xml
+	// PassToken for headers in xml
 	PassToken = "token"
 	// intGerritMerge is interval between each status check to merge a submit, in seconds
 	intGerritMerge = 15
@@ -53,17 +53,22 @@ func (f *sliceFlag) Set(value string) error {
 }
 
 var (
-	Ver, Bld, cfgFile string
-	paramS            sliceFlag
-	cfg               jirrit
-	uiSilent          bool
-	step              int
-	svrTypes          []string
-	errAuth           = errors.New("auth failure")
-	errConn           = errors.New("conn failure")
-	errCfg            = errors.New("cfg failure")
-	errGram           = errors.New("request failure in grammar")
-	errSrvr           = errors.New("server error")
+	// Ver version
+	Ver string
+	// Bld build
+	Bld       string
+	stdOutput bool
+	cfgFile   string
+	paramS    sliceFlag
+	cfg       jirrit
+	uiSilent  bool
+	step      int
+	svrTypes  []string
+	errAuth   = errors.New("auth failure")
+	errConn   = errors.New("conn failure")
+	errCfg    = errors.New("cfg failure")
+	errGram   = errors.New("request failure in grammar")
+	errSrvr   = errors.New("server error")
 )
 
 type passwords struct {
@@ -115,6 +120,14 @@ type jirrit struct {
 	Svrs []svrs    `xml:"server"`
 }
 
+// LogTypeErr logs failure in type conversion
+func LogTypeErr(v any, exp string) {
+	Log(stdOutput, false,
+		reflect.TypeOf(v).String(),
+		"found instead of", exp)
+}
+
+// Log wrapped logging and command output
 func Log(onscreen, wttime bool, inf ...any) {
 	if len(cfg.Log) < 1 {
 		switch onscreen {
@@ -244,6 +257,9 @@ func main() {
 		eztools.Verbose = 2
 	case paramVVV:
 		eztools.Verbose = 3
+	}
+	if eztools.Debugging && eztools.Verbose > 1 {
+		stdOutput = true
 	}
 	cats := makeCat2Act()
 	var err error
@@ -1006,10 +1022,10 @@ func chkErrRest(bodyBytes []byte, body interface{},
 	}
 	if err != nil {
 		Log(true, false, "REST error", err)
-		Log(true, false, "REST body=", string(bodyBytes))
+		Log(stdOutput, false, "REST body=", string(bodyBytes))
 	} else {
 		if eztools.Debugging && eztools.Verbose > 2 {
-			Log(true, false, "REST body=", string(bodyBytes))
+			Log(stdOutput, false, "REST body=", string(bodyBytes))
 		}
 	}
 	return body, err
@@ -1031,9 +1047,9 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 // return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
-	if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
+	/*if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
 		Log(true, false, "resting", bodyReq)
-	}
+	}*/
 	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
 	if err != nil {
 		return
@@ -1053,8 +1069,7 @@ func restMap(method, url string, authInfo eztools.AuthInfo,
 	}
 	bodyMap, ok := body.(map[string]interface{})
 	if !ok {
-		Log(true, false, "REST response type error for map "+
-			reflect.TypeOf(body).String())
+		LogTypeErr(body, "REST response type error for map")
 	}
 	return
 }
@@ -1151,9 +1166,7 @@ func loopStringMap(m map[string]interface{},
 					matched = true
 					id, ok := v.(string)
 					if !ok {
-						Log(true, false,
-							reflect.TypeOf(v).String()+
-								" got instead of string")
+						LogTypeErr(v, "string")
 						break
 					}
 					ret = true
@@ -1189,8 +1202,7 @@ func chkNSetIssueInfo(v interface{}) string {
 	if !ok {
 		flt, ok := v.(float64)
 		if !ok {
-			Log(true, false, reflect.TypeOf(v).String()+
-				" got instead of string or float64")
+			LogTypeErr(v, "string or float64")
 			return ""
 		}
 		str = strconv.FormatFloat(flt, 'f', -1, 64)
@@ -1202,8 +1214,7 @@ func chkNLoopStringMap(m interface{},
 	mustStr string, keyStr []string) []string {
 	sub, ok := m.(map[string]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(m).String()+
-			" got instead of map[string]interface{}")
+		LogTypeErr(m, "map[string]interface{}")
 		return nil
 	}
 	res, _ := loopStringMap(sub, mustStr, keyStr, nil)
@@ -1221,18 +1232,14 @@ func parseIssues(issueKey string, m map[string]interface{},
 			//eztools.ShowStrln("func " + i)
 			issues, ok := v.([]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(v).String()+
-					" got instead of "+
-					"[]interface{} for "+i)
+				LogTypeErr(v, "[]interface{} for "+i)
 				return false
 			}
 			for _, v := range issues {
 				//eztools.ShowStrln("Ticket")
 				issue, ok := v.(map[string]interface{})
 				if !ok {
-					Log(true, false, reflect.TypeOf(v).String()+
-						" got instead of "+
-						"map[string]interface{}")
+					LogTypeErr(v, "map[string]interface{}")
 					continue
 				}
 				if issueInfo := fun(issue); issueInfo != nil {
@@ -1249,10 +1256,15 @@ func parseIssues(issueKey string, m map[string]interface{},
 }
 
 const (
-	StateTypeTranRej       = "transition reject"
-	StateTypeTranCls       = "transition close"
-	StateTypeNotOpn        = "not open"
+	// StateTypeTranRej key in cfg
+	StateTypeTranRej = "transition reject"
+	// StateTypeTranCls StateType key in cfg
+	StateTypeTranCls = "transition close"
+	// StateTypeNotOpn key in cfg
+	StateTypeNotOpn = "not open"
+	// StateTypeResolutionRes key in cfg
 	StateTypeResolutionRes = "resolved"
+	// StateTypeResolutionRej key in cfg
 	StateTypeResolutionRej = "rejected"
 )
 
@@ -1270,7 +1282,9 @@ func makeStates(svr *svrs, tp string) (ret []string) {
 const (
 	// IssueinfoStrVal value string for common usages
 	IssueinfoStrVal = "value"
+
 	//common use
+
 	// IssueinfoStrID ID string
 	IssueinfoStrID = "id"
 	// IssueinfoStrSubmittable submittable string
@@ -1307,7 +1321,9 @@ const (
 	IssueinfoStrBranch = "branch"
 	// IssueinfoStrDispname display name string
 	IssueinfoStrDispname = "displayName"
+
 	// for code-review, verified and manual-testing
+
 	// IssueinfoStrSubmitType submit type string
 	IssueinfoStrSubmitType = "submit_type"
 	// IssueinfoStrApprovals approvals string
@@ -1328,7 +1344,7 @@ const (
 	IssueinfoStrComments = "comments"
 	// IssueinfoStrBin binary string for file list, gerrit
 	IssueinfoStrBin = "binary"
-	// IssueinfoStrBin old path/renamed from string for file list, gerrit
+	// IssueinfoStrOldPath old path/renamed from string for file list, gerrit
 	IssueinfoStrOldPath = "old_path"
 	// IssueinfoStrCherry cherry pick string of download for gerrit
 	IssueinfoStrCherry = "Cherry Pick"
@@ -1344,8 +1360,8 @@ const (
 	IssueinfoStrMatch = "match"
 	// IssueinfoStrJob job string for Jenkins
 	IssueinfoStrJob = "jobs"
-	// IssueinfoStrUrl url string for Jenkins
-	IssueinfoStrUrl = "url"
+	// IssueinfoStrURL url string for Jenkins
+	IssueinfoStrURL = "url"
 	// IssueinfoStrBld builds string for Jenkins
 	IssueinfoStrBld = "builds"
 	// IssueinfoStrNmb number string for Jenkins
@@ -1360,16 +1376,27 @@ const (
 	IssueinfoStrFileNm = "file_name"
 	// IssueinfoStrData data string for bugzilla
 	IssueinfoStrData = "data"
+	// IssueinfoStrChg changes string for bugzilla
+	IssueinfoStrChg = "changes"
+	// IssueinfoStrRmvd removed string for changes in bugzilla
+	IssueinfoStrRmvd = "removed"
+	// IssueinfoStrAdded added string for changes in bugzilla
+	IssueinfoStrAdded = "added"
 )
 
 type issueInfos map[string]string
 type issueInfoSlc []issueInfos
 
+func makeIssueInfo() (inf issueInfos) {
+	return make(issueInfos)
+}
+
 func (inf issueInfos) ToSlc() issueInfoSlc {
 	return issueInfoSlc{inf}
 }
-func (inf issueInfoSlc) ToMapSlc() (res []map[string]string) {
-	for _, i := range inf {
+
+func (issues issueInfoSlc) ToMapSlc() (res []map[string]string) {
+	for _, i := range issues {
 		res = append(res, i)
 	}
 	return
@@ -1496,10 +1523,8 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 				printID()
 			}
 			return
-		} else {
-			// x,y,z instead of range
-			break
 		}
+		// x,y,z instead of range
 	}
 	// x,y[,...]
 	parts := strings.Split(issueInfo[IssueinfoStrID], issueSeparator)

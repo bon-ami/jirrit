@@ -6,15 +6,15 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"gitee.com/bon-ami/eztools/v4"
+	"golang.org/x/exp/maps"
 )
 
-const RestAPIBZStr = "rest/bug/"
+const urlAPI4BZ = "rest/bug/"
 
 // parseTypicalBZNum not used yet
 //
@@ -86,7 +86,7 @@ func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?",
 			"", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -137,56 +137,63 @@ func bugzillaChooseTran(tranName string,
 				}
 			}
 			return tranID, false, eztools.ErrNoValidResults
-		} else {
-			if uiSilent {
-				noInteractionAllowed()
-				return "", false, eztools.ErrInvalidInput
-			}
-			eztools.ShowStrln(
-				"There are following transitions available.")
-			i, _ := eztools.ChooseStrings(tranNames)
-			if i == eztools.InvalidID {
-				return "", false, eztools.ErrInvalidInput
-			}
-			tranID = tranNames[i]
-			tranCmtReq = tranCmts[i]
 		}
+		if uiSilent {
+			noInteractionAllowed()
+			return "", false, eztools.ErrInvalidInput
+		}
+		eztools.ShowStrln(
+			"There are following transitions available.")
+		i, _ := eztools.ChooseStrings(tranNames)
+		if i == eztools.InvalidID {
+			return "", false, eztools.ErrInvalidInput
+		}
+		tranID = tranNames[i]
+		tranCmtReq = tranCmts[i]
 	}
 	return tranID, tranCmtReq, nil
 }
 
 // bugzillaTranExec transition issue {id} to state {tranID}
 func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
-	id, cmt, tranID string, cmtReq bool, body any) (err error) {
+	id, cmt, tranID string, cmtReq bool, body any) (issueInfoSlc, error) {
+	issueInfo1 := makeIssueInfo()
+	issueInfo1[IssueinfoStrID] = id
 	if body == nil {
 		if cmtReq {
-			var cmt string
 			if len(cmt) < 1 {
 				cmt = eztools.PromptStr(IssueinfoStrComments)
 				if len(cmt) < 1 {
-					return eztools.ErrInvalidInput
+					return issueInfo1.ToSlc(),
+						eztools.ErrInvalidInput
 				}
 			}
-			body = map[string]string{"status": tranID, "comment": cmt}
+			issueInfo1[IssueinfoStrComments] = cmt
+			cmtBody := map[string]string{"body": cmt}
+			/*jsonStr, err := json.Marshal(cmtBody)
+			if err != nil {
+				return issueInfo, err
+			}*/
+			body = map[string]any{"status": tranID, "comment": cmtBody}
 		} else {
 			body = map[string]string{"status": tranID}
 		}
 	}
 	jsonStr, err := json.Marshal(body)
 	if err != nil {
-		return
+		return issueInfo1.ToSlc(), err
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		Log(false, false, id+" in transition")
+		Log(false, false, id, "in transition to", tranID, "w/t comment", cmt)
 		if eztools.Verbose > 1 {
-			eztools.ShowByteln(jsonStr)
+			eztools.ShowStrln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+	bodyMap, err := restMap(eztools.METHOD_PUT,
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			id+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
-	return
+	return bugzillaParseIssues(bodyMap), err
 }
 
 // bugzillaFuncNTran is transitions for reject & close
@@ -236,11 +243,11 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		tranNames = nil
 		if funcBody == nil {
-			err = bugzillaTranExec(svr, authInfo,
+			_, err = bugzillaTranExec(svr, authInfo,
 				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
 				tranID, tranCmtReq, nil)
 		} else {
-			err = bugzillaTranExec(svr, authInfo,
+			_, err = bugzillaTranExec(svr, authInfo,
 				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
 				tranID, tranCmtReq, funcBody(tranID, tranCmtReq))
 		}
@@ -303,9 +310,8 @@ func inputMultiple(cfg, ans []string) (ret string) {
 	case 0:
 		if len(ans) > 0 { // use ans if cfg is < 2
 			return strings.Join(ans, "")
-		} else { // no config or ans
-			return eztools.PromptStr("what to input")
 		}
+		return eztools.PromptStr("what to input")
 	}
 	ansLen := len(ans)
 	var ansI int
@@ -417,7 +423,7 @@ func bugzillaTransition(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	return nil, bugzillaTranExec(svr, authInfo,
+	return bugzillaTranExec(svr, authInfo,
 		issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
 		tranID, cmtReq, nil)
 }
@@ -456,7 +462,7 @@ func bugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	return nil, err
@@ -491,7 +497,7 @@ func bugzillaAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_POST,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/comment?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	return nil, err
@@ -504,7 +510,7 @@ func bugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/comment?",
 			"", authInfo), authInfo, nil, svr.Magic)
 	if err != nil {
@@ -535,7 +541,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	const RestAPIBZStr = "rest/field/bug/"
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+RestAPIBZStr+
 			"bug_status?", "", authInfo),
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -566,17 +572,13 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 		loopStringMap(fld1Map, "values", nil, func(key string, val any) bool {
 			valSlc, ok := val.([]any)
 			if !ok {
-				Log(true, false, reflect.TypeOf(val).String()+
-					" got instead of "+
-					"[]interface{}")
+				LogTypeErr(val, "[]interface{}")
 				return false
 			}
 			for _, val1Any := range valSlc {
 				val1Map, ok := val1Any.(map[string]any)
 				if !ok {
-					Log(true, false, reflect.TypeOf(val1Any).String()+
-						" got instead of "+
-						"map[string]interface{}")
+					LogTypeErr(val1Any, "map[string]interface{}")
 					continue
 				}
 				nmAny, ok := val1Map["name"]
@@ -585,9 +587,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 				}
 				nmStr, ok := nmAny.(string)
 				if !ok {
-					Log(true, false, reflect.TypeOf(nmAny).String()+
-						" got instead of "+
-						"string")
+					LogTypeErr(nmAny, "string")
 					continue
 				}
 				if nmStr != stt {
@@ -613,9 +613,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 					}
 					nm1Str, ok := nm1Any.(string)
 					if !ok {
-						Log(true, false, reflect.TypeOf(nm1Any).String()+
-							" got instead of "+
-							"string")
+						LogTypeErr(nm1Any, "string")
 						continue
 					}
 					retStates = append(retStates, nm1Str)
@@ -625,9 +623,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 					if ok {
 						cmt1Bool, ok = cmt1Any.(bool)
 						if !ok {
-							Log(true, false, reflect.TypeOf(cmt1Any).String()+
-								" got instead of "+
-								"bool")
+							LogTypeErr(cmt1Any, "bool")
 						}
 					}
 					retCmts = append(retCmts, cmt1Bool)
@@ -646,7 +642,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 func bugzillaDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (map[string]interface{}, error) {
 	return restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?",
 			"", authInfo), authInfo, nil, svr.Magic)
 }
@@ -664,8 +660,8 @@ func bugzillaDetail(svr *svrs, authInfo eztools.AuthInfo,
 	return bugzillaParseIssues(bodyMap), nil
 }
 
-// bugzillaUriWtToken generate URI of <addr>api_key=<pass>&<prm>
-func bugzillaUriWtToken(addr, prm string, authInfo eztools.AuthInfo) string {
+// bugzillaURIWtToken generate URI of <addr>api_key=<pass>&<prm>
+func bugzillaURIWtToken(addr, prm string, authInfo eztools.AuthInfo) string {
 	/*addrWtSlash := func() string {
 		if strings.HasSuffix(addr, "/") {
 			return addr
@@ -688,14 +684,62 @@ func bugzillaUriWtToken(addr, prm string, authInfo eztools.AuthInfo) string {
 		authInfo.Pass + sep + prm)
 }
 
+func bugzillaParse1Chg(v any) (issueInfoOut issueInfos) {
+	issueInfoOut = make(issueInfos)
+	chgStru, ok := v.(map[string]any)
+	if !ok {
+		LogTypeErr(v, "map[string]any for changes")
+		return
+	}
+	for chgI, chgV := range chgStru {
+		chgInt, ok := chgV.(map[string]any)
+		if !ok {
+			LogTypeErr(chgV,
+				"map[string]any for one change")
+			continue
+		}
+		var str string
+		// what if multiple removed/added?
+		if del, ok := chgInt[IssueinfoStrRmvd]; ok {
+			if chgStr, ok := del.(string); ok {
+				str += chgStr
+			} else {
+				LogTypeErr(del,
+					"string for"+IssueinfoStrRmvd+"of"+chgI)
+			}
+		}
+		str += " -> "
+		if added, ok := chgInt[IssueinfoStrAdded]; ok {
+			if chgStr, ok := added.(string); ok {
+				str += chgStr
+			} else {
+				LogTypeErr(added,
+					"string for"+IssueinfoStrAdded+"of"+chgI)
+			}
+		}
+		issueInfoOut[chgI] += str
+	}
+	return
+}
+
+// bugzillaParse1Issue parses reply for one issue
+// if both "changes" and same level of definition found,
+// the latter overrides the result
 func bugzillaParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 	issueInfoOut = make(issueInfos)
+	if eztools.Debugging && eztools.Verbose > 2 {
+		eztools.ShowStrln("parsing one issue")
+	}
 	for i, v := range m {
 		if v == nil {
 			continue
 		}
-		//eztools.ShowStrln(i, "-->", v)
+		if eztools.Debugging && eztools.Verbose > 2 {
+			eztools.ShowStr(i, "=", v, "\t")
+		}
 		switch i {
+		case IssueinfoStrChg:
+			maps.Copy(issueInfoOut, bugzillaParse1Chg(v))
 		case IssueinfoStrID:
 			issueInfoOut[IssueinfoStrID] = chkNSetIssueInfo(v)
 		case IssueinfoStrAssigned2:
@@ -712,6 +756,9 @@ func bugzillaParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 		case IssueinfoStrSolution:
 			issueInfoOut[IssueinfoStrDesc] = chkNSetIssueInfo(v)
 		}
+	}
+	if eztools.Debugging && eztools.Verbose > 2 {
+		eztools.ShowStrln("")
 	}
 	return
 }
@@ -749,17 +796,13 @@ func bugzillaParseComments(m map[string]interface{}) issueInfoSlc {
 	bugsI := m["bugs"]
 	bugsM, ok := bugsI.(map[string]any)
 	if !ok {
-		Log(true, false, reflect.TypeOf(bugsI).String()+
-			" got instead of "+
-			"map[string]any for bugs")
+		LogTypeErr(bugsI, "map[string]any for bugs")
 		return nil
 	}
 	for _, bug1I := range bugsM {
 		bug1M, ok := bug1I.(map[string]any)
 		if !ok {
-			Log(true, false, reflect.TypeOf(bug1I).String()+
-				" got instead of "+
-				"map[string]any for bug1")
+			LogTypeErr(bug1I, "map[string]any for bug1")
 			return nil
 		}
 		return parseIssues("comments", bug1M, bugzillaParse1Comment)
@@ -781,7 +824,7 @@ func bugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr,
+		bugzillaURIWtToken(svr.URL+RestAPIBZStr,
 			"assigned_to="+authInfo.User+states,
 			authInfo), authInfo, nil, svr.Magic)
 	if err != nil {
@@ -837,7 +880,7 @@ func bugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	return nil, err
@@ -868,7 +911,7 @@ func bugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	return nil, err
@@ -914,7 +957,7 @@ func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 		}*/
 	}
 	_, err = restMap(eztools.METHOD_POST,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/attachment?",
 			"", authInfo), authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
@@ -927,7 +970,7 @@ func bugzillaListFile(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/attachment?",
 			"", authInfo), authInfo, nil, svr.Magic)
 	if err != nil {
@@ -944,8 +987,7 @@ func bugzillaParseAttachments(bodyMap map[string]interface{}, tp string, dataNee
 	}
 	bugAny, ok := bodyInt.(map[string]any)
 	if !ok {
-		Log(true, false, reflect.TypeOf(bodyInt).String()+
-			" got instead of map[string]any")
+		LogTypeErr(bodyInt, "map[string]any")
 		return
 	}
 	for _, bug1Any := range bugAny {
@@ -960,28 +1002,26 @@ func bugzillaParseAttachments(bodyMap map[string]interface{}, tp string, dataNee
 			}
 			keyF, ok := file1Map[IssueinfoStrID].(float64)
 			if !ok {
-				Log(true, false, "skipping id for an attachment",
-					reflect.TypeOf(file1Map[IssueinfoStrID]).String())
+				LogTypeErr(file1Map[IssueinfoStrID], "skipping id for an attachment")
 				continue
 			}
 			key := strconv.Itoa(int(keyF))
 			sizeF, ok := file1Map[IssueinfoStrSize].(float64)
 			if !ok {
-				Log(true, false, "skipping size for an attachment",
-					reflect.TypeOf(file1Map[IssueinfoStrSize]).String())
+				LogTypeErr(file1Map[IssueinfoStrSize], "skipping size for an attachment")
 				continue
 			}
 			size := eztools.TranSize(int64(sizeF), 0, false)
 			file, ok := file1Map[IssueinfoStrFileNm].(string)
 			if !ok {
-				Log(true, false, "skipping file for an attachment",
-					reflect.TypeOf(file1Map[IssueinfoStrFileNm]).String())
+				LogTypeErr(file1Map[IssueinfoStrFileNm],
+					"skipping file for an attachment")
 				continue
 			}
 			desc, ok := file1Map[IssueinfoStrSummary].(string)
 			if !ok {
-				Log(true, false, "skipping desc for an attachment",
-					reflect.TypeOf(file1Map[IssueinfoStrSummary]).String())
+				LogTypeErr(file1Map[IssueinfoStrSummary],
+					"skipping desc for an attachment")
 				continue
 			}
 			inf := issueInfos{
@@ -1054,7 +1094,7 @@ func bugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo[IssueinfoStrName])
 	}
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		bugzillaUriWtToken(svr.URL+RestAPIBZStr+"attachment/"+
+		bugzillaURIWtToken(svr.URL+urlAPI4BZ+"attachment/"+
 			issueInfo[IssueinfoStrKey]+"?",
 			"", authInfo), authInfo, nil, svr.Magic)
 	if err != nil {

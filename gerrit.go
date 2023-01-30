@@ -28,8 +28,7 @@ func gerritGetIssuesOrReviews(method, url, magic string,
 		for _, v := range bodySlc {
 			m, ok := v.(map[string]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(v).String()+
-					" got instead of map string to interface!")
+				LogTypeErr(v, "map string to interface!")
 				continue
 			}
 			issues = fun(m, issues)
@@ -39,8 +38,7 @@ func gerritGetIssuesOrReviews(method, url, magic string,
 		if ok {
 			issues = fun(bodyMap, issues)
 		} else {
-			Log(true, false, reflect.TypeOf(body).String()+
-				" got instead of slice of or map string to, interface!")
+			LogTypeErr(body, "slice of or map string to, interface!")
 		}
 	}
 	return issues, err
@@ -104,13 +102,8 @@ func gerritParseIssuesOrReviews(m map[string]interface{},
 				if !eztools.Debugging {
 					continue
 				}
-				Log(true, false,
-					reflect.TypeOf(
-						m[str1]).
-						String()+
-						" got instead of "+
-						"bool for "+
-						str1+"!")
+				LogTypeErr(m[str1],
+					"bool for "+str1+"!")
 			} else {
 				switch bo {
 				case true:
@@ -196,8 +189,7 @@ func gerritGetHistory(url, magic string, authInfo eztools.AuthInfo) (
 			}
 			a, ok := i.([]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(i).String()+
-					" got instead of slice")
+				LogTypeErr(i, "slice")
 				return nil
 			}
 			var ret issueInfoSlc
@@ -281,14 +273,13 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 				func(body map[string]interface{}) issueInfoSlc {
 					retI := body[IssueinfoStrCherry]
 					if retI == nil {
-						Log(true, false, "NOTHING got intead of string!")
+						Log(stdOutput, false, "NOTHING got intead of string!")
 						return nil
 					}
 					if retS, ok := retI.(string); ok {
 						return issueInfos{IssueinfoStrMergeable: retS}.ToSlc()
 					}
-					Log(true, false, reflect.TypeOf(retI).String()+
-						" got instead of string!")
+					LogTypeErr(retI, "string")
 					return nil
 				})
 
@@ -338,8 +329,8 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 	err = eztools.ErrNoValidResults
 	bodyMap, ok := body.(map[string]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(body).String()+
-			" got instead of slice of or map string to, interface!")
+		LogTypeErr(body,
+			"slice of or map string to, interface!")
 		return
 	}
 	labels := bodyMap[IssueinfoStrLabels]
@@ -348,8 +339,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	labelMap, ok := labels.(map[string]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(labels).String()+
-			" got instead of map string to interface!")
+		LogTypeErr(labels, "map string to interface")
 		return
 	}
 	scores = make([]scores2Marshal, 0)
@@ -357,8 +347,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 	for labelName, label1 := range labelMap {
 		label, ok := label1.(map[string]interface{})
 		if !ok {
-			Log(true, false, reflect.TypeOf(label1).String()+
-				" got instead of map string to interface!")
+			LogTypeErr(label1, "map string to interface")
 			continue
 		}
 		//eztools.ShowStrln(labelName + "=")
@@ -377,9 +366,9 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 		values := label["values"]
 		valueMap, ok := values.(map[string]interface{})
 		if !ok {
-			Log(true, false, reflect.TypeOf(values).String()+
-				" got instead of map string to interface for "+
-				labelName+"!")
+			LogTypeErr(values,
+				"map string to interface for "+
+					labelName+"!")
 			return nil, nil, nil
 		}
 		high := 0
@@ -420,8 +409,7 @@ func gerritParseFiles(body map[string]interface{}) issueInfoSlc {
 		}
 		m, ok := v.(map[string]interface{})
 		if !ok {
-			Log(true, false, reflect.TypeOf(v).String()+
-				" got instead of map string to interface!")
+			LogTypeErr(v, "map string to interface")
 			continue
 		}
 		type flds struct {
@@ -444,8 +432,7 @@ func gerritParseFiles(body map[string]interface{}) issueInfoSlc {
 				}
 				fn, ok := m[str].(string)
 				if !ok {
-					Log(true, false, reflect.TypeOf(m[str]).String()+
-						" got instead of string for "+str)
+					LogTypeErr(m[str], "string for "+str)
 					return "", false
 
 				}
@@ -518,7 +505,7 @@ func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	fm, ok := f.(map[string]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(f).String() +
+		LogTypeErr(true, false, reflect.TypeOf(f).String() +
 			" got instead of map string to interface!")
 		return nil, nil
 	}
@@ -542,8 +529,8 @@ func gerritParseRecursively(m map[string]interface{}, str []string, // issues is
 		for _, v := range str {
 			fm, ok := m1[v].(map[string]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(m1[v]).String()+
-					" got instead of map string to interface for "+v)
+				LogTypeErr(m1[v],
+					"map string to interface for "+v)
 				return nil
 			}
 			m1 = fm
@@ -1117,13 +1104,13 @@ func gerritListPrj(svr *svrs, authInfo eztools.AuthInfo,
 			for _, v := range [...]string{
 				IssueinfoStrLink, IssueinfoStrMatch} {
 				if m[v] == nil {
-					Log(true, false, "NOTHING got intead of string for "+
+					Log(stdOutput, false, "NOTHING got intead of string for "+
 						v+"!")
 					continue
 				}
 				if retS, ok := m[v].(string); !ok {
-					Log(true, false, reflect.TypeOf(m[v]).String()+
-						" got instead of string for "+v+"!")
+					LogTypeErr(m[v],
+						"string for "+v+"!")
 				} else {
 					issueInfo[v] = retS
 					sth = true

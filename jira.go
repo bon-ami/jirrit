@@ -14,7 +14,7 @@ import (
 	"gitee.com/bon-ami/eztools/v4"
 )
 
-const RestAPIJRStr = "rest/api/latest/issue/"
+const urlAPI4JR = "rest/api/latest/issue/"
 
 func custFld(jsonStr, fldKey, fldVal string) string {
 	if len(fldKey) > 0 {
@@ -143,9 +143,7 @@ func jiraParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
 			//eztools.ShowStrln("1issue "+i, v)
 			fields, ok := v.(map[string]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(v).String()+
-					" got instead of "+
-					"map[string]interface{}")
+				LogTypeErr(v, "map[string]interface{}")
 				return false
 			}
 			issueInfoOut = jiraParse1Field(fields)
@@ -162,25 +160,20 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 		func(i string, v interface{}) bool {
 			arrI, ok := v.([]interface{})
 			if !ok {
-				Log(true, false,
-					reflect.TypeOf(v).String()+
-						" got instead of []interface{}")
+				LogTypeErr(v, "[]interface{}")
 				return false
 			}
 			for _, arr1 := range arrI {
 				tran1, ok := arr1.(map[string]interface{})
 				if !ok {
-					Log(true, false,
-						reflect.TypeOf(arr1).
-							String()+
-							" got instead of "+
-							"map[string]interface{}")
+					LogTypeErr(arr1,
+						"map[string]interface{}")
 					continue
 				}
 				/*to, ok := tran1["to"].(map[string]interface{})
 				if !ok { // to contains description, id, name and statusCategory=id+key+name
 					// TODO: dynamically calculate path to resolved status
-					Log(true, false,
+					LogTypeErr(stdOutput, false,
 						reflect.TypeOf(tran1["to"]).
 							String() +
 							" got instead of string")
@@ -188,18 +181,12 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 				}*/
 				tranN, ok := tran1["name"].(string)
 				if !ok {
-					Log(true, false,
-						reflect.TypeOf(tran1["name"]).
-							String()+
-							" got instead of string")
+					LogTypeErr(tran1["name"], "string")
 					return false
 				}
 				tranI, ok := tran1["id"].(string)
 				if !ok {
-					Log(true, false,
-						reflect.TypeOf(tran1["id"]).
-							String()+
-							" got instead of string")
+					LogTypeErr(tran1["id"], "string")
 					return false
 				}
 				tranNames = append(tranNames, tranN)
@@ -256,17 +243,13 @@ func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
 		func(i string, v interface{}) bool {
 			cmts, ok := v.([]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(v).String()+
-					" got instead of "+
-					"[]interface{}")
+				LogTypeErr(v, "[]interface{}")
 				return false
 			}
 			for _, s := range cmts {
 				cmt, ok := s.(map[string]interface{})
 				if !ok {
-					Log(true, false, reflect.TypeOf(s).String()+
-						" got instead of "+
-						"map[string]interface{}")
+					LogTypeErr(s, "map[string]interface{}")
 					continue
 				}
 				issue1, err := jiraParse1Cmt(cmt)
@@ -342,7 +325,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	_, err = restSth(eztools.METHOD_PUT,
-		svr.URL+RestAPIJRStr+issueInfo[IssueinfoStrID],
+		svr.URL+urlAPI4JR+issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// result/body is []uint8, if success
 	return nil, err
@@ -356,26 +339,24 @@ type mustFlds struct {
 func jiraParseAllowedVal(vals interface{}) (musts []mustFlds) {
 	valsSlc, ok := vals.([]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(vals).String()+
-			" got instead of slice")
+		LogTypeErr(vals, "slice")
 		return
 	}
 	for _, val1 := range valsSlc {
 		val1Map, ok := val1.(map[string]interface{})
 		if !ok {
-			Log(true, false, reflect.TypeOf(val1).String()+
-				" got instead of map of string to interface")
+			LogTypeErr(val1, "map of string to interface")
 			continue
 		}
 		for _, i := range [...]string{"id", "value"} {
 			val1Any := val1Map[i]
 			if val1Any == nil {
-				Log(true, false, "NO "+i+" found")
+				Log(stdOutput, false, "NO "+i+" found")
 				break
 			}
 			val1Str, ok := val1Any.(string)
 			if !ok {
-				Log(true, false, reflect.TypeOf(val1Any).String()+
+				Log(stdOutput, false, reflect.TypeOf(val1Any).String()+
 					" got instead of string")
 				break
 			}
@@ -398,30 +379,25 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 			//eztools.ShowStrln("1issue " + i)
 			arrI, ok := v.([]interface{})
 			if !ok {
-				Log(true, false,
-					reflect.TypeOf(v).String()+
-						" got instead of []interface{}")
+				LogTypeErr(v, "[]interface{}")
 				return false
 			}
 			for _, arr1 := range arrI {
 				arr1Map, ok := arr1.(map[string]interface{})
 				if !ok {
-					Log(true, false,
-						reflect.TypeOf(arr1).
-							String()+
-							" got instead of "+
-							"map[string]interface{}")
+					LogTypeErr(arr1,
+						"map[string]interface{}")
 					continue
 				}
 				fields := arr1Map["fields"]
 				if fields == nil {
-					Log(false, false, "NO fields got in reply of expanded fields!")
+					Log(false, false, "NO fields got "+
+						"in reply of expanded fields!")
 					return false
 				}
 				fieldMap, ok := fields.(map[string]interface{})
 				if !ok {
-					Log(true, false, reflect.TypeOf(fieldMap).String()+
-						" got instead of "+
+					LogTypeErr(fieldMap,
 						"map[string]interface{}")
 					return false
 				}
@@ -430,8 +406,7 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 					//eztools.ShowStrln(fldName)
 					fldValMap, ok := fldVal.(map[string]interface{})
 					if !ok {
-						Log(true, false, reflect.TypeOf(fldVal).String()+
-							" got instead of "+
+						LogTypeErr(fldVal,
 							"map[string]interface{}")
 						continue
 					}
@@ -441,8 +416,7 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 					}
 					fldReqBl, ok := fldReq.(bool)
 					if !ok {
-						Log(true, false, reflect.TypeOf(fldReq).String()+
-							" got instead of "+"bool")
+						LogTypeErr(fldReq, "bool")
 						continue
 					}
 					if !fldReqBl {
@@ -455,8 +429,8 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 						case "name":
 							fld1ValStr, ok := fld1Val.(string)
 							if !ok {
-								Log(true, false, reflect.TypeOf(fld1Val).String()+
-									" got instead of "+"string for "+fld1Name)
+								LogTypeErr(fld1Val,
+									"string for "+fld1Name)
 								continue FLD_MAP_IN_TRAN_MUST_FLDS
 							}
 							mustFld1.name = fld1ValStr
@@ -477,7 +451,7 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraGetTransExpanded(svr *svrs, authInfo eztools.AuthInfo,
 	id, exp string) (bodyMap map[string]interface{}, err error) {
-	return restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	return restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		id+"/transitions"+exp, authInfo, nil, svr.Magic)
 }
 
@@ -543,7 +517,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
+	_, err = restSth(eztools.METHOD_POST, svr.URL+urlAPI4JR+
 		id+"/transitions", authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
 	// replies to transitions contains no body
@@ -629,7 +603,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	//eztools.ShowStrln(jsonStr)
 	_, err := restSth(eztools.METHOD_PUT,
-		svr.URL+RestAPIJRStr+
+		svr.URL+urlAPI4JR+
 			issueInfo[IssueinfoStrID],
 		authInfo, strings.NewReader(jsonStr),
 		svr.Magic)
@@ -637,7 +611,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (interface{}, error) {
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		id+"/editmeta", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -877,7 +851,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	//eztools.ShowByteln(jsonStr)
-	_, err = restMap(eztools.METHOD_PUT, svr.URL+RestAPIJRStr+
+	_, err = restMap(eztools.METHOD_PUT, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// TODO: parse result
@@ -916,7 +890,7 @@ func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	_, err = restMap(eztools.METHOD_PUT,
-		svr.URL+RestAPIJRStr+issueInfo[IssueinfoStrID]+"/comment/"+
+		svr.URL+urlAPI4JR+issueInfo[IssueinfoStrID]+"/comment/"+
 			issueInfo[IssueinfoStrKey], authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
 	// TODO: parse result
@@ -930,7 +904,7 @@ func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrKey]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIJRStr+
+	_, err := restMap(eztools.METHOD_DEL, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/comment/"+issueInfo[IssueinfoStrKey],
 		authInfo, nil, svr.Magic)
 	// TODO: parse result
@@ -960,7 +934,7 @@ func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
 	if eztools.Debugging && eztools.Verbose > 0 {
 		eztools.ShowByteln(jsonStr)
 	}
-	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
+	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+urlAPI4JR+
 		id+"/"+urlSuffix,
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
@@ -990,7 +964,7 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/comment",
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -1004,7 +978,7 @@ func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID], authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1051,7 +1025,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1061,9 +1035,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 		func(_ string, watchersI interface{}) bool {
 			watchersS, ok := watchersI.([]interface{})
 			if !ok {
-				Log(true, false, reflect.TypeOf(watchersS).String()+
-					" got instead of "+
-					"[]interface{}")
+				LogTypeErr(watchersS, "[]interface{}")
 				return false
 			}
 			for _, watcherI := range watchersS {
@@ -1086,7 +1058,7 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIJRStr+
+	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1095,9 +1067,7 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	watchingI := bodyMap["isWatching"]
 	watching, ok := watchingI.(bool)
 	if !ok {
-		Log(true, false, reflect.TypeOf(watchingI).String()+
-			" got instead of "+
-			"bool")
+		LogTypeErr(watchingI, "bool")
 		return nil, err
 	}
 	res = append(res, issueInfos{
@@ -1110,7 +1080,7 @@ func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
+	_, err := restMap(eztools.METHOD_POST, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers",
 		authInfo, strings.NewReader("\""+cfg.User+"\""), svr.Magic)
 	return nil, err
@@ -1121,7 +1091,7 @@ func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+RestAPIJRStr+
+	_, err := restMap(eztools.METHOD_DEL, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers?username="+cfg.User,
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -1133,13 +1103,12 @@ func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) {
 	bodyInt := bodyMap["fields"]
 	if bodyInt == nil {
-		Log(true, false, "NO fields to parse")
+		Log(stdOutput, false, "NO fields to parse")
 		return
 	}
 	bodyFlds, ok := bodyInt.(map[string]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(bodyInt).String()+
-			" got instead of map of string to interface{}")
+		LogTypeErr(bodyInt, "map of string to interface{}")
 		return
 	}
 	if bodyFlds["attachment"] == nil {
@@ -1148,15 +1117,13 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 	}
 	bodySlc, ok := bodyFlds["attachment"].([]interface{})
 	if !ok {
-		Log(true, false, reflect.TypeOf(bodyFlds["attachment"]).String()+
-			" got instead of slice of interface{}")
+		LogTypeErr(bodyFlds["attachment"], "slice of interface{}")
 		return
 	}
 	for _, slc1 := range bodySlc {
 		map1, ok := slc1.(map[string]interface{})
 		if !ok {
-			Log(true, false, reflect.TypeOf(slc1).String()+
-				" got instead of map of string to interface{}")
+			LogTypeErr(slc1, "map of string to interface{}")
 			continue
 		}
 		inf, _ := loopStringMap(map1, "", []string{
@@ -1165,8 +1132,7 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 		if map1[IssueinfoStrSize] != nil {
 			szI, ok := map1[IssueinfoStrSize].(float64)
 			if !ok {
-				Log(true, false, reflect.TypeOf(map1[IssueinfoStrSize]).String()+
-					" got instead of float64")
+				LogTypeErr(map1[IssueinfoStrSize], "float64")
 			} else {
 				sz = eztools.TranSize(int64(szI), 1, false)
 			}
@@ -1188,7 +1154,7 @@ func jiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrFile]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restFile(eztools.METHOD_POST, svr.URL+RestAPIJRStr+
+	_, err := restFile(eztools.METHOD_POST, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/attachments",
 		authInfo, "file", issueInfo[IssueinfoStrFile],
 		map[string]string{"X-Atlassian-Token": "nocheck"}, svr.Magic)
@@ -1246,7 +1212,7 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
 	if err == nil || !os.IsNotExist(err) {
 		if !fi.IsDir() {
-			Log(true, false, issueInfo[IssueinfoStrFile]+" in EXISTENCE and will NOT be overwritten!")
+			Log(stdOutput, false, issueInfo[IssueinfoStrFile]+" in EXISTENCE and will NOT be overwritten!")
 			return nil, err
 		}
 		isDir = true
