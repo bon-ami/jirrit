@@ -184,7 +184,8 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 		return issueInfo1.ToSlc(), err
 	}
 	if eztools.Debugging && eztools.Verbose > 0 {
-		Log(false, false, id, "in transition to", tranID, "w/t comment", cmt)
+		Log(false, false, id, "in transition to",
+			tranID, "w/t comment", cmt)
 		if eztools.Verbose > 1 {
 			eztools.ShowStrln(jsonStr)
 		}
@@ -196,18 +197,10 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 	return bugzillaParseIssues(bodyMap), err
 }
 
-// bugzillaFuncNTran is transitions for reject & close
-func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
+// bugzillaTranFromAvail is transitions for reject & close
+func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
-	funcBody func(tranID string, tranCmtReq bool) any,
-	funcPre func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) error) (err error) {
-	if funcPre != nil {
-		if err = funcPre(svr, authInfo, issueInfo); err != nil {
-			return err
-		}
-
-	}
+	funcBody func(tranID string, tranCmtReq bool) any) (err error) {
 	var (
 		tranNames   []string
 		tranCmtReqs []bool
@@ -263,16 +256,6 @@ func bugzillaFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
 	return err
 }
 
-func bugzillaReqCmt(issueInfo issueInfos, must bool) string {
-	cmt := issueInfo[IssueinfoStrComments]
-	if must {
-		if len(cmt) < 1 {
-			cmt = eztools.PromptStr(IssueinfoStrComments)
-		}
-	}
-	return cmt
-}
-
 // bugzillaReject rejects an issue
 //
 //	If there are multiple steps, and comment is provided,
@@ -292,8 +275,8 @@ func bugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
 				issueInfo, reso, false, tranID, cmtReq)
 		}
 	}
-	return nil, bugzillaFuncNTran(svr, authInfo, issueInfo, Steps,
-		makeBody, nil)
+	return nil, bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps,
+		makeBody)
 }
 
 func inputMultiple(cfg, ans []string) (ret string) {
@@ -336,7 +319,8 @@ func bugzillaBody4Tran(svr *svrs, issueInfo issueInfos, reso string, solutionNee
 	tranID string, cmtReq bool) any {
 	var solu string
 	if solutionNeeded {
-		if len(paramS) > 0 {
+		//if len(paramS) > 0 {
+		if len(issueInfo[IssueinfoStrSolution]) < 1 {
 			if str := inputMultiple(svr.Flds.Solution,
 				paramS); len(str) > 0 {
 				issueInfo[IssueinfoStrSolution] = str
@@ -344,7 +328,7 @@ func bugzillaBody4Tran(svr *svrs, issueInfo issueInfos, reso string, solutionNee
 		}
 	}
 	solu = issueInfo[IssueinfoStrSolution]
-	cmt := bugzillaReqCmt(issueInfo, cmtReq)
+	cmt := issueInfo[IssueinfoStrComments]
 	if len(cmt) < 1 {
 		ret := map[string]string{
 			"status":     tranID,
@@ -404,7 +388,7 @@ func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 				issueInfo, reso, true, tranID, cmtReq)
 		}
 	}
-	return nil, bugzillaFuncNTran(svr, authInfo, issueInfo, Steps, makeBody, nil)
+	return nil, bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps, makeBody)
 }
 
 // bugzillaTransition transitions an issue to a state

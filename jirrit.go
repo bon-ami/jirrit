@@ -204,9 +204,10 @@ func main() {
 		"project for JIRA issues, or state to trasit to for bugzilla")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
-			"or (test step) comment for JIRA and bugzilla (closure)")
+			"or comment for transitions for JIRA and bugzilla")
 	flag.StringVar(&paramL, "l", "",
-		"linked issue when linking issues, "+
+		"test steps for JIRA, or, "+
+			"linked issue when linking issues, "+
 			"or resolution of transition in bugzilla")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
 	flag.StringVar(&paramZ, "z", "", "number limit to show Jenkins builds")
@@ -1690,17 +1691,39 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 	switch svr.Type {
 	case CategoryJira, CategoryBugzilla:
 		switch action {
-		case "move status of a case",
-			"show details of a case",
+		case "close a case to resolved from any known statuses":
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
+			useInputOrPrompt(svr, inf, IssueinfoStrComments)
+			switch svr.Type {
+			case CategoryJira:
+				useInputOrPromptStr(svr, inf, IssueinfoStrLink,
+					"test step for closure")
+			}
+		case "move status of a case":
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
+			strCmt := IssueinfoStrComments
+			switch svr.Type {
+			case CategoryBugzilla:
+				strCmt += " (added to all statues during transition)"
+			}
+			useInputOrPromptStr(svr, inf, IssueinfoStrComments, strCmt)
+		case "close a case with default design as steps",
+			"close a case with general requirement as steps":
+			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+				return true
+			}
+			useInputOrPrompt(svr, inf, IssueinfoStrComments)
+		case "show details of a case",
 			"list comments of a case",
 			"list files attached to a case",
 			"list watchers of a case",
 			"check whether watching a case",
 			"watch a case",
-			"unwatch a case",
-			"close a case to resolved from any known statuses",
-			"close a case with default design as steps",
-			"close a case with general requirement as steps":
+			"unwatch a case":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}

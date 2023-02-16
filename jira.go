@@ -531,16 +531,14 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-// jiraFuncNTran is transitions for reject & close
-func jiraFuncNTran(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, steps []string,
-	fun func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) error) (err error) {
-	if fun != nil {
-		if err = fun(svr, authInfo, issueInfo); err != nil {
-			return err
+// jiraCmtNTran is transitions for reject & close, adding comments
+func jiraCmtNTran(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos, steps []string) (err error) {
+	if len(issueInfo[IssueinfoStrComments]) > 0 {
+		_, err := jiraAddComment1(svr, authInfo, issueInfo)
+		if err != nil {
+			Log(true, false, err)
 		}
-
 	}
 	var tranNames, tranIDs []string
 	for i, tran := range steps {
@@ -680,35 +678,14 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
-	var jsonStr string
-	firstRun := true
-	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
-		func(svr *svrs, authInfo eztools.AuthInfo,
-			issueInfo issueInfos) error {
-			if len(issueInfo[IssueinfoStrComments]) > 0 {
-				_, err := jiraAddComment1(svr, authInfo, issueInfo)
-				if err != nil {
-					Log(true, false, err)
-				}
-			}
-			/* senarios
-			| entrance time | issueInfo | jsonStr | to process |
-			| ------------- | --------- | ------- | ---------- |
-			| 0             | ""        | ""      | choose, make jsonStr and send |
-			| 0             | sth.      | ""      | make jsonStr and send |
-			| n             | ""        | ""      | N |
-			| n             | sth.      | sth.    | send only |
-			*/
-			if firstRun {
-				jsonStr = jiraGetDesc(svr, authInfo, issueInfo)
-				firstRun = false
-			}
-			if len(jsonStr) > 0 {
-				return jiraEditWtFields(svr, authInfo, issueInfo, jsonStr)
-
-			}
-			return nil
-		})
+	if jsonStr := jiraGetDesc(svr, authInfo, issueInfo); len(jsonStr) > 0 {
+		if err := jiraEditWtFields(svr,
+			authInfo, issueInfo,
+			jsonStr); err != nil {
+			return nil, err
+		}
+	}
+	return nil, jiraCmtNTran(svr, authInfo, issueInfo, Steps)
 }
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
@@ -718,33 +695,30 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
-	if !uiSilent {
-		useInputOrPromptStr(svr, issueInfo, IssueinfoStrComments,
-			"test step for closure")
+	if len(qa) > 0 {
+		var jsonStr string
+		for i, v := range map[string]string{
+			svr.Flds.TstPre:  "none",
+			svr.Flds.TstStep: qa,
+			svr.Flds.TstExp:  "none"} {
+			jsonStr = custFld(jsonStr, i, v)
+		}
+		if len(jsonStr) < 1 {
+			Log(true, false,
+				"NO Tst* fields defined for this server")
+		} else {
+			if err := jiraEditWtFields(svr, authInfo,
+				issueInfo, jsonStr); err != nil {
+				return nil, err
+			}
+		}
 	}
-	if len(qa) < 1 {
-		return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps, nil)
-	}
-	var jsonStr string
-	for i, v := range map[string]string{
-		svr.Flds.TstPre:  "none",
-		svr.Flds.TstStep: qa,
-		svr.Flds.TstExp:  "none"} {
-		jsonStr = custFld(jsonStr, i, v)
-	}
-	if len(jsonStr) < 1 {
-		Log(true, false, "NO Tst* fields defined for this server")
-	}
-	return nil, jiraFuncNTran(svr, authInfo, issueInfo, Steps,
-		func(svr *svrs, authInfo eztools.AuthInfo,
-			issueInfo issueInfos) error {
-			return jiraEditWtFields(svr, authInfo, issueInfo, jsonStr)
-		})
+	return nil, jiraCmtNTran(svr, authInfo, issueInfo, Steps)
 }
 
 func jiraClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[IssueinfoStrComments])
+	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[IssueinfoStrLink])
 }
 
 func jiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
