@@ -200,11 +200,14 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 // bugzillaTranFromAvail is transitions for reject & close
 func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, steps []string,
-	funcBody func(tranID string, tranCmtReq bool) any) (err error) {
+	funcBody func(tranID string, tranCmtReq bool) any) (
+	issueInfoSlc, error) {
 	var (
 		tranNames   []string
 		tranCmtReqs []bool
 		stt         string
+		ret         issueInfoSlc
+		err         error
 	)
 	for i, tran := range steps {
 		if eztools.Debugging && eztools.Verbose > 1 {
@@ -214,12 +217,12 @@ func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 			stt, tranNames, tranCmtReqs, err =
 				bugzillaGetTrans(svr, authInfo, issueInfo, stt)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		if tranNames == nil || len(tranNames) < 1 {
 			Log(true, false, "NO available transitions")
-			return eztools.ErrNoValidResults
+			return nil, eztools.ErrNoValidResults
 		}
 		tranID, tranCmtReq, err := bugzillaChooseTran(tran,
 			tranNames, tranCmtReqs)
@@ -230,17 +233,17 @@ func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 				if err == eztools.ErrNoValidResults {
 					Log(true, false, "No available transitions. Check permission!")
 				}
-				return err
+				return nil, err
 			}
 			continue
 		}
 		tranNames = nil
 		if funcBody == nil {
-			_, err = bugzillaTranExec(svr, authInfo,
+			ret, err = bugzillaTranExec(svr, authInfo,
 				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
 				tranID, tranCmtReq, nil)
 		} else {
-			_, err = bugzillaTranExec(svr, authInfo,
+			ret, err = bugzillaTranExec(svr, authInfo,
 				issueInfo[IssueinfoStrID], issueInfo[IssueinfoStrComments],
 				tranID, tranCmtReq, funcBody(tranID, tranCmtReq))
 		}
@@ -249,11 +252,11 @@ func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 				jiraGetTransMustFlds(svr, authInfo,
 					issueInfo[IssueinfoStrID])
 			}*/
-			return err
+			return nil, err
 		}
 		stt = tranID
 	}
-	return err
+	return ret, err
 }
 
 // bugzillaReject rejects an issue
@@ -275,7 +278,7 @@ func bugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
 				issueInfo, reso, false, tranID, cmtReq)
 		}
 	}
-	return nil, bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps,
+	return bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps,
 		makeBody)
 }
 
@@ -388,7 +391,7 @@ func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 				issueInfo, reso, true, tranID, cmtReq)
 		}
 	}
-	return nil, bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps, makeBody)
+	return bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps, makeBody)
 }
 
 // bugzillaTransition transitions an issue to a state
