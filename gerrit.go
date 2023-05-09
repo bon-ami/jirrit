@@ -566,14 +566,13 @@ func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 	status string, issueInfo issueInfos) (issueInfoSlc, error) {
-	if len(issueInfo[IssueinfoStrID]) < 1 {
-		return nil, eztools.ErrInvalidInput
-	}
 	var urlAffix string
 	strs := [...][2]string{
 		{"status:", status},
+		{"project:", issueInfo[IssueinfoStrProj]},
 		{"branch:", issueInfo[IssueinfoStrBranch]},
-		{"owner:", issueInfo[IssueinfoStrID]}}
+		{"owner:", issueInfo[IssueinfoStrID]},
+		{"", issueInfo[IssueinfoStrVal]}}
 	for _, v := range strs {
 		if len(v[1]) > 0 {
 			if len(urlAffix) > 0 {
@@ -581,6 +580,9 @@ func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 			}
 			urlAffix += v[0] + v[1]
 		}
+	}
+	if len(urlAffix) < 1 {
+		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "changes/?q="
 	return gerritGetIssues(svr.URL+RestAPIStr+urlAffix, svr.Magic, authInfo)

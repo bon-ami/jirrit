@@ -201,14 +201,15 @@ func main() {
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
 	flag.StringVar(&paramP, "p", "",
-		"project for JIRA issues, or state to trasit to for bugzilla")
+		"project for JIRA or Gerrit, or state to trasit to for bugzilla")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
 			"or comment for transitions for JIRA and bugzilla")
 	flag.StringVar(&paramL, "l", "",
 		"test steps for JIRA, or, "+
 			"linked issue when linking issues, "+
-			"or resolution of transition in bugzilla")
+			"or resolution of transition in bugzilla, "+
+			"or more param for issue listing of Gerrit")
 	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
 	flag.StringVar(&paramZ, "z", "", "number limit to show Jenkins builds")
 	flag.StringVar(&paramCfg, "cfg", "", "config file")
@@ -1609,7 +1610,8 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	if ind == IssueinfoStrID {
 		switch svr.Type {
 		case CategoryJira:
-			if sChg, ok := changeTypicalJiraNum(svr, s, base, smart, changes); ok {
+			if sChg, ok := changeTypicalJiraNum(svr, s, base,
+				smart, changes); ok {
 				inf[ind] = sChg
 				return true
 			}
@@ -1658,7 +1660,9 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 				for _, v := range slc {
 					//eztools.ShowStrln(v)
 					choices = append(choices,
-						v[IssueinfoStrID]+":"+v[IssueinfoStrSummary]+v[IssueinfoStrSubject])
+						v[IssueinfoStrID]+":"+
+							v[IssueinfoStrSummary]+
+							v[IssueinfoStrSubject])
 				}
 			}
 		}
@@ -1737,7 +1741,8 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrKey, "file ID")
 		case "add a file to a case":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
@@ -1745,25 +1750,31 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPrompt(svr, inf, IssueinfoStrFile)
 			switch svr.Type {
 			case CategoryBugzilla:
-				useInputOrPromptStr(svr, inf, IssueinfoStrKey, "description")
+				useInputOrPromptStr(svr, inf,
+					IssueinfoStrKey, "description")
 			}
 		case "get a file to a case":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "file ID")
-			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "file to be saved as")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrKey, "file ID")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrFile, "file to be saved as")
 		case "change a comment from a case":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
-			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "comment body")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrKey, "comment ID")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrComments, "comment body")
 		case "delete a comment from a case":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "comment ID")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrKey, "comment ID")
 		case "add a comment to a case",
 			"reject a case from any known statuses":
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
@@ -1774,8 +1785,10 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrSummary, "assignee")
-			useInputOrPromptStr(svr, inf, IssueinfoStrComments, "component")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrSummary, "assignee")
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrComments, "component")
 		}
 	case CategoryGerrit:
 		switch action {
@@ -1793,17 +1806,24 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPrompt(svr, inf, IssueinfoStrRevCur)
 		case "cherry pick all my open":
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
+		case "add scores, wait for it to be mergable and merge sb.'s submits":
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrID, IssueinfoStrAssignee)
+			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list merged submits of someone",
-			"add scores, wait for it to be mergable and merge sb.'s submits",
 			"list sb.'s open submits":
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrID, IssueinfoStrAssignee)
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
+			useInputOrPrompt(svr, inf, IssueinfoStrProj)
+			useInputOrPromptStr(svr, inf, IssueinfoStrVal,
+				"more param(such as \"is:stared+has:star\")")
 		case "cherry pick a submit":
 			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
 				return true
 			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur, "revision(empty for current)")
+			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur,
+				"revision(empty for current)")
 			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
 		case "list config of a project":
 			useInputOrPrompt(svr, inf, IssueinfoStrProj)
@@ -1811,13 +1831,15 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 	case CategoryJenkins:
 		switch action {
 		case "list builds":
-			useInputOrPromptStr(svr, inf, IssueinfoStrSize, "max number of results")
+			useInputOrPromptStr(svr, inf, IssueinfoStrSize,
+				"max number of results")
 			/*case "show details of a build":
 			useInputOrPromptStr(svr, inf, IssueinfoStrID, "job")
 			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "build")
 			break*/
 		case "get log of a build":
-			useInputOrPromptStr(svr, inf, IssueinfoStrFile, "log file name to save as")
+			useInputOrPromptStr(svr, inf, IssueinfoStrFile,
+				"log file name to save as")
 		}
 	default:
 		Log(true, false, "Server type unknown: "+svr.Type)
