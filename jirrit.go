@@ -1049,6 +1049,9 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 // return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
+	if eztools.Debugging && eztools.Verbose > 2 {
+		Log(true, false, method, url)
+	}
 	/*if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
 		Log(true, false, "resting", bodyReq)
 	}*/
@@ -1144,9 +1147,8 @@ loop map.
 		in case of string or skip otherwise.
 	If key does not match mustStr, skip.
 
-Invoke fun with key and value.
-Both return values of fun and this means whether
-
+	Invoke fun with key and value.
+	Both return values of fun and this means whether
 	any item ever processed successfully.
 */
 func loopStringMap(m map[string]interface{},
@@ -1200,16 +1202,18 @@ func chkNSetIssueInfo(v interface{}) string {
 		Log(false, false, "nil got, not string")
 		return ""
 	}
-	str, ok := v.(string)
-	if !ok {
-		flt, ok := v.(float64)
-		if !ok {
-			LogTypeErr(v, "string or float64")
-			return ""
-		}
-		str = strconv.FormatFloat(flt, 'f', -1, 64)
+	switch v.(type) {
+	case string:
+		return v.(string)
+	case float64:
+		flt := v.(float64)
+		return strconv.FormatFloat(flt, 'f', -1, 64)
+	default:
+		Log(false, false,
+			"unknown non string/float64 type:",
+			fmt.Sprintf("%T", v))
+		return ""
 	}
-	return str
 }
 
 func chkNLoopStringMap(m interface{},
@@ -1223,6 +1227,7 @@ func chkNLoopStringMap(m interface{},
 	return res
 }
 
+// parseIssues loops a map of string to a slice of map of string
 func parseIssues(issueKey string, m map[string]interface{},
 	fun func(map[string]interface{}) issueInfos) issueInfoSlc {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
@@ -1338,7 +1343,7 @@ const (
 	IssueinfoStrFile = "file"
 	// IssueinfoStrSize size string
 	IssueinfoStrSize = "size"
-	// IssueinfoStrMergeable mergable string for details, gerrit
+	// IssueinfoStrMergeable mergeable string for details, gerrit
 	IssueinfoStrMergeable = "mergeable"
 	// IssueinfoStrLabels labels string for scores, gerrit
 	IssueinfoStrLabels = "labels"
@@ -1356,6 +1361,24 @@ const (
 	IssueinfoStrMsg = "message"
 	// IssueinfoStrAuthor author string of history for gerrit
 	IssueinfoStrAuthor = "author"
+	// IssueinfoStr_Nmb number string for gerrit
+	IssueinfoStr_Nmb = "_number"
+	// IssueinfoStrTopic topic string for gerrit
+	IssueinfoStrTopic = "topic"
+	// IssueinfoStr_Chg_Nmb change number string for gerrit
+	IssueinfoStr_Chg_Nmb = "_change_number"
+	// IssueinfoStr_Rev_Nmb revision number string for gerrit
+	IssueinfoStr_Rev_Nmb = "_revision_number"
+	// IssueinfoStrCommit commit string for gerrit
+	IssueinfoStrCommit = "commit"
+	// IssueinfoStrParents parents string for gerrit
+	IssueinfoStrParents = "parents"
+	// IssueinfoStrParent parent string for gerrit
+	IssueinfoStrParent = "parent"
+	// IssueinfoStrMerged merged string for gerrit
+	IssueinfoStrMerged = "MERGED"
+	// IssueinfoStrSubmit submit string
+	IssueinfoStrSubmit = "submit"
 	// IssueinfoStrLink is the JIRA link string in config of a project, gerrit
 	IssueinfoStrLink = "link"
 	// IssueinfoStrMatch is the JIRA match pattern string in config of a project, gerrit
@@ -1425,14 +1448,20 @@ func (issues issueInfoSlc) ToMapSlc() (res []map[string]string) {
 var issueInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrSubject,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState}
+
+// issueDetailsTxt details of a gerrit issue
 var issueDetailsTxt = []string{
-	IssueinfoStrID, IssueinfoStrSubmittable, IssueinfoStrSubject,
-	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrState, IssueinfoStrMergeable}
+	IssueinfoStrID, IssueinfoStr_Nmb, IssueinfoStrSubmittable,
+	IssueinfoStrSubject, IssueinfoStrProj, IssueinfoStrBranch,
+	IssueinfoStrState, IssueinfoStrMergeable, IssueinfoStrTopic}
 var issueHistoryTxt = []string{
 	IssueinfoStrID, IssueinfoStrDate, IssueinfoStrMsg}
+
+// issueRevsTxt a revision of a gerrit issue
 var issueRevsTxt = []string{
-	IssueinfoStrID, IssueinfoStrName, IssueinfoStrRevCur,
-	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType}
+	IssueinfoStrID, IssueinfoStr_Nmb, IssueinfoStrRevCur,
+	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType,
+	IssueinfoStrTopic}
 
 /*
 	 var issueDldCmds = []string{
@@ -1645,35 +1674,59 @@ func useInputOrPrompt(svr *svrs, inf issueInfos, ind string) {
 // Parameters: fun=function to list issues for user to choose from
 // Return value: true=no ID input; false=sth. input
 func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, fun func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) (issueInfoSlc, error)) bool {
+	issueInfo issueInfos) bool {
+	/*switch svr.Type {
+	case CategoryGerrit:
+		defer gerritAnyID2ID(svr, authInfo, issueInfo)
+	}*/
 	if len(issueInfo[IssueinfoStrID]) > 0 {
 		return false
 	}
-	if fun == nil {
+	if uiSilent {
+		noInteractionAllowed()
+		return true
+	}
+	var (
+		strIndCmp, strIndSum string
+		listFunc             func(svr *svrs, authInfo eztools.AuthInfo,
+			issueInfo issueInfos) (issueInfoSlc, error)
+	)
+	switch svr.Type {
+	case CategoryJira:
+		listFunc = jiraMyOpen
+		strIndCmp = IssueinfoStrProj
+		strIndSum = IssueinfoStrSummary
+	case CategoryBugzilla:
+		listFunc = bugzillaMyOpen
+		strIndCmp = IssueinfoStrProj
+		strIndSum = IssueinfoStrSummary
+	case CategoryGerrit:
+		listFunc = gerritMyOpen
+		strIndCmp = IssueinfoStrBranch
+		strIndSum = IssueinfoStrSubject
+	}
+	if listFunc == nil {
 		useInputOrPrompt(svr, issueInfo, IssueinfoStrID)
 	} else {
-		slc, err := fun(svr, authInfo, issueInfo)
+		slc, err := listFunc(svr, authInfo, issueInfo)
 		var choices []string
-		if err == nil {
-			if len(slc) > 0 {
-				for _, v := range slc {
-					//eztools.ShowStrln(v)
-					choices = append(choices,
-						v[IssueinfoStrID]+":"+
-							v[IssueinfoStrSummary]+
-							v[IssueinfoStrSubject])
-				}
+		if err == nil && len(slc) > 0 {
+			for _, v := range slc {
+				//eztools.ShowStrln(v)
+				choices = append(choices,
+					v[IssueinfoStrID]+" :\t"+
+						v[strIndCmp]+" :\t"+
+						v[strIndSum])
+			}
+			i, s := eztools.ChooseStrings(choices)
+			if i == eztools.InvalidID {
+				issueInfo[IssueinfoStrID] = s
+			} else {
+				issueInfo[IssueinfoStrID] = slc[i][IssueinfoStrID]
 			}
 		}
-		i, s := eztools.ChooseStrings(choices)
-		if i == eztools.InvalidID {
-			if s == "" {
-				return true
-			}
-			issueInfo[IssueinfoStrID] = s
-		} else {
-			issueInfo[IssueinfoStrID] = slc[i][IssueinfoStrID]
+		if len(issueInfo[IssueinfoStrID]) < 1 {
+			useInputOrPrompt(svr, issueInfo, IssueinfoStrID)
 		}
 	}
 	if len(issueInfo[IssueinfoStrID]) < 1 {
@@ -1684,19 +1737,13 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 
 func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 	action string, inf issueInfos) bool {
-	var listFunc func(svr *svrs, authInfo eztools.AuthInfo,
-		issueInfo issueInfos) (issueInfoSlc, error)
 	switch svr.Type {
-	case CategoryJira:
-		listFunc = jiraMyOpen
-	case CategoryBugzilla:
-		listFunc = bugzillaMyOpen
-	}
-	switch svr.Type {
+	case CategoryGerrit:
+		break
 	case CategoryJira, CategoryBugzilla:
 		switch action {
 		case "close a case to resolved from any known statuses":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPrompt(svr, inf, IssueinfoStrComments)
@@ -1706,7 +1753,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 					"test step for closure")
 			}
 		case "move status of a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			strCmt := IssueinfoStrComments
@@ -1717,7 +1764,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPromptStr(svr, inf, IssueinfoStrComments, strCmt)
 		case "close a case with default design as steps",
 			"close a case with general requirement as steps":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPrompt(svr, inf, IssueinfoStrComments)
@@ -1728,23 +1775,23 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			"check whether watching a case",
 			"watch a case",
 			"unwatch a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 		case "link a case to another":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf, IssueinfoStrLink,
 				"ID (not indexes above, if any) this issue blocks")
 		case "remove a file attached to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrKey, "file ID")
 		case "add a file to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPrompt(svr, inf, IssueinfoStrFile)
@@ -1754,7 +1801,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 					IssueinfoStrKey, "description")
 			}
 		case "get a file to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf,
@@ -1762,7 +1809,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrFile, "file to be saved as")
 		case "change a comment from a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf,
@@ -1770,19 +1817,19 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrComments, "comment body")
 		case "delete a comment from a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrKey, "comment ID")
 		case "add a comment to a case",
 			"reject a case from any known statuses":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPrompt(svr, inf, IssueinfoStrComments)
 		case "transfer a case to someone":
-			if useInputOrPrompt4ID(svr, authInfo, inf, listFunc) {
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
 			}
 			useInputOrPromptStr(svr, inf,
@@ -1790,53 +1837,11 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			useInputOrPromptStr(svr, inf,
 				IssueinfoStrComments, "component")
 		}
-	case CategoryGerrit:
-		switch action {
-		case "show details of a submit",
-			"show reviewers of a submit",
-			"show current revision/commit of a submit",
-			"list files of a submit":
-			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
-				return true
-			}
-		case "list files of a submit by revision":
-			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
-				return true
-			}
-			useInputOrPrompt(svr, inf, IssueinfoStrRevCur)
-		case "cherry pick all my open":
-			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
-		case "add scores, wait for it to be mergable and merge sb.'s submits":
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrID, IssueinfoStrAssignee)
-			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
-		case "list merged submits of someone",
-			"list sb.'s open submits":
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrID, IssueinfoStrAssignee)
-			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
-			useInputOrPrompt(svr, inf, IssueinfoStrProj)
-			useInputOrPromptStr(svr, inf, IssueinfoStrVal,
-				"more param(such as \"is:stared+has:star\")")
-		case "cherry pick a submit":
-			if useInputOrPrompt4ID(svr, authInfo, inf, gerritMyOpen) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur,
-				"revision(empty for current)")
-			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
-		case "list config of a project":
-			useInputOrPrompt(svr, inf, IssueinfoStrProj)
-		}
 	case CategoryJenkins:
 		switch action {
 		case "list builds":
 			useInputOrPromptStr(svr, inf, IssueinfoStrSize,
 				"max number of results")
-			/*case "show details of a build":
-			useInputOrPromptStr(svr, inf, IssueinfoStrID, "job")
-			useInputOrPromptStr(svr, inf, IssueinfoStrKey, "build")
-			break*/
 		case "get log of a build":
 			useInputOrPromptStr(svr, inf, IssueinfoStrFile,
 				"log file name to save as")
@@ -1879,17 +1884,18 @@ func makeCat2Act() cat2Act {
 			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
 			{"list sb.'s open submits", gerritSbOpen},
-			{"list all my open revisions/commits", gerritRevs},
+			{"list all my open revisions or commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
 			{"show details of a submit", gerritDetailOnCurrRev},
 			{"show history of a submit", gerritHistory},
-			{"show reviewers of a submit", gerritReviews},
-			{"show current revision/commit of a submit", gerritRev},
+			{"show reviewers and scores of a submit", gerritReviews},
+			{"show current revision or commit of a submit", gerritRev},
 			{"rebase a submit", gerritRebase},
 			{"merge a submit", gerritMerge},
+			{"show related submits of one", gerritRelated},
 			{"add scores to a submit", gerritScore},
 			{"add scores, wait for it to be mergable and merge a submit", gerritWaitNMerge},
-			{"add scores, wait for it to be mergable and merge sb.'s submits", gerritWaitNMergeSb},
+			{"wait for mergable and merge sbs submits", gerritWaitNMergeSb},
 			{"abandon all my open submits", gerritAbandonMyOpen},
 			{"abandon a submit", gerritAbandon},
 			{"cherry pick all my open submits", gerritPickMyOpen},
