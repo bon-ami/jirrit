@@ -476,25 +476,25 @@ func main() {
 					break
 				}
 			}
-			_, err = loopIssues(svr, issueInfo,
-				func(inf issueInfos) (issueInfos, error) {
-					Log(false, true, svr.Name, funParam, inf)
-					issues, err := fun(svr, authInfo, inf)
-					if err != nil {
-						if err == eztools.ErrNoValidResults {
-							if uiSilent {
-								Log(false, false, "NO valid results!")
-							} else {
-								Log(true, false, "NO valid results!")
-							}
-						} else {
-							Log(false, false, err)
+			looper := func(inf issueInfos) (issueInfoSlc, error) {
+				Log(false, true, svr.Name, funParam, inf)
+				issues, err := fun(svr, authInfo, inf)
+				if err != nil {
+					var op bool
+					e := err
+					if err == eztools.ErrNoValidResults {
+						if !uiSilent {
+							op = true
 						}
-					} else {
-						issues.Print()
+						e = eztools.ErrNoValidResults
 					}
-					return inf, err
-				})
+					Log(op, false, e)
+				} else {
+					issues.Print()
+				}
+				return issues, err
+			}
+			_, err = loopIssues(svr, issueInfo, looper)
 			if choices == nil || len(choices) < 2 { // no loop
 				break
 			}
@@ -1489,10 +1489,11 @@ const issueSeparator = ","
 // from multiple ID's in one issueInfo,
 // while other fields use the former values returned from function fun
 func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
-	issueInfos, error)) (issueInfoOut issueInfoSlc, err error) {
+	issueInfoSlc, error)) (issueInfoOut issueInfoSlc, err error) {
 	printID := func() {
 		if err == nil {
-			Log(false, false, "Done with "+issueInfo[IssueinfoStrID])
+			Log(false, false, "Done with "+
+				issueInfo[IssueinfoStrID])
 		}
 	}
 	//Log(false, false,strings.Count(issueInfo[IssueinfoStrID], separator))
@@ -1504,7 +1505,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 		}
 		issueInfo, err := fun(issueInfo)
 		printID()
-		return issueInfoSlc{issueInfo}, err
+		return issueInfo, err
 	case 2: // x,,y or x,y,z
 		parts := strings.Split(issueInfo[IssueinfoStrID], issueSeparator)
 		//Log(false, false,parts)
@@ -1524,33 +1525,41 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 			lowerBound, err = strconv.Atoi(parts[0])
 			if err != nil {
 				var ok bool
-				if prefix, lowerBoundStr, _, ok = parseTypicalJiraNum(svr, parts[0]); !ok {
-					Log(true, false, "the former part must be in the form of X-0 or 0")
+				if prefix, lowerBoundStr, _, ok =
+					parseTypicalJiraNum(svr, parts[0]); !ok {
+					Log(true, false, "the former"+
+						" part must be in the"+
+						" form of X-0 or 0")
 					return
 				}
 				lowerBound, err = strconv.Atoi(lowerBoundStr)
 				if err != nil {
-					Log(true, false, lowerBoundStr+" is NOT a number!")
+					Log(true, false, lowerBoundStr+
+						" is NOT a number!")
 					return
 				}
 			}
 			upperBound, err = strconv.Atoi(parts[2])
 			if err != nil {
-				Log(true, false, "the latter part must be a number")
+				Log(true, false,
+					"the latter part must be a number")
 				return
 			}
 			if lowerBound >= upperBound {
-				Log(true, false, "the number in the latter part must be greater than the one in the former part")
+				Log(true, false, "the number in the latter"+
+					" part must be greater than the one"+
+					" in the former part")
 				return
 			}
 			for i := lowerBound; i <= upperBound; i++ {
-				issueInfo[IssueinfoStrID] = prefix + strconv.Itoa(i)
-				//eztools.ShowStrln("looping " + issueInfo[IssueinfoStrID])
-				issueInfo, err = fun(issueInfo)
-				/*if err != nil {
-					return
-				}*/ // let it work for the next
-				issueInfoOut = append(issueInfoOut, issueInfo)
+				issueInfo[IssueinfoStrID] =
+					prefix + strconv.Itoa(i)
+				//eztools.ShowStrln("looping ",
+				//issueInfo[IssueinfoStrID])
+				if inf, err := fun(issueInfo); err == nil {
+					issueInfoOut = append(issueInfoOut,
+						inf...)
+				}
 				printID()
 			}
 			return
@@ -1572,14 +1581,14 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	for {
 		issueInfo[IssueinfoStrID] = prefix + currentNo
 		//eztools.ShowStrln("looping " + issueInfo[IssueinfoStrID])
-		issueInfo, err = fun(issueInfo)
-		/*if err != nil {
-			return
-		}*/ // let it work for the next
-		issueInfoOut = append(issueInfoOut, issueInfo)
+		inf, err := fun(issueInfo)
+		if err == nil {
+			issueInfoOut = append(issueInfoOut, inf...)
+		} // let it work for the next
 		printID()
 		if i < len(parts) {
-			if prefixNew, currentNo, _, ok = parseTypicalJiraNum(svr, parts[i]); !ok {
+			if prefixNew, currentNo, _, ok =
+				parseTypicalJiraNum(svr, parts[i]); !ok {
 				// reuse old prefix
 				currentNo = parts[i]
 			} else {
