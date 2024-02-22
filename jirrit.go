@@ -1389,6 +1389,8 @@ const (
 	IssueinfoStrURL = "url"
 	// IssueinfoStrBld builds string for Jenkins
 	IssueinfoStrBld = "builds"
+	// IssueinfoStrBldin building string for Jenkins
+	IssueinfoStrBldin = "building"
 	// IssueinfoStrNmb number string for Jenkins
 	IssueinfoStrNmb = "number"
 	// IssueinfoStrCreator creator string for bugzilla

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 
@@ -192,90 +193,178 @@ func jenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 	return jenkinsParseJobs(bodyMap[IssueinfoStrJob])
 }
 
+func jenkinsParseBldActParams(parIn any, issueInfo issueInfos) bool {
+	par1Map, ok := parIn.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	// check class
+	clsAny := par1Map["_class"]
+	if clsAny == nil {
+		return false
+	}
+	clsStr, ok := clsAny.(string)
+	if !ok {
+		Log(false, false, "class NOT a string!")
+		return false
+	}
+	switch clsStr {
+	case "hudson.model.StringParameterValue", "hudson.model.TextParameterValue":
+		break
+	default:
+		return false
+	}
+	// check name
+	clsAny = par1Map["name"]
+	if clsAny == nil {
+		return false
+	}
+	nmStr, ok := clsAny.(string)
+	if !ok {
+		Log(false, false, "name NOT a string!")
+		return false
+	}
+	if nmStr == "" {
+		return false
+	}
+	// get value
+	clsAny = par1Map["value"]
+	if clsAny == nil {
+		return false
+	}
+	vlStr, ok := clsAny.(string)
+	if !ok {
+		Log(false, false, "value NOT a string!")
+		return false
+	}
+	if vlStr != "" {
+		issueInfo[nmStr] = vlStr
+	}
+	return true
+}
+
+func jenkinsParseBldParams(act1Map map[string]any, issueInfo issueInfos) bool {
+	parAny := act1Map["parameters"]
+	if parAny == nil {
+		Log(false, false, "parameters NOT found")
+		return false
+	}
+	parSlc, ok := parAny.([]interface{})
+	if !ok || parSlc == nil {
+		Log(false, false, "parameters NOT a slice")
+		return false
+	}
+	for _, par1 := range parSlc {
+		jenkinsParseBldActParams(par1, issueInfo)
+	}
+	return true
+}
+
+func jenkinsParseBldActCause(parIn any, issueInfo issueInfos) bool {
+	par1Map, ok := parIn.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	// check class
+	clsAny := par1Map["_class"]
+	if clsAny == nil {
+		return false
+	}
+	clsStr, ok := clsAny.(string)
+	if !ok {
+		Log(false, false, "class NOT a string!")
+		return false
+	}
+	switch clsStr {
+	case "hudson.model.Cause$UserIdCause":
+		break
+	default:
+		return false
+	}
+	// check userName
+	clsAny = par1Map["userName"]
+	if clsAny == nil {
+		return false
+	}
+	nmStr, ok := clsAny.(string)
+	if !ok {
+		Log(false, false, "name NOT a string!")
+		return false
+	}
+	if nmStr == "" {
+		return false
+	}
+	issueInfo[IssueinfoStrAuthor] = nmStr
+	return true
+}
+
+func jenkinsParseBldCause(act1Map map[string]any, issueInfo issueInfos) bool {
+	parAny := act1Map["causes"]
+	if parAny == nil {
+		Log(false, false, "parameters NOT found")
+		return false
+	}
+	parSlc, ok := parAny.([]interface{})
+	if !ok || parSlc == nil {
+		Log(false, false, "parameters NOT a slice")
+		return false
+	}
+	for _, par1 := range parSlc {
+		jenkinsParseBldActCause(par1, issueInfo)
+	}
+	return true
+}
+
+func jenkinsParseBldDisp(act1Map map[string]any, issueInfo issueInfos) bool {
+	parAny := act1Map[IssueinfoStrBldin]
+	if parAny == nil {
+		Log(false, false, "parameters NOT found")
+		return false
+	}
+	parBool, ok := parAny.(bool)
+	if !ok {
+		Log(false, false, "parameters NOT a bool, but a ", fmt.Sprintf("%T", parAny))
+		return false
+	}
+	issueInfo[IssueinfoStrBldin] = strconv.FormatBool(parBool)
+	return true
+}
+
 func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
-	actInt := bodyMap["actions"]
-	if actInt == nil {
+	issueInfo := make(issueInfos)
+	if bodyMap["actions"] == nil {
 		Log(false, false, "NO actions found")
 		return nil, eztools.ErrNoValidResults
 	}
-	actSlc, ok := actInt.([]interface{})
+	actSlc, ok := bodyMap["actions"].([]interface{})
 	if !ok {
 		Log(false, false, "actions NOT a slice!")
 		return nil, eztools.ErrNoValidResults
 	}
-	issueInfo := make(issueInfos)
-	for _, act1Int := range actSlc {
-		act1Map, ok := act1Int.(map[string]interface{})
+	for _, act1Any := range actSlc {
+		act1Map, ok := act1Any.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		clsInt := act1Map["_class"]
-		if clsInt == nil {
+		clsAny := act1Map["_class"]
+		if clsAny == nil {
 			continue
 		}
-		clsStr, ok := clsInt.(string)
+		clsStr, ok := clsAny.(string)
 		if !ok {
 			Log(false, false, "class NOT a string!")
 			continue
 		}
-		if clsStr != "hudson.model.ParametersAction" {
-			continue
+		switch clsStr {
+		case "hudson.model.ParametersAction":
+			jenkinsParseBldParams(act1Map, issueInfo)
+		case "hudson.model.CauseAction":
+			jenkinsParseBldCause(act1Map, issueInfo)
 		}
-		parInt := act1Map["parameters"]
-		if parInt == nil {
-			Log(false, false, "parameters NOT found")
-			continue
-		}
-		parSlc, ok := parInt.([]interface{})
-		if !ok || parSlc == nil {
-			Log(false, false, "parameters NOT a slice")
-			continue
-		}
-		for _, par1Int := range parSlc {
-			par1Map, ok := par1Int.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			// check class
-			clsInt := par1Map["_class"]
-			if clsInt == nil {
-				continue
-			}
-			clsStr, ok := clsInt.(string)
-			if !ok {
-				Log(false, false, "class NOT a string!")
-				continue
-			}
-			if clsStr != "hudson.model.StringParameterValue" {
-				continue
-			}
-			// check name
-			clsInt = par1Map["name"]
-			if clsInt == nil {
-				continue
-			}
-			nmStr, ok := clsInt.(string)
-			if !ok {
-				Log(false, false, "name NOT a string!")
-				continue
-			}
-			if nmStr == "" {
-				continue
-			}
-			// get value
-			clsInt = par1Map["value"]
-			if clsInt == nil {
-				continue
-			}
-			vlStr, ok := clsInt.(string)
-			if !ok {
-				Log(false, false, "value NOT a string!")
-				continue
-			}
-			if vlStr != "" {
-				issueInfo[nmStr] = vlStr
-			}
-		}
+	}
+	jenkinsParseBldDisp(bodyMap, issueInfo)
+	if len(issueInfo) < 1 {
+		return nil, eztools.ErrNoValidResults
 	}
 	return issueInfo, nil
 }
