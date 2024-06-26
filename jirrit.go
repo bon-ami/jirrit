@@ -192,16 +192,16 @@ func main() {
 	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
 	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
-	flag.StringVar(&paramK, "k", "", "key or description, "+
-		"or build for Jenkins")
+	flag.StringVar(&paramK, "k", "", "key or description. reject reason for JIRA")
 	flag.StringVar(&paramI, "i", "",
-		"ID of issue, change, commit or assignee, or job for Jenkins")
+		"ID of issue, change, commit or assignee, or build for Jenkins")
 	flag.StringVar(&paramB, "b", "", "branch for JIRA and Gerrit")
 	flag.StringVar(&paramHD, "hd", "",
 		"new assignee when transferring issues, "+
 			"or revision id for cherrypicks")
 	flag.StringVar(&paramP, "p", "",
-		"project for JIRA or Gerrit, or state to trasit to for bugzilla")
+		"project for JIRA or Gerrit, state to trasit to for bugzilla, "+
+			"or job ID for Jenkins")
 	flag.StringVar(&paramC, "c", "",
 		"new component when transferring issues, "+
 			"or comment for transitions for JIRA and bugzilla")
@@ -1894,7 +1894,7 @@ func makeCat2Act() cat2Act {
 		CategoryGerrit: []action2Func{
 			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
-			{"list sb.'s open submits", gerritSbOpen},
+			{"list sbs open submits", gerritSbOpen},
 			{"list all my open revisions or commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
 			{"show details of a submit", gerritDetailOnCurrRev},

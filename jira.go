@@ -634,39 +634,38 @@ func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (inte
 }
 
 // jiraEditMeta get possible reject reasons
+// reject reason stored in IssueinfoStrKey
 func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (jsonStr string) {
 	if len(svr.Flds.RejectRsn) > 0 {
-		if len(issueInfo[IssueinfoStrDesc]) < 1 {
+		if len(issueInfo[IssueinfoStrKey]) < 1 {
 			// get all possible reasons
 			field, err := jiraEditMeta(svr, authInfo, issueInfo[IssueinfoStrID],
 				svr.Flds.RejectRsn)
 			if err != nil {
 				Log(false, false, err)
 			} else {
-				issueInfo[IssueinfoStrDesc] = getValuesFromMaps("value", field)
+				issueInfo[IssueinfoStrKey] = getValuesFromMaps("value", field)
 			}
-			if len(issueInfo[IssueinfoStrDesc]) < 1 {
+			if len(issueInfo[IssueinfoStrKey]) < 1 {
 				Log(false, false, "NO choices found for "+svr.Flds.RejectRsn)
 				useInputOrPromptStr(svr, issueInfo,
-					IssueinfoStrDesc, "reject reason")
+					IssueinfoStrKey, "reject reason")
 			}
 		}
-		if len(issueInfo[IssueinfoStrDesc]) > 0 {
+		if len(issueInfo[IssueinfoStrKey]) > 0 {
 			for i, v := range map[string]string{
-				"value": issueInfo[IssueinfoStrDesc]} {
+				"value": issueInfo[IssueinfoStrKey]} {
 				jsonStr = custFld(jsonStr, i, v)
 			}
 			if len(jsonStr) < 1 {
 				Log(true, false, "NO RejectRsn field "+
 					"defined for this server")
-				issueInfo[IssueinfoStrDesc] = ""
+				issueInfo[IssueinfoStrKey] = ""
 			} else {
 				jsonStr = `        "` + svr.Flds.RejectRsn + `": {` + jsonStr + `}`
 			}
 		}
-	} else {
-		issueInfo[IssueinfoStrDesc] = ""
 	}
 	return
 }
@@ -678,6 +677,7 @@ func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
 		Log(true, false, "No transitions configured for this server!")
 		return nil, errCfg
 	}
+	// set reject reason
 	if jsonStr := jiraGetDesc(svr, authInfo, issueInfo); len(jsonStr) > 0 {
 		if err := jiraEditWtFields(svr,
 			authInfo, issueInfo,

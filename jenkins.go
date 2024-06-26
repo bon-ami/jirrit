@@ -50,7 +50,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 			continue
 		}
 		issues = append(issues, issueInfos{
-			IssueinfoStrKey: strconv.FormatFloat(ns, 'f', 0, 64),
+			IssueinfoStrID:  strconv.FormatFloat(ns, 'f', 0, 64),
 			IssueinfoStrURL: us,
 		})
 	}
@@ -71,7 +71,7 @@ func jenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
 	var RestAPIStr = "/api/json?tree=builds[number,url]{," +
 		issueInfo[IssueinfoStrSize] + "}"
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		svr.URL+"job/"+issueInfo[IssueinfoStrID]+RestAPIStr, authInfo, nil, svr.Magic)
+		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+RestAPIStr, authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func jenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
 func jenkinsChooseBld(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
 	issueInfo, err := jenkinsChooseJob(svr, authInfo, issueInfo)
-	if err != nil || len(issueInfo[IssueinfoStrKey]) > 0 {
+	if err != nil || len(issueInfo[IssueinfoStrID]) > 0 {
 		return issueInfo, err
 	}
 
@@ -97,18 +97,18 @@ func jenkinsChooseBld(svr *svrs, authInfo eztools.AuthInfo,
 			return ind
 		},
 		func(ind int) string {
-			return issues[ind][IssueinfoStrKey]
+			return issues[ind][IssueinfoStrID]
 		}, "Which build?")
 	if ind == eztools.InvalidID {
 		return issueInfo, eztools.ErrInvalidInput
 	}
-	issueInfo[IssueinfoStrKey] = issues[ind][IssueinfoStrKey]
+	issueInfo[IssueinfoStrID] = issues[ind][IssueinfoStrID]
 	return issueInfo, nil
 }
 
 func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
-	if len(issueInfo[IssueinfoStrID]) > 0 {
+	if len(issueInfo[IssueinfoStrProj]) > 0 {
 		return issueInfo, nil
 	}
 
@@ -129,7 +129,7 @@ func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 	if ind == eztools.InvalidID {
 		return issueInfo, eztools.ErrInvalidInput
 	}
-	issueInfo[IssueinfoStrID] = issues[ind][IssueinfoStrName]
+	issueInfo[IssueinfoStrProj] = issues[ind][IssueinfoStrName]
 	return issueInfo, nil
 }
 
@@ -375,13 +375,13 @@ func jenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	if len(issueInfo[IssueinfoStrID]) < 1 || len(issueInfo[IssueinfoStrKey]) < 1 {
+	if len(issueInfo[IssueinfoStrProj]) < 1 || len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "/api/json"
 	bodyMap, err := restMap(eztools.METHOD_GET,
-		svr.URL+"job/"+issueInfo[IssueinfoStrID]+"/"+
-			issueInfo[IssueinfoStrKey]+RestAPIStr,
+		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+"/"+
+			issueInfo[IssueinfoStrID]+RestAPIStr,
 		authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
@@ -396,13 +396,13 @@ func jenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	if len(issueInfo[IssueinfoStrID]) < 1 || len(issueInfo[IssueinfoStrKey]) < 1 {
+	if len(issueInfo[IssueinfoStrProj]) < 1 || len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "/consoleText"
 	body, err := restSth(eztools.METHOD_GET,
-		svr.URL+"job/"+issueInfo[IssueinfoStrID]+
-			"/"+issueInfo[IssueinfoStrKey]+RestAPIStr,
+		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+
+			"/"+issueInfo[IssueinfoStrID]+RestAPIStr,
 		authInfo, nil, svr.Magic)
 	if err != nil || nil == body {
 		return nil, err

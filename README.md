@@ -2,6 +2,7 @@
 
 ## Command line parameters
 
+run `jirrit -h` for more info on these parameters.
  - `-h` help message.
  - `-ver` / `-version` version info.
  - `-v` logging enabled and more interactions. Most query actions need logging.
@@ -14,14 +15,14 @@
  - `-reverse` reverse output results.
  - `-r string` provide a server's name
  - `-a string` provide an action's name.
- - `-i string` provide an issue ID or assignee. Some actions are subjected to a certain issue or issues. Enter it when running or as a command param.
+ - `-i string` provide an ID of issue, change, commit, assignee or build.
  - `-b string` provide a branch.
  - `-c string` provide a component or a comment.
- - `-f string` provide a file/dir to save attachment as.
+ - `-f string` provide a file/dir of attachment.
  - `-hd string` provide an new assignee for issue transfer, or revision for cherrypicks.
- - `-k string` provide a key, a description, a build or a solution.
- - `-l string` provide a linked issue.
- - `-p string` provide a project.
+ - `-k string` provide a key, a description or a reject reason.
+ - `-l string` provide test steps, a linked issue, resolution or more params.
+ - `-p string` provide a project, state to transit to or job ID.
  - `-s []string` provide multiple parts to be used with field configurations, or one complete solution for closure in bugzilla.
  - `-w string` provide JIRA ID to store. To be used together with "-r".
  - `-z int` provide max number of buils to show for Jenkins.
@@ -81,12 +82,8 @@ Usually, these fields can be seen in an issue's detail.
   - add a comment to a case
   - delete a comment from a case
   - change a comment from a case
-  - list my open cases
   - link a case to another
-  - reject a case from any known statuses
-  - close a case to resolved from any known statuses (change it to resolved)
-  - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
-  - close a case with general requirement as steps (change it to resolved, adding test condition="none", steps="general requirement" and expectation="none")
+  - list my open cases
   - list watchers of a case
   - check whether watching a case
   - watch a case
@@ -95,21 +92,27 @@ Usually, these fields can be seen in an issue's detail.
   - list files attached to a case
   - get a file to a case (specify a full path, a file name under current dir, or a dir in existence, without current file under it. If no file name provided, the original file name of the attachment will be taken. If destination file already exists, this will fail.)
   - remove a file attached to a case
+  - reject a case from any known statuses
+  - close a case to resolved from any known statuses (change it to resolved)
+  - close a case with default design as steps (change it to resolved, adding test condition="none", steps="default design" and expectation="none")
+  - close a case with general requirement as steps (change it to resolved, adding test condition="none", steps="general requirement" and expectation="none")
 
 - Gerrit
   - list merged submits of someone
   - list my open submits
-  - list sb.'s open submits
+  - list sbs open submits
   - list all my open revisions/commits
   - list all open submits
   - show details of a submit (by commit ID or change ID)
-  - show reviewers of a submit
-  - show current revision/commit of a submit
+  - show history of a submit
+  - show reviewers and scores of a submit
+  - show current revision or commit of a submit
   - rebase a submit
   - merge a submit
+  - show related submits of one
   - add scores to a submit (Code-Review +2, Verified +1, and Manual-Testing, or other field as configured, +1)
   - add scores, wait for it to be mergable and merge a submit
-  - add scores, wait for it to be mergable and merge sb.'s submits
+  - add scores, wait for it to be mergable and merge sbs submits
   - abandon all my open submits
   - abandon a submit
   - cherry pick all my open submits
@@ -124,6 +127,23 @@ Usually, these fields can be seen in an issue's detail.
   - show details of a build
   - get log of a build
   - list builds
+
+- Bugzilla
+  - transfer a case to someone
+  - move status of a case
+  - show details of a case
+  - list comments of a case
+  - add a comment to a case
+  - list my open cases
+  - link a case to another
+  - list watchers of a case
+  - watch a case
+  - unwatch a case
+  - add a file to a case
+  - list files attached to a case
+  - get a file to a case
+  - reject a case from any known statuses
+  - close a case to resolved from any known statuses
 
 ## Input grammar
 
