@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v4"
+	"gitee.com/bon-ami/eztools/v6"
 )
 
 const urlAPI4JR = "rest/api/latest/issue/"
@@ -324,7 +325,7 @@ func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
+	_, err = restSth(http.MethodPut,
 		svr.URL+urlAPI4JR+issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// result/body is []uint8, if success
@@ -451,7 +452,7 @@ func jiraGetTransMustFlds(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraGetTransExpanded(svr *svrs, authInfo eztools.AuthInfo,
 	id, exp string) (bodyMap map[string]interface{}, err error) {
-	return restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	return restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		id+"/transitions"+exp, authInfo, nil, svr.Magic)
 }
 
@@ -517,7 +518,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_POST, svr.URL+urlAPI4JR+
+	_, err = restSth(http.MethodPost, svr.URL+urlAPI4JR+
 		id+"/transitions", authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
 	// replies to transitions contains no body
@@ -576,8 +577,13 @@ func jiraCmtNTran(svr *svrs, authInfo eztools.AuthInfo,
 			issueInfo[IssueinfoStrID], tranID)
 		if err != nil {
 			if err == errGram {
-				jiraGetTransMustFlds(svr, authInfo,
+				flds, err := jiraGetTransMustFlds(svr, authInfo,
 					issueInfo[IssueinfoStrID])
+				if err != nil {
+					Log(true, false, err)
+				} else {
+					Log(true, false, "must fields are", flds)
+				}
 			}
 			return err
 		}
@@ -600,7 +606,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 		Log(false, false, "Processing "+issueInfo[IssueinfoStrID])
 	}
 	//eztools.ShowStrln(jsonStr)
-	_, err := restSth(eztools.METHOD_PUT,
+	_, err := restSth(http.MethodPut,
 		svr.URL+urlAPI4JR+
 			issueInfo[IssueinfoStrID],
 		authInfo, strings.NewReader(jsonStr),
@@ -609,7 +615,7 @@ func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (interface{}, error) {
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		id+"/editmeta", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -825,7 +831,7 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, err
 	}
 	//eztools.ShowByteln(jsonStr)
-	_, err = restMap(eztools.METHOD_PUT, svr.URL+urlAPI4JR+
+	_, err = restMap(http.MethodPut, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID],
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	// TODO: parse result
@@ -863,7 +869,7 @@ func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	_, err = restMap(eztools.METHOD_PUT,
+	_, err = restMap(http.MethodPut,
 		svr.URL+urlAPI4JR+issueInfo[IssueinfoStrID]+"/comment/"+
 			issueInfo[IssueinfoStrKey], authInfo,
 		bytes.NewReader(jsonStr), svr.Magic)
@@ -878,7 +884,7 @@ func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrKey]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+urlAPI4JR+
+	_, err := restMap(http.MethodDelete, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/comment/"+issueInfo[IssueinfoStrKey],
 		authInfo, nil, svr.Magic)
 	// TODO: parse result
@@ -908,7 +914,7 @@ func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
 	if eztools.Debugging && eztools.Verbose > 0 {
 		eztools.ShowByteln(jsonStr)
 	}
-	bodyMap, err = restMap(eztools.METHOD_POST, svr.URL+urlAPI4JR+
+	bodyMap, err = restMap(http.MethodPost, svr.URL+urlAPI4JR+
 		id+"/"+urlSuffix,
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
 	if err != nil {
@@ -938,7 +944,7 @@ func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/comment",
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -952,7 +958,7 @@ func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID], authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -985,7 +991,7 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 			}
 		}
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+RestAPIStr+
 		url.QueryEscape("assignee="+authInfo.User+states),
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -999,7 +1005,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1032,7 +1038,7 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+urlAPI4JR+
+	bodyMap, err := restMap(http.MethodGet, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers", authInfo, nil, svr.Magic)
 	if err != nil {
 		return nil, err
@@ -1054,7 +1060,7 @@ func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_POST, svr.URL+urlAPI4JR+
+	_, err := restMap(http.MethodPost, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers",
 		authInfo, strings.NewReader("\""+cfg.User+"\""), svr.Magic)
 	return nil, err
@@ -1065,7 +1071,7 @@ func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restMap(eztools.METHOD_DEL, svr.URL+urlAPI4JR+
+	_, err := restMap(http.MethodDelete, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/watchers?username="+cfg.User,
 		authInfo, nil, svr.Magic)
 	if err != nil {
@@ -1128,7 +1134,7 @@ func jiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 		len(issueInfo[IssueinfoStrFile]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	_, err := restFile(eztools.METHOD_POST, svr.URL+urlAPI4JR+
+	_, err := restFile(http.MethodPost, svr.URL+urlAPI4JR+
 		issueInfo[IssueinfoStrID]+"/attachments",
 		authInfo, "file", issueInfo[IssueinfoStrFile],
 		map[string]string{"X-Atlassian-Token": "nocheck"}, svr.Magic)
@@ -1202,18 +1208,20 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo[IssueinfoStrFile] = filepath.Join(issueInfo[IssueinfoStrFile],
 			issueInfo[IssueinfoStrName])
 	}
-	resp, err := eztools.RestSend(eztools.METHOD_GET,
-		issueInfo[IssueinfoStrLink], authInfo, nil)
+	resp, err := eztools.HTTPSendAuth(http.MethodGet,
+		issueInfo[IssueinfoStrLink], "", authInfo, nil)
 	if err != nil {
 		return nil, err
 	}
-	recognized, bodyType, bodyBytes, errNo, err := eztools.RestParseBody(resp,
+	recognized, bodyType, bodyBytes, errNo, err := eztools.HTTPParseBody(resp,
 		issueInfo[IssueinfoStrFile], nil, []byte(svr.Magic))
 	if err == nil {
-		if recognized != eztools.BODY_TYPE_FILE {
-			eztools.FileWrite(issueInfo[IssueinfoStrFile], bodyBytes)
+		if recognized != eztools.BodyTypeFile {
 			if eztools.Debugging && eztools.Verbose > 0 {
 				Log(false, false, "body type", bodyType, "forced to be saved as file!")
+			}
+			if err := eztools.FileWrite(issueInfo[IssueinfoStrFile], bodyBytes); err != nil {
+				Log(true, false, "failed to save file", issueInfo[IssueinfoStrFile], err)
 			}
 		}
 	}
@@ -1235,7 +1243,7 @@ func jiraDelFile(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	// https://developer.atlassian.com/static/rest/jira/5.1.6.html#id127779
 	const RestAPIStr = "rest/api/latest/attachment/"
-	_, err := restSth(eztools.METHOD_DEL,
+	_, err := restSth(http.MethodDelete,
 		svr.URL+RestAPIStr+issueInfo[IssueinfoStrKey],
 		authInfo, nil, svr.Magic)
 	return nil, err

@@ -3,13 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"gitee.com/bon-ami/eztools/v4"
+	"gitee.com/bon-ami/eztools/v6"
 )
 
 func gerritRest4Maps(method, url, magic string,
@@ -23,13 +24,12 @@ func gerritRest4Maps(method, url, magic string,
 		return nil, err
 	}
 	issues := make(issueInfoSlc, 0)
-	switch body.(type) {
+	switch body := body.(type) {
 	case []interface{}:
-		bodySlc := body.([]interface{})
-		if len(bodySlc) < 1 {
+		if len(body) < 1 {
 			return nil, err
 		}
-		for _, v := range bodySlc {
+		for _, v := range body {
 			m, ok := v.(map[string]interface{})
 			if !ok {
 				LogTypeErr(v, "map string to interface!")
@@ -38,7 +38,7 @@ func gerritRest4Maps(method, url, magic string,
 			issues = fun(m, issues)
 		}
 	case map[string]interface{}:
-		issues = fun(body.(map[string]interface{}), issues)
+		issues = fun(body, issues)
 	default:
 		LogTypeErr(body, "slice of or map string to, interface!")
 	}
@@ -149,7 +149,7 @@ func gerritGetReviews(url, magic string, authInfo eztools.AuthInfo) (
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}
-	return gerritRest4Maps(eztools.METHOD_GET, url,
+	return gerritRest4Maps(http.MethodGet, url,
 		magic, authInfo,
 		func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
 			return gerritParseIssuesOrReviews(m, issues, reviewInfoTxt, nil)
@@ -161,7 +161,7 @@ func gerritGetDetails(url, magic string, authInfo eztools.AuthInfo) (
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}
-	return gerritRest4Maps(eztools.METHOD_GET, url,
+	return gerritRest4Maps(http.MethodGet, url,
 		magic, authInfo,
 		func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
 			return gerritParseIssuesOrReviews(m, issues, issueDetailsTxt, nil)
@@ -173,7 +173,7 @@ func gerritGetHistory(url, magic string, authInfo eztools.AuthInfo) (
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}
-	return gerritRest4Maps(eztools.METHOD_GET, url,
+	return gerritRest4Maps(http.MethodGet, url,
 		magic, authInfo,
 		func(m map[string]interface{},
 			issues issueInfoSlc) issueInfoSlc {
@@ -210,7 +210,7 @@ func gerritGetIssues(url, magic string, authInfo eztools.AuthInfo) (
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}
-	return gerritRest4Maps(eztools.METHOD_GET, url,
+	return gerritRest4Maps(http.MethodGet, url,
 		magic, authInfo,
 		func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
 			return gerritParseIssuesOrReviews(m, issues, issueInfoTxt, nil)
@@ -229,6 +229,7 @@ func gerritQuery1(svr *svrs, authInfo eztools.AuthInfo,
 		svr.Magic, authInfo)
 }
 
+/*
 // param: issueInfo[ISSUEINFO_IND_ID] any ID acceptable
 // TODO: remove it if not used
 func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
@@ -244,7 +245,7 @@ func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
 		return
 	}
 	issueInfo[IssueinfoStrID] = inf[0][IssueinfoStrID]
-}
+}*/
 
 func gerritRevs(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
@@ -334,7 +335,7 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 			return issues
 		}
 		// +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
-		ret, err := gerritRest4Maps(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		ret, err := gerritRest4Maps(http.MethodGet, svr.URL+RestAPIStr+
 			issueInfo[IssueinfoStrID]+
 			"&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS",
 			svr.Magic, authInfo, parser)
@@ -377,7 +378,7 @@ func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 			return inf, nil
 		}
 		const RestAPIStr = "changes/"
-		if more, err := gerritRest4Maps(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		if more, err := gerritRest4Maps(http.MethodGet, svr.URL+RestAPIStr+
 			inf[0][IssueinfoStrID]+"/revisions/current/mergeable",
 			svr.Magic, authInfo,
 			func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
@@ -387,7 +388,7 @@ func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 				inf[0][IssueinfoStrMergeable] = more[0][IssueinfoStrMergeable]
 			}
 		}
-		if more, err := gerritRest4Maps(eztools.METHOD_GET, svr.URL+RestAPIStr+
+		if more, err := gerritRest4Maps(http.MethodGet, svr.URL+RestAPIStr+
 			inf[0][IssueinfoStrID]+"/revisions/current/actions",
 			svr.Magic, authInfo,
 			func(m map[string]interface{}, issues issueInfoSlc) issueInfoSlc {
@@ -427,7 +428,7 @@ func gerritGetScores(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (scores []scores2Marshal,
 	rejected map[string]struct{}, err error) {
 	const RestAPIStr = "changes/"
-	body, err := restSth(eztools.METHOD_GET, svr.URL+RestAPIStr+
+	body, err := restSth(http.MethodGet, svr.URL+RestAPIStr+
 		issueInfo[IssueinfoStrID]+"/detail",
 		authInfo, nil, svr.Magic)
 	if err != nil || body == nil {
@@ -571,7 +572,7 @@ func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, eztools.ErrInvalidInput
 		}
 		const RestAPIStr = "changes/"
-		bodyMap, err := restMap(eztools.METHOD_GET,
+		bodyMap, err := restMap(http.MethodGet,
 			svr.URL+RestAPIStr+
 				issueInfo[IssueinfoStrID]+"/revisions/"+
 				issueInfo[IssueinfoStrRevCur]+"/files/",
@@ -591,7 +592,7 @@ func gerritListFiles(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	looper := func(issueInfo issueInfos) (issueInfoSlc, error) {
 		const RestAPIStr = "changes/?q="
-		return gerritRest4Maps(eztools.METHOD_GET,
+		return gerritRest4Maps(http.MethodGet,
 			svr.URL+RestAPIStr+
 				issueInfo[IssueinfoStrID]+
 				"&o=CURRENT_REVISION&o=CURRENT_FILES",
@@ -806,7 +807,7 @@ func gerritPick1(svr *svrs, authInfo eztools.AuthInfo,
 		jsonValue, _ := json.Marshal(map[string]string{
 			//"message": "testing", // if this is a must, I have to read original submit message
 			"destination": issueInfo[IssueinfoStrBranch]})
-		bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+
+		bodyMap, err := restMap(http.MethodPost, svr.URL+
 			RestAPIStr+issueInfo[IssueinfoStrID]+
 			"/revisions/"+issueInfo[IssueinfoStrRevCur]+
 			"/cherrypick",
@@ -899,7 +900,7 @@ func gerritActOn1(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	const RestAPIStr = "changes/"
-	bodyMap, err := restMap(eztools.METHOD_POST, svr.URL+
+	bodyMap, err := restMap(http.MethodPost, svr.URL+
 		RestAPIStr+issueInfo[IssueinfoStrID]+action,
 		authInfo, nil, svr.Magic)
 	return gerritParseIssuesOrReviews(bodyMap, issues, issueInfoTxt, nil),
@@ -1020,7 +1021,7 @@ func gerritRelated(svr *svrs, authInfo eztools.AuthInfo,
 			return
 		}
 		const RestAPIStr = "changes/"
-		bodyMap, err := restMap(eztools.METHOD_GET, svr.URL+
+		bodyMap, err := restMap(http.MethodGet, svr.URL+
 			RestAPIStr+inf[0][IssueinfoStrID]+
 			"/revisions/"+inf[0][IssueinfoStrRevCur]+"/related",
 			authInfo, nil, svr.Magic)
@@ -1274,7 +1275,7 @@ func gerritListPrj(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "projects/"
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		svr.URL+RestAPIStr+
 			url.QueryEscape(issueInfo[IssueinfoStrProj])+"/config",
 		authInfo, nil, svr.Magic)

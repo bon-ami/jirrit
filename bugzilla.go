@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v4"
+	"gitee.com/bon-ami/eztools/v6"
 	"golang.org/x/exp/maps"
 )
 
 const urlAPI4BZ = "rest/bug/"
 
+/*
 // parseTypicalBZNum not used yet
 //
 //	Return values
@@ -56,7 +57,7 @@ func parseTypicalBZNum(svr *svrs, num string) (nonDigit,
 		} // "A-1,B-2" not handled
 	}
 	return "", "", false, false
-}
+}*/
 
 // bugzillaTransfer transfer an issue to someone else, and additionally to a component
 func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
@@ -85,7 +86,7 @@ func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
+	_, err = restSth(http.MethodPut,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?",
 			"", authInfo),
@@ -190,7 +191,7 @@ func bugzillaTranExec(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowStrln(jsonStr)
 		}
 	}
-	bodyMap, err := restMap(eztools.METHOD_PUT,
+	bodyMap, err := restMap(http.MethodPut,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			id+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -448,7 +449,7 @@ func bugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
+	_, err = restSth(http.MethodPut,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -483,7 +484,7 @@ func bugzillaAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_POST,
+	_, err = restSth(http.MethodPost,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/comment?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -496,7 +497,7 @@ func bugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/comment?",
 			"", authInfo), authInfo, nil, svr.Magic)
@@ -527,7 +528,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	}
 	const RestAPIBZStr = "rest/field/bug/"
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+RestAPIBZStr+
 			"bug_status?", "", authInfo),
 		authInfo, nil, svr.Magic)
@@ -628,7 +629,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 
 func bugzillaDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (map[string]interface{}, error) {
-	return restMap(eztools.METHOD_GET,
+	return restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?",
 			"", authInfo), authInfo, nil, svr.Magic)
@@ -655,7 +656,7 @@ func bugzillaURIWtToken(addr, prm string, authInfo eztools.AuthInfo) string {
 		}
 		return addr + "/"
 	}*/
-	if authInfo.Type != eztools.AUTH_NONE || len(authInfo.Pass) < 1 {
+	if authInfo.Type != eztools.AuthNone || len(authInfo.Pass) < 1 {
 		/*if len(prm) < 1 {
 			return addr
 		}*/
@@ -810,7 +811,7 @@ func bugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 			}
 		}
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+RestAPIBZStr,
 			"assigned_to="+authInfo.User+states,
 			authInfo), authInfo, nil, svr.Magic)
@@ -866,7 +867,7 @@ func bugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
+	_, err = restSth(http.MethodPut,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -897,7 +898,7 @@ func bugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}
 	}
-	_, err = restSth(eztools.METHOD_PUT,
+	_, err = restSth(http.MethodPut,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"?", "", authInfo),
 		authInfo, bytes.NewReader(jsonStr), svr.Magic)
@@ -943,7 +944,7 @@ func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 			eztools.ShowByteln(jsonStr)
 		}*/
 	}
-	_, err = restMap(eztools.METHOD_POST,
+	_, err = restMap(http.MethodPost,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/attachment?",
 			"", authInfo), authInfo,
@@ -956,7 +957,7 @@ func bugzillaListFile(svr *svrs, authInfo eztools.AuthInfo,
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+
 			issueInfo[IssueinfoStrID]+"/attachment?",
 			"", authInfo), authInfo, nil, svr.Magic)
@@ -1080,7 +1081,7 @@ func bugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo[IssueinfoStrFile] = filepath.Join(issueInfo[IssueinfoStrFile],
 			issueInfo[IssueinfoStrName])
 	}
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		bugzillaURIWtToken(svr.URL+urlAPI4BZ+"attachment/"+
 			issueInfo[IssueinfoStrKey]+"?",
 			"", authInfo), authInfo, nil, svr.Magic)

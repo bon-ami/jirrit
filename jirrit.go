@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitee.com/bon-ami/eztools/v4"
+	"gitee.com/bon-ami/eztools/v6"
 )
 
 const (
@@ -264,10 +264,10 @@ func main() {
 		stdOutput = true
 	}
 	cats := makeCat2Act()
-	var err error
-	cfgFile, err = eztools.XMLReadDefault(paramCfg, module, &cfg)
-	if err != nil {
-		Log(true, false, "failed to open config file", err)
+	var errs []error
+	cfgFile, errs = eztools.XMLReadDefault(paramCfg, "", "", "", module, &cfg)
+	if errs != nil {
+		Log(true, false, "failed to open config file", errs[0])
 		if len(paramCfg) > 0 {
 			cfgFile = paramCfg
 		} else {
@@ -438,7 +438,7 @@ func main() {
 		}
 		svrParam = svr.Name
 	}
-	eztools.AUTH_INSECURE_TLS = true
+	eztools.AuthInsecureTLS = true
 	Log(false, false, "runtime params: server="+
 		svrParam+", action="+funParam+", info array:")
 	Log(false, false, issueInfo)
@@ -447,7 +447,7 @@ func main() {
 	} else {
 		step = 1
 	}
-	err = nil
+	var err error
 	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
@@ -849,17 +849,17 @@ func chkUpdate(eztoolscfg string, upch chan bool) {
 		}
 	}
 	var (
-		db  *eztools.Dbs
+		db  *eztools.Db
 		err error
 	)
 	if len(eztoolscfg) > 0 {
-		db, _, err = eztools.MakeDbsWtCfgFile(eztoolscfg, "")
+		db, _, err = eztools.MakeDbWtCfgFile("", "", "", "", eztoolscfg)
 		if err != nil {
 			eztoolscfg = ""
 		}
 	}
 	if len(eztoolscfg) == 0 {
-		db, _, err = eztools.MakeDbs()
+		db, _, err = eztools.MakeDb()
 		if err != nil {
 			if /*err == os.PathErr ||*/ err == eztools.ErrNoValidResults {
 				eztools.ShowStrln("NO configuration for EZtools. Get one to auto update this app!")
@@ -885,18 +885,18 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 	}
 	switch pass.Type {
 	case PassDigest:
-		authInfo.Type = eztools.AUTH_DIGEST
+		authInfo.Type = eztools.AuthDigest
 	case PassPlain:
-		authInfo.Type = eztools.AUTH_PLAIN
+		authInfo.Type = eztools.AuthPlain
 	case PassBasic:
-		authInfo.Type = eztools.AUTH_BASIC
+		authInfo.Type = eztools.AuthBasic
 	default: //PassToken
-		authInfo.Type = eztools.AUTH_NONE
+		authInfo.Type = eztools.AuthNone
 		//authInfo.Pass = ""
 		//return
 	}
 	authInfo.Pass = pass.Pass
-	if authInfo.Type != eztools.AUTH_NONE && len(authInfo.Pass) < 1 {
+	if authInfo.Type != eztools.AuthNone && len(authInfo.Pass) < 1 {
 		err = errors.New("NO password configured")
 	}
 	return
@@ -918,9 +918,15 @@ type cat2Act map[string][]action2Func
 
 func isValidSvr(cats cat2Act, svr *svrs) bool {
 	if len(svr.Name) < 1 || len(svr.Type) < 1 || len(svr.URL) < 1 {
+		if eztools.Verbose > 0 {
+			eztools.LogPrint("Skipping invalid server", svr.Name)
+		}
 		return false
 	}
 	if _, ok := cats[svr.Type]; !ok {
+		if eztools.Verbose > 0 {
+			eztools.LogPrint("Skipping unknown type", svr.Type, "of server", svr.Name, ". must be", cats)
+		}
 		return false
 	}
 	u, err := url.Parse(svr.URL)
@@ -1036,13 +1042,13 @@ func chkErrRest(bodyBytes []byte, body interface{},
 func restFile(method, url string, authInfo eztools.AuthInfo,
 	fType, fName string, hdrs map[string]string,
 	magic string) (body interface{}, err error) {
-	resp, err := eztools.RestSendFileNHdr(method, url,
+	resp, err := eztools.HTTPSendAuthNHdrNFile(method, url,
 		authInfo, fType, fName, hdrs)
 	if err != nil {
 		return
 	}
-	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
-		"", &body, []byte(magic))
+	_, _, bodyBytes, errInt, err :=
+		eztools.HTTPParseBody(resp, "", &body, []byte(magic))
 	return chkErrRest(bodyBytes, body, errInt, err)
 }
 
@@ -1055,12 +1061,13 @@ func restSth(method, url string, authInfo eztools.AuthInfo,
 	/*if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
 		Log(true, false, "resting", bodyReq)
 	}*/
-	resp, err := eztools.RestSend(method, url, authInfo, bodyReq)
+	resp, err := eztools.HTTPSendAuth(method,
+		url, "", authInfo, bodyReq)
 	if err != nil {
 		return
 	}
-	_, _, bodyBytes, errInt, err := eztools.RestParseBody(resp,
-		"", &body, []byte(magic))
+	_, _, bodyBytes, errInt, err :=
+		eztools.HTTPParseBody(resp, "", &body, []byte(magic))
 	body, err = chkErrRest(bodyBytes, body, errInt, err)
 	return
 }
@@ -1092,7 +1099,7 @@ get all values from
 	}
 */
 func getValuesFromMaps(name string, field interface{}) string {
-	//eztools.ShowSthln(field)
+	//eztools.ShowStrln(field)
 	fieldMap, ok := field.(map[string]interface{})
 	if !ok {
 		Log(false, false, reflect.TypeOf(field).String()+
@@ -1202,12 +1209,11 @@ func chkNSetIssueInfo(v interface{}) string {
 		Log(false, false, "nil got, not string")
 		return ""
 	}
-	switch v.(type) {
+	switch v := v.(type) {
 	case string:
-		return v.(string)
+		return v
 	case float64:
-		flt := v.(float64)
-		return strconv.FormatFloat(flt, 'f', -1, 64)
+		return strconv.FormatFloat(v, 'f', -1, 64)
 	default:
 		Log(false, false,
 			"unknown non string/float64 type:",
@@ -1231,7 +1237,7 @@ func chkNLoopStringMap(m interface{},
 func parseIssues(issueKey string, m map[string]interface{},
 	fun func(map[string]interface{}) issueInfos) issueInfoSlc {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
-		eztools.ShowSthln(strs)
+		eztools.ShowStrln(strs)
 	}*/
 	results := make(issueInfoSlc, 0)
 	loopStringMap(m, issueKey, nil,
@@ -1250,7 +1256,7 @@ func parseIssues(issueKey string, m map[string]interface{},
 					continue
 				}
 				if issueInfo := fun(issue); issueInfo != nil {
-					//eztools.ShowSthln(issueInfo)
+					//eztools.ShowStrln(issueInfo)
 					results = append(results, issueInfo)
 				}
 			}
@@ -1391,8 +1397,12 @@ const (
 	IssueinfoStrBld = "builds"
 	// IssueinfoStrBldin building string for Jenkins
 	IssueinfoStrBldin = "building"
+	// IssueinfoStrTimestamp timestamp string for Jenkins
+	IssueinfoStrTimestamp = "timestamp"
 	// IssueinfoStrNmb number string for Jenkins
 	IssueinfoStrNmb = "number"
+	// IssueinfoStrResult result string for Jenkins
+	IssueinfoStrResult = "result"
 	// IssueinfoStrCreator creator string for bugzilla
 	IssueinfoStrCreator = "creator"
 	// IssueinfoStrTxt text string for bugzilla
@@ -1861,7 +1871,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 		Log(true, false, "Server type unknown: "+svr.Type)
 		return true
 	}
-	//eztools.ShowSthln(inf)
+	//eztools.ShowStrln(inf)
 	return false
 }
 

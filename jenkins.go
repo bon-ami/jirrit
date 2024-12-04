@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
+	"time"
 
-	"gitee.com/bon-ami/eztools/v4"
+	"gitee.com/bon-ami/eztools/v6"
 )
 
 // jenkinsParseBlds get "name" & "url" from "jobs" or sth.
@@ -70,7 +72,7 @@ func jenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	var RestAPIStr = "/api/json?tree=builds[number,url]{," +
 		issueInfo[IssueinfoStrSize] + "}"
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+RestAPIStr, authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
@@ -185,7 +187,7 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 func jenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIStr = "api/json"
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		svr.URL+RestAPIStr, authInfo, nil, svr.Magic)
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
@@ -315,19 +317,59 @@ func jenkinsParseBldCause(act1Map map[string]any, issueInfo issueInfos) bool {
 	return true
 }
 
-func jenkinsParseBldDisp(act1Map map[string]any, issueInfo issueInfos) bool {
-	parAny := act1Map[IssueinfoStrBldin]
-	if parAny == nil {
-		Log(false, false, "parameters NOT found")
-		return false
+// jenkinsParseBldDisp parses first level of results
+// Return value: true if any parsed
+func jenkinsParseBldDisp(act1Map map[string]any, issueInfo issueInfos) (ret bool) {
+	table := []struct {
+		key string
+		fun func(any) bool
+	}{
+		{
+			IssueinfoStrBldin,
+			func(a any) bool {
+				parBool, ok := a.(bool)
+				if !ok {
+					Log(false, false, "parameters NOT a bool, but a ", fmt.Sprintf("%T", a))
+					return false
+				}
+				issueInfo[IssueinfoStrBldin] = strconv.FormatBool(parBool)
+				return true
+			},
+		},
+		{
+			IssueinfoStrTimestamp,
+			func(a any) bool {
+				parInt, ok := a.(float64)
+				if !ok {
+					Log(false, false, "parameters NOT a uint, but a ", fmt.Sprintf("%T", a))
+					return false
+				}
+				issueInfo[IssueinfoStrDate] = time.UnixMilli(int64(parInt)).Format(time.RFC3339)
+				return true
+			},
+		},
+		{
+			IssueinfoStrResult,
+			func(a any) bool {
+				parStr, ok := a.(string)
+				if !ok {
+					Log(false, false, "parameters NOT a string, but a ", fmt.Sprintf("%T", a))
+					return false
+				}
+				issueInfo[IssueinfoStrResult] = parStr
+				return true
+			},
+		},
 	}
-	parBool, ok := parAny.(bool)
-	if !ok {
-		Log(false, false, "parameters NOT a bool, but a ", fmt.Sprintf("%T", parAny))
-		return false
+	for _, item := range table {
+		parAny := act1Map[item.key]
+		if parAny == nil {
+			Log(false, false, "parameters NOT found for", item.key)
+			continue
+		}
+		ret = item.fun(parAny) || ret
 	}
-	issueInfo[IssueinfoStrBldin] = strconv.FormatBool(parBool)
-	return true
+	return
 }
 
 func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
@@ -379,7 +421,7 @@ func jenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "/api/json"
-	bodyMap, err := restMap(eztools.METHOD_GET,
+	bodyMap, err := restMap(http.MethodGet,
 		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+"/"+
 			issueInfo[IssueinfoStrID]+RestAPIStr,
 		authInfo, nil, svr.Magic)
@@ -400,7 +442,7 @@ func jenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	const RestAPIStr = "/consoleText"
-	body, err := restSth(eztools.METHOD_GET,
+	body, err := restSth(http.MethodGet,
 		svr.URL+"job/"+issueInfo[IssueinfoStrProj]+
 			"/"+issueInfo[IssueinfoStrID]+RestAPIStr,
 		authInfo, nil, svr.Magic)
