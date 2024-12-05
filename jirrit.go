@@ -226,6 +226,7 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInf
 			}
 			looper := func(inf issueInfos) (issueInfoSlc, error) {
 				Log(false, true, svr.Name, funParam, inf)
+				id := inf[IssueinfoStrID]
 				issues, err := fun(svr, authInfo, inf)
 				if err != nil {
 					var op bool
@@ -238,7 +239,7 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInf
 					}
 					Log(op, false, e)
 				} else {
-					issues.Print(para.fn, para.fv, para.fs)
+					issues.Print(id, para.fn, para.fv, para.fs)
 				}
 				return issues, err
 			}
@@ -558,7 +559,7 @@ func main() {
 	issueInfo := mkIssueinfo(p)
 	svrParam := "N/A"
 	if svr != nil {
-		matchFuncFromParam(p, svr, cats)
+		fun, funParam = matchFuncFromParam(p, svr, cats)
 		svrParam = svr.Name
 	}
 	eztools.AuthInsecureTLS = true
@@ -592,8 +593,8 @@ func main() {
 }
 
 // Print outputs the results
-// Parameters: filter parameters, name, value, script
-func (issues issueInfoSlc) Print(fn, fv, fs string) {
+// Parameters: original ID, filter parameters, name, value, script
+func (issues issueInfoSlc) Print(id, fn, fv, fs string) {
 	funcScript := func(issueInfo issueInfos) bool {
 		jsonData, err := json.Marshal(issueInfo)
 		if err != nil {
@@ -660,8 +661,8 @@ func (issues issueInfoSlc) Print(fn, fv, fs string) {
 			if fun != nil && !fun(issues[i]) {
 				continue
 			}
-			Log(true, false, "Issue/Reviewer/Comment/File "+
-				strconv.Itoa(i+1))
+			Log(true, false, "Issue/Reviewer/Comment/File",
+				i+1, "(input ID:", id, ")")
 			for i1, v1 := range issues[i] {
 				Log(true, false, "\t", i1+"="+
 					strings.ReplaceAll(v1, "\n", "\n\t\t"))
