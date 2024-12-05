@@ -506,6 +506,69 @@ func bugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	return bugzillaParseComments(bodyMap), nil
 }
+func bugzillaParseTran1(_ /*key*/ string, val any, stt string,
+	retStates []string, retCmts []bool) ([]string, []bool, bool) {
+	valSlc, ok := val.([]any)
+	if !ok {
+		LogTypeErr(val, "[]interface{}")
+		return retStates, retCmts, false
+	}
+	for _, val1Any := range valSlc {
+		val1Map, ok := val1Any.(map[string]any)
+		if !ok {
+			LogTypeErr(val1Any, "map[string]interface{}")
+			continue
+		}
+		nmAny, ok := val1Map["name"]
+		if !ok || nmAny == nil {
+			continue
+		}
+		nmStr, ok := nmAny.(string)
+		if !ok {
+			LogTypeErr(nmAny, "string")
+			continue
+		}
+		if nmStr != stt {
+			continue
+		}
+		chgAny, ok := val1Map["can_change_to"]
+		if !ok || chgAny == nil {
+			continue
+		}
+		chgSlc, ok := chgAny.([]any)
+		if !ok || chgSlc == nil {
+			continue
+		}
+		for _, chg1Any := range chgSlc {
+			chg1Map, ok := chg1Any.(map[string]any)
+			if !ok || chg1Map == nil {
+				continue
+			}
+
+			nm1Any, ok := chg1Map["name"]
+			if !ok {
+				continue
+			}
+			nm1Str, ok := nm1Any.(string)
+			if !ok {
+				LogTypeErr(nm1Any, "string")
+				continue
+			}
+			retStates = append(retStates, nm1Str)
+
+			var cmt1Bool bool
+			cmt1Any, ok := chg1Map["comment_required"]
+			if ok {
+				cmt1Bool, ok = cmt1Any.(bool)
+				if !ok {
+					LogTypeErr(cmt1Any, "bool")
+				}
+			}
+			retCmts = append(retCmts, cmt1Bool)
+		}
+	}
+	return retStates, retCmts, false
+}
 
 // bugzillaGetTrans get transferable states
 //
@@ -547,6 +610,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 		retStates []string
 		retCmts   []bool
 	)
+
 	for _, fld1Any := range fldSlc {
 		fld1Map, ok := fld1Any.(map[string]interface{})
 		if !ok {
@@ -557,67 +621,10 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 			chgMap map[string]any
 			chg []string
 		)*/
-		loopStringMap(fld1Map, "values", nil, func(key string, val any) bool {
-			valSlc, ok := val.([]any)
-			if !ok {
-				LogTypeErr(val, "[]interface{}")
-				return false
-			}
-			for _, val1Any := range valSlc {
-				val1Map, ok := val1Any.(map[string]any)
-				if !ok {
-					LogTypeErr(val1Any, "map[string]interface{}")
-					continue
-				}
-				nmAny, ok := val1Map["name"]
-				if !ok || nmAny == nil {
-					continue
-				}
-				nmStr, ok := nmAny.(string)
-				if !ok {
-					LogTypeErr(nmAny, "string")
-					continue
-				}
-				if nmStr != stt {
-					continue
-				}
-				chgAny, ok := val1Map["can_change_to"]
-				if !ok || chgAny == nil {
-					continue
-				}
-				chgSlc, ok := chgAny.([]any)
-				if !ok || chgSlc == nil {
-					continue
-				}
-				for _, chg1Any := range chgSlc {
-					chg1Map, ok := chg1Any.(map[string]any)
-					if !ok || chg1Map == nil {
-						continue
-					}
-
-					nm1Any, ok := chg1Map["name"]
-					if !ok {
-						continue
-					}
-					nm1Str, ok := nm1Any.(string)
-					if !ok {
-						LogTypeErr(nm1Any, "string")
-						continue
-					}
-					retStates = append(retStates, nm1Str)
-
-					var cmt1Bool bool
-					cmt1Any, ok := chg1Map["comment_required"]
-					if ok {
-						cmt1Bool, ok = cmt1Any.(bool)
-						if !ok {
-							LogTypeErr(cmt1Any, "bool")
-						}
-					}
-					retCmts = append(retCmts, cmt1Bool)
-				}
-			}
-			return false
+		loopStringMap(fld1Map, "values", nil, func(key string, val any) (ret bool) {
+			retStates, retCmts, ret = bugzillaParseTran1(
+				key, val, stt, retStates, retCmts)
+			return ret
 		})
 	}
 	if eztools.Debugging && eztools.Verbose > 1 {

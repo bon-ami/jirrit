@@ -21,6 +21,16 @@ import (
 	"gitee.com/bon-ami/eztools/v6"
 )
 
+const ( // exit codes
+	extCfg = iota + 1
+	extAuth
+	extConn
+	extInpt
+	extRslt
+	extGram
+	extSrvr
+)
+
 const (
 	module = "jirrit"
 	// CategoryJira JIRA server in xml
@@ -158,309 +168,34 @@ func Log(onscreen, wttime bool, inf ...any) {
 	}
 }
 
-func main() {
-	const ParamDef = "_"
-	const (
-		extCfg = iota + 1
-		extAuth
-		extConn
-		extInpt
-		extRslt
-		extGram
-		extSrvr
-	)
-	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
+type params struct {
+	h, ver, v, vv, vvv, reverse, getSvrCfg, setSvrCfg         bool
+	r, a, w, k, f, z, i, b, cfg, log, hd, p, l, c, fn, fv, fs string
+}
 
-	var (
-		paramH, paramVer, paramV, paramVV, paramVVV,
-		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
-		paramR, paramA, paramW, paramK, paramF, paramZ,
-		paramI, paramB, paramCfg, paramLog,
-		paramHD, paramP, paramL, paramC,
-		paramFN, paramFV, paramFS string
-	)
-	const cfgSvrOpt = "setsvrcfg"
-	flag.BoolVar(&paramH, "h", false, "help message")
-	flag.BoolVar(&paramVer, "ver", false, "version info")
-	flag.BoolVar(&paramVer, "version", false, "version info")
-	flag.BoolVar(&paramV, "v", false,
-		"log file output")
-	flag.BoolVar(&paramVV, "vv", false, "verbose messages")
-	flag.BoolVar(&paramVVV, "vvv", false,
-		"verbose messages with network I/O")
-	flag.BoolVar(&paramReverse, "reverse", false, "reverse output")
-	flag.BoolVar(&paramGetSvrCfg, "getsvrcfg", false,
-		"get server list from config")
-	flag.BoolVar(&paramSetSvrCfg, cfgSvrOpt, false,
-		"set servers as config")
-	flag.StringVar(&paramR, "r", "", "server name, to be together with -a")
-	flag.StringVar(&paramA, "a", "", "action, to be together with -r")
-	flag.StringVar(&paramW, "w", ParamDef, "JIRA ID to store in settings, "+
-		"to be together with -r. current setting shown, if empty value.")
-	flag.StringVar(&paramK, "k", "", "key or description. reject reason for JIRA")
-	flag.StringVar(&paramI, "i", "",
-		"ID of issue, change, commit or assignee, or build for Jenkins")
-	flag.StringVar(&paramB, "b", "", "branch for JIRA and Gerrit")
-	flag.StringVar(&paramHD, "hd", "",
-		"new assignee when transferring issues, "+
-			"or revision id for cherrypicks")
-	flag.StringVar(&paramP, "p", "",
-		"project for JIRA or Gerrit, state to trasit to for bugzilla, "+
-			"or job ID for Jenkins")
-	flag.StringVar(&paramC, "c", "",
-		"new component when transferring issues, "+
-			"or comment for transitions for JIRA and bugzilla")
-	flag.StringVar(&paramL, "l", "",
-		"test steps for JIRA, or, "+
-			"linked issue when linking issues, "+
-			"or resolution of transition in bugzilla, "+
-			"or more param for issue listing of Gerrit")
-	flag.StringVar(&paramF, "f", "", "file to be sent/saved as")
-	flag.StringVar(&paramZ, "z", "", "number limit to show Jenkins builds")
-	flag.StringVar(&paramCfg, "cfg", "", "config file")
-	flag.StringVar(&paramLog, "log", "", "log file")
-	flag.Var(&paramS, "s", "solution for bugzilla closure. "+
-		"If solution field defined in config, one string overrides all, "+
-		"while multiple strings are appended to each field definition, "+
-		"such as \"-s 'guten morgen; bonne soirée'\" is similar to "+
-		"\"-s morgen -s tag\" if \"guten\" & \"bonne\" "+
-		"defined in config as in example.xml.")
-	flag.StringVar(&paramFN, "fn", "", "output filter, name. "+
-		"to be used together with fv or fs")
-	flag.StringVar(&paramFV, "fv", "", "output filter, value. "+
-		"to be used together with fn. results with this name-value pair only")
-	flag.StringVar(&paramFS, "fs", "", "output filter, python3 script. "+
-		"not to be used together with fn or fv. "+
-		"results filtered by return value 0 from script fv, "+
-		"run by command fn. Note this may be very time-consuming")
-	flag.Parse()
-	if paramVer {
-		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
-		return
-	}
-	if paramH {
-		eztools.ShowStrln("::Return values::")
-		eztools.ShowStrln("", "0", "no error")
-		eztools.ShowStrln("", extCfg, "config error")
-		eztools.ShowStrln("", extAuth, "auth error")
-		eztools.ShowStrln("", extConn, "connection error")
-		eztools.ShowStrln("", extInpt, "input error")
-		eztools.ShowStrln("", extRslt, "result error")
-		eztools.ShowStrln("", extGram, "request error")
-		eztools.ShowStrln("", extSrvr, "server error")
-		eztools.ShowStrln("::When inputting ID's, there are following options for some actions::")
-		eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
-		eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
-		eztools.ShowStrln(" 3. ID range, such as 0,,2 or X-0,2")
-		eztools.ShowStrln("")
-		flag.Usage()
-		eztools.ShowStrln("")
-		eztools.ShowStrln("::Action strings, \"a\", to be used with server names, \"r\", only, and that will eliminate interactions in UI::")
-		for cat, i := range makeCat2Act() {
-			eztools.ShowStrln("\t\t" + cat)
-			for _, j := range i {
-				eztools.ShowStrln("\t" + j.n)
-			}
-		}
-		return
-	}
-	eztools.Debugging = paramV || paramVV || paramVVV
-	switch {
-	case paramV:
-		eztools.Verbose = 1
-	case paramVV:
-		eztools.Verbose = 2
-	case paramVVV:
-		eztools.Verbose = 3
-	}
-	if eztools.Debugging && eztools.Verbose > 1 {
-		stdOutput = true
-	}
-	cats := makeCat2Act()
-	var errs []error
-	cfgFile, errs = eztools.XMLReadDefault(paramCfg, "", "", "", module, &cfg)
-	if errs != nil {
-		Log(true, false, "failed to open config file", errs[0])
-		if len(paramCfg) > 0 {
-			cfgFile = paramCfg
-		} else {
-			home, _ := os.UserHomeDir()
-			cfgFile = filepath.Join(home, module+".xml")
-		}
-		switch eztools.PromptStr("create " +
-			cfgFile + "?([Enter]=y)") {
-		case "", "y", "Y", "yes", "YES", "Yes":
-			break
-		default:
-			os.Exit(extCfg)
-		}
-		var changed bool
-		cfg.User = chkUsr(cfg.User, false)
-		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
-			os.Exit(extCfg)
-		}
-		if !saveCfg() {
-			os.Exit(extCfg)
+func mkIssueinfo(p params) issueInfos {
+	inf := make(issueInfos)
+	matrix := [...][]string{
+		{p.i, IssueinfoStrID},
+		{p.k, IssueinfoStrKey},
+		{p.hd, IssueinfoStrSummary},
+		{p.p, IssueinfoStrProj},
+		{p.b, IssueinfoStrBranch},
+		{p.l, IssueinfoStrLink},
+		{p.f, IssueinfoStrFile},
+		{p.z, IssueinfoStrSize},
+		{p.c, IssueinfoStrComments}}
+	// paramS to be handled when needed
+	for _, i := range matrix {
+		if len(i[0]) > 0 {
+			inf[i[1]] = i[0]
 		}
 	}
-	if len(paramLog) > 0 {
-		cfg.Log = paramLog
-	} else if len(cfg.Log) < 1 && eztools.Debugging {
-		cfg.Log = module + ".log"
-	}
-	if len(cfg.Log) > 0 {
-		logger, err := os.OpenFile(cfg.Log,
-			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err == nil {
-			if err = eztools.InitLogger(logger); err != nil {
-				Log(true, false, err)
-			}
-		} else {
-			Log(true, false, "Failed to open log file "+cfg.Log)
-		}
-	}
+	return inf
+}
 
-	if paramGetSvrCfg {
-		Log(true, false, "user:"+cfg.User)
-		for _, svr := range cfg.Svrs {
-			Log(true, false, "type:"+svr.Type+", name:"+
-				svr.Name+", url:"+svr.URL+
-				", ip:"+svr.IP)
-		}
-		return
-	}
-	if paramSetSvrCfg {
-		if uiSilent {
-			noInteractionAllowed()
-			return
-		}
-		cfg.User = chkUsr(cfg.User, true)
-		var changed bool
-		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
-			os.Exit(extCfg)
-		}
-		if !saveCfg() {
-			os.Exit(extCfg)
-		}
-		return
-	}
-	if !uiSilent {
-		cfg.User = chkUsr(cfg.User, true)
-		if !chkSvr(cfg.Svrs, cfg.Pass, cfgSvrOpt) {
-			failSvrCfg(cfgSvrOpt)
-			os.Exit(extCfg)
-		}
-	}
-	var svr *svrs
-	if paramW != ParamDef {
-		switch len(paramW) {
-		case 0:
-			for _, svr := range cfg.Svrs {
-				if len(svr.Watch) > 0 {
-					Log(true, false, "type:"+svr.Type+", name:"+
-						svr.Name+", watch:"+svr.Watch)
-				}
-			}
-		default:
-			switch len(paramR) {
-			case 0:
-				svr = chooseSvrByType(cfg.Svrs, CategoryJira)
-			default:
-				svr = matchSvr(cfg.Svrs, paramR)
-			}
-			if svr == nil {
-				eztools.LogFatal("NO server matched!")
-				return
-			}
-			// reset previous watch
-			for _, svr1 := range cfg.Svrs {
-				if len(svr1.Watch) > 0 && svr1.Name != svr.Name {
-					svr1.Watch = ""
-				}
-			}
-			svr.Watch = paramW
-			if !saveCfg() {
-				os.Exit(extCfg)
-			}
-		}
-		return
-	}
-
-	// self upgrade
-	upch := make(chan bool, 2)
-	go chkUpdate(cfg.EzToolsCfg, upch)
-
-	var (
-		fun     actionFunc
-		choices []string
-	)
-	switch len(cfg.Svrs) {
-	case 0:
-		eztools.LogFatal("NO server configured!")
-	case 1:
-		svr = &cfg.Svrs[0]
-	}
-	if len(paramR) > 0 {
-		for i, v := range cfg.Svrs {
-			if paramR == v.Name {
-				svr = &cfg.Svrs[i]
-				break
-			}
-		}
-		if svr == nil {
-			Log(true, false, "Unknown server "+paramR)
-		}
-	}
-	mkIssueinfo := func() issueInfos {
-		inf := make(issueInfos)
-		matrix := [...][]string{
-			{paramI, IssueinfoStrID},
-			{paramK, IssueinfoStrKey},
-			{paramHD, IssueinfoStrSummary},
-			{paramP, IssueinfoStrProj},
-			{paramB, IssueinfoStrBranch},
-			{paramL, IssueinfoStrLink},
-			{paramF, IssueinfoStrFile},
-			{paramZ, IssueinfoStrSize},
-			{paramC, IssueinfoStrComments}}
-		// paramS to be handled when needed
-		for _, i := range matrix {
-			if len(i[0]) > 0 {
-				inf[i[1]] = i[0]
-			}
-		}
-		return inf
-	}
-	issueInfo := mkIssueinfo()
-	funParam := "N/A"
-	svrParam := "N/A"
-	if svr != nil {
-		if len(paramA) > 0 {
-			for _, v := range cats[svr.Type] {
-				if paramA == v.n {
-					uiSilent = true
-					fun = v.f
-					funParam = v.n
-					break
-				}
-			}
-			if fun == nil {
-				Log(true, false, "\""+paramA+
-					"\" NOT recognized as a command")
-			}
-		}
-		svrParam = svr.Name
-	}
-	eztools.AuthInsecureTLS = true
-	Log(false, false, "runtime params: server="+
-		svrParam+", action="+funParam+", info array:")
-	Log(false, false, issueInfo)
-	if paramReverse {
-		step = -1
-	} else {
-		step = 1
-	}
-	var err error
+func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInfo issueInfos, para params) (err error) {
+	var choices []string
 	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
@@ -484,7 +219,7 @@ func main() {
 			if fun == nil { // reset issueInfo among loops
 				funParam, fun, issueInfo = chooseAct(svr,
 					authInfo, choices, cats[svr.Type],
-					mkIssueinfo())
+					mkIssueinfo(para))
 				if fun == nil {
 					break
 				}
@@ -503,7 +238,7 @@ func main() {
 					}
 					Log(op, false, e)
 				} else {
-					issues.Print(paramFN, paramFV, paramFS)
+					issues.Print(para.fn, para.fv, para.fs)
 				}
 				return issues, err
 			}
@@ -516,23 +251,204 @@ func main() {
 			break
 		}
 	}
+	return
+}
 
-	if eztools.Debugging {
-		eztools.ShowStrln("waiting for update check...")
+func flagParse(ParamDef, cfgSvrOpt string) params {
+	var p params
+
+	flag.BoolVar(&p.h, "h", false, "help message")
+	flag.BoolVar(&p.ver, "ver", false, "version info")
+	flag.BoolVar(&p.ver, "version", false, "version info")
+	flag.BoolVar(&p.v, "v", false,
+		"log fiLe output")
+	flag.BoolVar(&p.vv, "vv", false, "verbose messages")
+	flag.BoolVar(&p.vvv, "vvv", false,
+		"verbosE messages with network I/O")
+	flag.BoolVar(&p.reverse, "reverse", false, "reverse output")
+	flag.BoolVar(&p.getSvrCfg, "getsvrcfg", false,
+		"get seRver list from config")
+	flag.BoolVar(&p.setSvrCfg, cfgSvrOpt, false,
+		"set servers as config")
+	flag.StringVar(&p.r, "r", "", "server name, to be together with -a")
+	flag.StringVar(&p.a, "a", "", "action, to be together with -r")
+	flag.StringVar(&p.w, "w", ParamDef, "JIRA ID to store in settings, "+
+		"to be together with -r. current setting shown, if empty value.")
+	flag.StringVar(&p.k, "k", "", "key or description. reject reason for JIRA")
+	flag.StringVar(&p.i, "i", "",
+		"ID of isSue, change, commit or assignee, or build for Jenkins")
+	flag.StringVar(&p.b, "b", "", "branch for JIRA and Gerrit")
+	flag.StringVar(&p.hd, "hd", "",
+		"new assignee when transferring issues, "+
+			"or revision id for cherrypicks")
+	flag.StringVar(&p.p, "p", "",
+		"project for JIRA or Gerrit, state to trasit to for bugzilla, "+
+			"or job ID for Jenkins")
+	flag.StringVar(&p.c, "c", "",
+		"new component when transferring issues, "+
+			"or comment for transitions for JIRA and bugzilla")
+	flag.StringVar(&p.l, "l", "",
+		"test steps for JIRA, or, "+
+			"linked issue when linking issues, "+
+			"or resolution of transition in bugzilla, "+
+			"or more param for issue listing of Gerrit")
+	flag.StringVar(&p.f, "f", "", "file to be sent/saved as")
+	flag.StringVar(&p.z, "z", "", "number limit to show Jenkins builds")
+	flag.StringVar(&p.cfg, "cfg", "", "config file")
+	flag.StringVar(&p.log, "log", "", "log file")
+	flag.Var(&paramS, "s", "solution for bugzilla closure. "+
+		"If solution field defined in config, one string overrides all, "+
+		"while multiple strings are appended to each field definition, "+
+		"such as \"-s 'guten morgen; bonne soirée'\" is similar to "+
+		"\"-s morgen -s tag\" if \"guten\" & \"bonne\" "+
+		"defined in config as in example.xml.")
+	flag.StringVar(&p.fn, "fn", "", "output filter, name. "+
+		"to be used together with fv or fs")
+	flag.StringVar(&p.fv, "fv", "", "output filter, value. "+
+		"to be used together with fn. results with this name-value pair only")
+	flag.StringVar(&p.fs, "fs", "", "output filter, python3 script. "+
+		"not to be used together with fn or fv. "+
+		"results filtered by return value 0 from script fv, "+
+		"run by command fn. Note this may be very time-consuming")
+	flag.Parse()
+
+	eztools.Debugging = p.v || p.vv || p.vvv
+	switch {
+	case p.vvv:
+		eztools.Verbose = 3
+	case p.vv:
+		eztools.Verbose = 2
+	case p.v:
+		eztools.Verbose = 1
 	}
-	if <-upch {
-		if <-upch {
-			if eztools.Debugging {
-				eztools.ShowStrln("waiting for update check to end...")
-			}
-			if <-upch {
-				if cfg.AppUp.Interval > 0 {
-					cfg.AppUp.Previous = eztools.TranDate("")
-					saveCfg()
-				}
-			}
+	return p
+}
+
+func flagHelp() {
+	eztools.ShowStrln("::Return values::")
+	eztools.ShowStrln("", "0", "no error")
+	eztools.ShowStrln("", extCfg, "config error")
+	eztools.ShowStrln("", extAuth, "auth error")
+	eztools.ShowStrln("", extConn, "connection error")
+	eztools.ShowStrln("", extInpt, "input error")
+	eztools.ShowStrln("", extRslt, "result error")
+	eztools.ShowStrln("", extGram, "request error")
+	eztools.ShowStrln("", extSrvr, "server error")
+	eztools.ShowStrln("::When inputting ID's, there are following options for some actions::")
+	eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
+	eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
+	eztools.ShowStrln(" 3. ID range, such as 0,,2 or X-0,2")
+	eztools.ShowStrln("")
+	flag.Usage()
+	eztools.ShowStrln("")
+	eztools.ShowStrln("::Action strings, \"a\", to be used with server names, \"r\", only, and that will eliminate interactions in UI::")
+	for cat, i := range makeCat2Act() {
+		eztools.ShowStrln("\t\t" + cat)
+		for _, j := range i {
+			eztools.ShowStrln("\t" + j.n)
 		}
 	}
+}
+
+func loadCfg(p params) {
+	var errs []error
+	cfgFile, errs = eztools.XMLReadDefault(p.cfg, "", "", "", module, &cfg)
+	if errs != nil {
+		Log(true, false, "failed to open config file", errs[0])
+		if len(p.cfg) > 0 {
+			cfgFile = p.cfg
+		} else {
+			home, _ := os.UserHomeDir()
+			cfgFile = filepath.Join(home, module+".xml")
+		}
+		switch eztools.PromptStr("create " +
+			cfgFile + "?([Enter]=y)") {
+		case "", "y", "Y", "yes", "YES", "Yes":
+			break
+		default:
+			os.Exit(extCfg)
+		}
+		var changed bool
+		cfg.User = chkUsr(cfg.User, false)
+		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
+			os.Exit(extCfg)
+		}
+		if !saveCfg() {
+			os.Exit(extCfg)
+		}
+	}
+	if len(p.log) > 0 {
+		cfg.Log = p.log
+	} else if len(cfg.Log) < 1 && eztools.Debugging {
+		cfg.Log = module + ".log"
+	}
+	if len(cfg.Log) > 0 {
+		logger, err := os.OpenFile(cfg.Log,
+			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err == nil {
+			if err = eztools.InitLogger(logger); err != nil {
+				Log(true, false, err)
+			}
+		} else {
+			Log(true, false, "Failed to open log file "+cfg.Log)
+		}
+	}
+}
+
+func watchCfg(p params) {
+	switch len(p.w) {
+	case 0:
+		for _, svr := range cfg.Svrs {
+			if len(svr.Watch) > 0 {
+				Log(true, false, "type:"+svr.Type+", name:"+
+					svr.Name+", watch:"+svr.Watch)
+			}
+		}
+	default:
+		var svr *svrs
+		switch len(p.r) {
+		case 0:
+			svr = chooseSvrByType(cfg.Svrs, CategoryJira)
+		default:
+			svr = matchSvr(cfg.Svrs, p.r)
+		}
+		if svr == nil {
+			eztools.LogFatal("NO server matched!")
+			return
+		}
+		// reset previous watch
+		for _, svr1 := range cfg.Svrs {
+			if len(svr1.Watch) > 0 && svr1.Name != svr.Name {
+				svr1.Watch = ""
+			}
+		}
+		svr.Watch = p.w
+		if !saveCfg() {
+			os.Exit(extCfg)
+		}
+	}
+}
+
+func matchFuncFromParam(p params, svr *svrs, cats cat2Act) (fun actionFunc, funParam string) {
+	funParam = "N/A"
+	if len(p.a) > 0 {
+		for _, v := range cats[svr.Type] {
+			if p.a == v.n {
+				uiSilent = true
+				fun = v.f
+				funParam = v.n
+				break
+			}
+		}
+		if fun == nil {
+			Log(true, false, "\""+p.a+
+				"\" NOT recognized as a command")
+		}
+	}
+	return
+}
+
+func errExit(err error) {
 	if err != nil {
 		if eztools.Debugging {
 			Log(true, false, "exit with \""+err.Error()+"\"")
@@ -555,6 +471,124 @@ func main() {
 			os.Exit(extSrvr)
 		}
 	}
+}
+
+func main() {
+	const ParamDef = "_"
+	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
+
+	const cfgSvrOpt = "setsvrcfg"
+	p := flagParse(ParamDef, cfgSvrOpt)
+	if p.ver {
+		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
+		return
+	}
+	if p.h {
+		flagHelp()
+		return
+	}
+	if eztools.Debugging && eztools.Verbose > 1 {
+		stdOutput = true
+	}
+	cats := makeCat2Act()
+	loadCfg(p)
+
+	if p.getSvrCfg {
+		Log(true, false, "user:"+cfg.User)
+		for _, svr := range cfg.Svrs {
+			Log(true, false, "type:"+svr.Type+", name:"+
+				svr.Name+", url:"+svr.URL+
+				", ip:"+svr.IP)
+		}
+		return
+	}
+	if p.setSvrCfg {
+		if uiSilent {
+			noInteractionAllowed()
+			return
+		}
+		cfg.User = chkUsr(cfg.User, true)
+		var changed bool
+		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
+			os.Exit(extCfg)
+		}
+		if !saveCfg() {
+			os.Exit(extCfg)
+		}
+		return
+	}
+	if !uiSilent {
+		cfg.User = chkUsr(cfg.User, true)
+		if !chkSvr(cfg.Svrs, cfg.Pass, cfgSvrOpt) {
+			failSvrCfg(cfgSvrOpt)
+			os.Exit(extCfg)
+		}
+	}
+	if p.w != ParamDef {
+		watchCfg(p)
+		return
+	}
+
+	// self upgrade
+	upch := make(chan bool, 2)
+	go chkUpdate(cfg.EzToolsCfg, upch)
+
+	var (
+		fun      actionFunc
+		funParam string
+		svr      *svrs
+	)
+	switch len(cfg.Svrs) {
+	case 0:
+		eztools.LogFatal("NO server configured!")
+	case 1:
+		svr = &cfg.Svrs[0]
+	}
+	if len(p.r) > 0 {
+		for i, v := range cfg.Svrs {
+			if p.r == v.Name {
+				svr = &cfg.Svrs[i]
+				break
+			}
+		}
+		if svr == nil {
+			Log(true, false, "Unknown server "+p.r)
+		}
+	}
+	issueInfo := mkIssueinfo(p)
+	svrParam := "N/A"
+	if svr != nil {
+		matchFuncFromParam(p, svr, cats)
+		svrParam = svr.Name
+	}
+	eztools.AuthInsecureTLS = true
+	Log(false, false, "runtime params: server="+
+		svrParam+", action="+funParam+", info array:")
+	Log(false, false, issueInfo)
+	if p.reverse {
+		step = -1
+	} else {
+		step = 1
+	}
+	err := mainLoop(svr, cats, fun, funParam, issueInfo, p)
+
+	if eztools.Debugging {
+		eztools.ShowStrln("waiting for update check...")
+	}
+	if <-upch {
+		if <-upch {
+			if eztools.Debugging {
+				eztools.ShowStrln("waiting for update check to end...")
+			}
+			if <-upch {
+				if cfg.AppUp.Interval > 0 {
+					cfg.AppUp.Previous = eztools.TranDate("")
+					saveCfg()
+				}
+			}
+		}
+	}
+	errExit(err)
 }
 
 // Print outputs the results
@@ -1824,108 +1858,115 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 	return false
 }
 
+// inputIssueInfo4JB is for Jira and Bugzilla
+func inputIssueInfo4JB(svr *svrs, authInfo eztools.AuthInfo,
+	action string, inf issueInfos) bool {
+	switch action {
+	case "close a case to resolved from any known statuses":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPrompt(svr, inf, IssueinfoStrComments)
+		switch svr.Type {
+		case CategoryJira:
+			useInputOrPromptStr(svr, inf, IssueinfoStrLink,
+				"test step for closure")
+		}
+	case "move status of a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		strCmt := IssueinfoStrComments
+		switch svr.Type {
+		case CategoryBugzilla:
+			strCmt += " (added to all statues during transition)"
+		}
+		useInputOrPromptStr(svr, inf, IssueinfoStrComments, strCmt)
+	case "close a case with default design as steps",
+		"close a case with general requirement as steps":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPrompt(svr, inf, IssueinfoStrComments)
+	case "show details of a case",
+		"list comments of a case",
+		"list files attached to a case",
+		"list watchers of a case",
+		"check whether watching a case",
+		"watch a case",
+		"unwatch a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+	case "link a case to another":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf, IssueinfoStrLink,
+			"ID (not indexes above, if any) this issue blocks")
+	case "remove a file attached to a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrKey, "file ID")
+	case "add a file to a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPrompt(svr, inf, IssueinfoStrFile)
+		switch svr.Type {
+		case CategoryBugzilla:
+			useInputOrPromptStr(svr, inf,
+				IssueinfoStrKey, "description")
+		}
+	case "get a file to a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrKey, "file ID")
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrFile, "file to be saved as")
+	case "change a comment from a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrKey, "comment ID")
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrComments, "comment body")
+	case "delete a comment from a case":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrKey, "comment ID")
+	case "add a comment to a case",
+		"reject a case from any known statuses":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPrompt(svr, inf, IssueinfoStrComments)
+	case "transfer a case to someone":
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrSummary, "assignee")
+		useInputOrPromptStr(svr, inf,
+			IssueinfoStrComments, "component")
+	}
+	return false
+}
+
 func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 	action string, inf issueInfos) bool {
 	switch svr.Type {
 	case CategoryGerrit:
 		break
 	case CategoryJira, CategoryBugzilla:
-		switch action {
-		case "close a case to resolved from any known statuses":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPrompt(svr, inf, IssueinfoStrComments)
-			switch svr.Type {
-			case CategoryJira:
-				useInputOrPromptStr(svr, inf, IssueinfoStrLink,
-					"test step for closure")
-			}
-		case "move status of a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			strCmt := IssueinfoStrComments
-			switch svr.Type {
-			case CategoryBugzilla:
-				strCmt += " (added to all statues during transition)"
-			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrComments, strCmt)
-		case "close a case with default design as steps",
-			"close a case with general requirement as steps":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPrompt(svr, inf, IssueinfoStrComments)
-		case "show details of a case",
-			"list comments of a case",
-			"list files attached to a case",
-			"list watchers of a case",
-			"check whether watching a case",
-			"watch a case",
-			"unwatch a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-		case "link a case to another":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf, IssueinfoStrLink,
-				"ID (not indexes above, if any) this issue blocks")
-		case "remove a file attached to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrKey, "file ID")
-		case "add a file to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPrompt(svr, inf, IssueinfoStrFile)
-			switch svr.Type {
-			case CategoryBugzilla:
-				useInputOrPromptStr(svr, inf,
-					IssueinfoStrKey, "description")
-			}
-		case "get a file to a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrKey, "file ID")
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrFile, "file to be saved as")
-		case "change a comment from a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrKey, "comment ID")
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrComments, "comment body")
-		case "delete a comment from a case":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrKey, "comment ID")
-		case "add a comment to a case",
-			"reject a case from any known statuses":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPrompt(svr, inf, IssueinfoStrComments)
-		case "transfer a case to someone":
-			if useInputOrPrompt4ID(svr, authInfo, inf) {
-				return true
-			}
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrSummary, "assignee")
-			useInputOrPromptStr(svr, inf,
-				IssueinfoStrComments, "component")
-		}
+		return inputIssueInfo4JB(svr, authInfo, action, inf)
 	case CategoryJenkins:
 		switch action {
 		case "list jobs", "list builds":
