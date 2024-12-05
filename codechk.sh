@@ -1,18 +1,20 @@
-#!/bin/sh
+#!/bin/bash
 fail_if_err() {
 	echo "checking $1: $3"
-	eval $2
+	eval "$2"
 	if [ "$?" -ne 0 ]; then
 		echo "FAILED " $1
 		exit 1
 	fi
 }
 
-fail_if_err "FORMAT" "[ -z $(goimports -l .) ]" "goimports -l ."
+fail_if_err "FORMAT" '[ -z "$(goimports -l .)" ]' "goimports -l ."
 fail_if_err "TEST" "go test ./... > /dev/null" "go test ./..."
 fail_if_err "VET" "go vet ./..." "go vet ./..."
 # go install golang.org/x/lint/golint@latest
-fail_if_err "LINT" "golint -set_exit_status \$(go list ./...)" "golint -set_exit_status \$(go list ./...)"
+#fail_if_err "LINT" "golint -set_exit_status \$(go list ./...)" "golint -set_exit_status \$(go list ./...)"
+#
+fail_if_err "LINT" "golangci-lint.exe run" "golangci-lint.exe run"
 # complexity check
 # go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 fail_if_err "CYCLO" "gocyclo -over 30 ." "gocyclo -over 30 ."

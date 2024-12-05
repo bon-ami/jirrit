@@ -26,6 +26,11 @@ run `jirrit -h` for more info on these parameters.
  - `-s []string` provide multiple parts to be used with field configurations, or one complete solution for closure in bugzilla.
  - `-w string` provide JIRA ID to store. To be used together with "-r".
  - `-z int` provide max number of buils to show for Jenkins.
+ - `-fn string` provide a key or command to filter results. To be used together with "-fv" or "-fs".
+ - `-fv string` provide a value to filter results. To be used together with "-fn".<BR>
+For example, for "-fn name -fv foo", the results with a line "    name=foo" will be taken, and others will be skipped.
+ - `-fs string` provide a script file to filter results. To be used together with "-fn".<BR>
+For example, for "-fn python -fs example_filter.py", the results with a line beginning with  "    name=MAD" will be taken, and others will be skipped.
 
 `-r` and `-a` are meant to be used together to avoid user input.
 
@@ -152,8 +157,8 @@ Be aware Change IDs are same among cherrypicks.
  - For most prompts, [Enter] without default value as shown is taken as an invalid input and return to previous menu.
  - If previous value is in the format of ".+\-[0-9]+", or X-0, to be easier to read, and the new input is just a number, it will be taken as the number replacing the previous number part.
  - In some cases, input support multiple lines. End an input with "\" to indicate it is a line of multiple ones and continue inputting.
- - In some cases,<BR>
-Input ".+\-[0-9]+[,][,][0-9]+", or "X-0,,1", or "0,,1", to be easier to read, to batch process all the ID's between, and including, the two numbers.<BR>
-Input "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.)
+ - In some interactive input cases, and for parameter "-i",
+   - ".+\-[0-9]+[,][,][0-9]+", or "X-0,,1", or "0,,1", to be easier to read, to batch process all the ID's between, and including, the two numbers.
+   - "X-0,Y-1,2", to be easier to read, to batch process all the ID's listed, adding previous letter part. ("X-0,Y-1,2" will result in processing X-0, Y-1 and Y-2.)
 
 [![screenshot](https://ezproject.sourceforge.io/sc_jirrit.png)](https://ezproject.sourceforge.io/sc_jirrit.png)

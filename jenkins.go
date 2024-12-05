@@ -136,7 +136,7 @@ func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 // jenkinsParseJobs get "name" & "url" from "jobs" or sth.
-func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
+func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
 	if i == nil {
 		Log(false, false, "NO jobs got")
 		return nil, nil
@@ -147,6 +147,7 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 		return nil, nil
 	}
 	var issues issueInfoSlc
+	count, _ := strconv.Atoi(num)
 	for _, e := range a {
 		m, ok := e.(map[string]interface{})
 		if !ok {
@@ -180,6 +181,13 @@ func jenkinsParseJobs(i interface{}) (issueInfoSlc, error) {
 			IssueinfoStrName: ns,
 			IssueinfoStrURL:  us,
 		})
+		if count == 0 { // no limit
+			continue
+		}
+		count--
+		if count == 0 {
+			break
+		}
 	}
 	return issues, nil
 }
@@ -192,7 +200,7 @@ func jenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil || nil == bodyMap || len(bodyMap) < 1 {
 		return nil, err
 	}
-	return jenkinsParseJobs(bodyMap[IssueinfoStrJob])
+	return jenkinsParseJobs(bodyMap[IssueinfoStrJob], issueInfo[IssueinfoStrSize])
 }
 
 func jenkinsParseBldActParams(parIn any, issueInfo issueInfos) bool {

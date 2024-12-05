@@ -35,12 +35,12 @@ compile:
     - go build -race -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG} -extldflags '-static'" -o $CI_PROJECT_DIR/jirrit
     #- GOARCH=386 go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG} -extldflags '-static'" -o $CI_PROJECT_DIR/jirrit32
     - GOOS=windows go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG}" -o $CI_PROJECT_DIR/jirrit.exe
-    - GOOS=windows GOARCH=386 go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG}" -o $CI_PROJECT_DIR/jirrit32.exe
-    #- GOOS=darwin go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG}" -o $CI_PROJECT_DIR/jirritMac
+    #- GOOS=windows GOARCH=386 go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG}" -o $CI_PROJECT_DIR/jirrit32.exe
+    - GOOS=darwin go build -ldflags "-X main.Bld=${CI_COMMIT_SHORT_SHA} -X main.Ver=${CI_COMMIT_TAG}" -o $CI_PROJECT_DIR/jirritMac
   artifacts:
     paths:
       - jirrit
       #- jirrit32
       - jirrit.exe
-      - jirrit32.exe
-      #- jirritMac
+      #- jirrit32.exe
+      - jirritMac

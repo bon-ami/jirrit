@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,10 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"gitee.com/bon-ami/eztools/v6"
 )
@@ -172,7 +176,8 @@ func main() {
 		paramReverse, paramGetSvrCfg, paramSetSvrCfg bool
 		paramR, paramA, paramW, paramK, paramF, paramZ,
 		paramI, paramB, paramCfg, paramLog,
-		paramHD, paramP, paramL, paramC string
+		paramHD, paramP, paramL, paramC,
+		paramFN, paramFV, paramFS string
 	)
 	const cfgSvrOpt = "setsvrcfg"
 	flag.BoolVar(&paramH, "h", false, "help message")
@@ -220,6 +225,14 @@ func main() {
 		"such as \"-s 'guten morgen; bonne soirée'\" is similar to "+
 		"\"-s morgen -s tag\" if \"guten\" & \"bonne\" "+
 		"defined in config as in example.xml.")
+	flag.StringVar(&paramFN, "fn", "", "output filter, name. "+
+		"to be used together with fv or fs")
+	flag.StringVar(&paramFV, "fv", "", "output filter, value. "+
+		"to be used together with fn. results with this name-value pair only")
+	flag.StringVar(&paramFS, "fs", "", "output filter, python3 script. "+
+		"not to be used together with fn or fv. "+
+		"results filtered by return value 0 from script fv, "+
+		"run by command fn. Note this may be very time-consuming")
 	flag.Parse()
 	if paramVer {
 		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
@@ -490,7 +503,7 @@ func main() {
 					}
 					Log(op, false, e)
 				} else {
-					issues.Print()
+					issues.Print(paramFN, paramFV, paramFS)
 				}
 				return issues, err
 			}
@@ -544,7 +557,44 @@ func main() {
 	}
 }
 
-func (issues issueInfoSlc) Print() {
+// Print outputs the results
+// Parameters: filter parameters, name, value, script
+func (issues issueInfoSlc) Print(fn, fv, fs string) {
+	funcScript := func(issueInfo issueInfos) bool {
+		jsonData, err := json.Marshal(issueInfo)
+		if err != nil {
+			Log(true, false, "Error serializing JSON:", err)
+			return true
+		}
+		if eztools.Debugging && eztools.Verbose > 0 {
+			Log(false, false, "filtering with", fn, fs)
+		}
+		cmd := exec.Command(fn, fs)
+		cmd.Stdin = bytes.NewReader(jsonData)
+		var out bytes.Buffer
+		if eztools.Debugging && eztools.Verbose > 1 {
+			cmd.Stdout = &out
+		}
+		err = cmd.Run()
+		if eztools.Debugging && eztools.Verbose > 1 {
+			Log(true, false, "script err=", err, "out=", out.String())
+		}
+		if err == nil {
+			return true
+		}
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+				exitCode := status.ExitStatus()
+				if eztools.Debugging && eztools.Verbose > 1 {
+					Log(true, false, "exit code=", exitCode)
+				}
+				if exitCode == 0 {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	if issues == nil {
 		Log(true, false, "No results.")
 	} else {
@@ -554,8 +604,26 @@ func (issues issueInfoSlc) Print() {
 		} else {
 			i = 0
 		}
+		var fun func(issueInfos) bool
+		if len(fn) > 0 {
+			switch {
+			case len(fs) > 0:
+				if _, err := os.Stat(fs); err != nil {
+					Log(true, false, err)
+					break
+				}
+				fun = funcScript
+			case len(fv) > 0:
+				fun = func(issueInfo issueInfos) bool {
+					return issueInfo[fn] == fv
+				}
+			}
+		}
 		for ; i >= 0 && i < len(issues); i += step {
 			if len(issues[i]) < 1 {
+				continue
+			}
+			if fun != nil && !fun(issues[i]) {
 				continue
 			}
 			Log(true, false, "Issue/Reviewer/Comment/File "+
@@ -1860,7 +1928,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 		}
 	case CategoryJenkins:
 		switch action {
-		case "list builds":
+		case "list jobs", "list builds":
 			useInputOrPromptStr(svr, inf, IssueinfoStrSize,
 				"max number of results")
 		case "get log of a build":
