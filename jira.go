@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -1185,10 +1183,7 @@ func jiraGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
-	if len(issueInfo[IssueinfoStrID]) < 1 {
-		return nil, eztools.ErrInvalidInput
-	}
-	isDir := false
+	/*isDir := false
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
 	if err == nil || !os.IsNotExist(err) {
 		if !fi.IsDir() {
@@ -1196,15 +1191,16 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 			return nil, err
 		}
 		isDir = true
-	}
-	issueInfo, err = jiraGetFileInf(svr, authInfo, issueInfo)
+	}*/
+	issueInfo, err := jiraGetFileInf(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err
 	}
 	if len(issueInfo[IssueinfoStrLink]) < 1 {
 		return nil, eztools.ErrNoValidResults
 	}
-	if len(issueInfo[IssueinfoStrFile]) < 1 || isDir {
+	_, err = restAttachment(http.MethodGet, issueInfo[IssueinfoStrLink], authInfo, nil, svr.Magic)
+	/*if len(issueInfo[IssueinfoStrFile]) < 1 || isDir {
 		issueInfo[IssueinfoStrFile] = filepath.Join(issueInfo[IssueinfoStrFile],
 			issueInfo[IssueinfoStrName])
 	}
@@ -1225,7 +1221,7 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 			}
 		}
 	}
-	issueInfo[IssueinfoStrState] = strconv.Itoa(errNo)
+	issueInfo[IssueinfoStrState] = strconv.Itoa(errNo)*/
 	return issueInfo.ToSlc(), err
 }
 

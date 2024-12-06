@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.23.0
 
 require (
-	gitee.com/bon-ami/eztools/v6 v6.2.1
+	gitee.com/bon-ami/eztools/v6 v6.3.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 )
 

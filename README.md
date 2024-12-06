@@ -123,9 +123,9 @@ Usually, these fields can be seen in an issue's detail.
   - cherry pick all my open submits
   - cherry pick a submit
   - revert a submit
-  - list files of a submit
   - list files of a submit by revision
   - list config of a project
+  - download a file of a submit
 
 - Jenkins
   - list jobs

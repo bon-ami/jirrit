@@ -293,7 +293,8 @@ func flagParse(ParamDef, cfgSvrOpt string) params {
 			"linked issue when linking issues, "+
 			"or resolution of transition in bugzilla, "+
 			"or more param for issue listing of Gerrit")
-	flag.StringVar(&p.f, "f", "", "file to be sent/saved as")
+	flag.StringVar(&p.f, "f", "", "file to be sent/saved as, "+
+		"or file ID of download in Gerrit")
 	flag.StringVar(&p.z, "z", "", "number limit to show Jenkins builds")
 	flag.StringVar(&p.cfg, "cfg", "", "config file")
 	flag.StringVar(&p.log, "log", "", "log file")
@@ -1101,10 +1102,10 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 	return funcs[fi].n, funcs[fi].f, issueInfo
 }
 
-func chkErrRest(bodyBytes []byte, body interface{},
-	errno int, err error) (interface{}, error) {
+func chkErrRest(bodyBytes []byte,
+	errno int, err error) error {
 	var (
-		dnsErr *net.DNSError
+		dnsErr net.DNSError
 		urlErr *url.Error
 	)
 	switch {
@@ -1139,40 +1140,69 @@ func chkErrRest(bodyBytes []byte, body interface{},
 			Log(stdOutput, false, "REST body=", string(bodyBytes))
 		}
 	}
-	return body, err
+	return err
+}
+
+// chkRespErr checks whether it is an error or log the response
+// Return value: whether it is an error
+func chkRespErr(resp *http.Response, err error) bool {
+	if err != nil {
+		return true
+	}
+	if eztools.Debugging && eztools.Verbose > 2 {
+		Log(stdOutput, false, resp)
+	}
+	return false
+}
+
+func logReq(method, url string) {
+	if eztools.Debugging && eztools.Verbose > 2 {
+		Log(stdOutput, false, method, url)
+	}
 }
 
 func restFile(method, url string, authInfo eztools.AuthInfo,
 	fType, fName string, hdrs map[string]string,
 	magic string) (body interface{}, err error) {
+	logReq(method, url)
 	resp, err := eztools.HTTPSendAuthNHdrNFile(method, url,
 		authInfo, fType, fName, hdrs)
-	if err != nil {
+	if chkRespErr(resp, err) {
 		return
 	}
 	_, _, bodyBytes, errInt, err :=
 		eztools.HTTPParseBody(resp, "", &body, []byte(magic))
-	return chkErrRest(bodyBytes, body, errInt, err)
+	return body, chkErrRest(bodyBytes, errInt, err)
+}
+
+// restAttachment sends a request and save the attachement in the response
+func restAttachment(method, url string, authInfo eztools.AuthInfo,
+	bodyReq io.Reader, magic string) (fileName string, err error) {
+	logReq(method, url)
+	resp, err := eztools.HTTPSendAuth(method,
+		url, "", authInfo, bodyReq)
+	if chkRespErr(resp, err) {
+		return
+	}
+	_, fileName, err = eztools.HTTPSaveAttachment(resp, "")
+	return fileName, err
 }
 
 // return nil for 404
 func restSth(method, url string, authInfo eztools.AuthInfo,
 	bodyReq io.Reader, magic string) (body interface{}, err error) {
-	if eztools.Debugging && eztools.Verbose > 2 {
-		Log(true, false, method, url)
-	}
+	logReq(method, url)
 	/*if eztools.Debugging && eztools.Verbose > 2 && bodyReq != nil {
-		Log(true, false, "resting", bodyReq)
+		Log(stdOutput, false, "resting", bodyReq)
 	}*/
 	resp, err := eztools.HTTPSendAuth(method,
 		url, "", authInfo, bodyReq)
-	if err != nil {
+	if chkRespErr(resp, err) {
 		return
 	}
 	_, _, bodyBytes, errInt, err :=
 		eztools.HTTPParseBody(resp, "", &body, []byte(magic))
-	body, err = chkErrRest(bodyBytes, body, errInt, err)
-	return
+	return body, chkErrRest(bodyBytes, errInt, err)
 }
 
 func restMap(method, url string, authInfo eztools.AuthInfo,
@@ -1965,6 +1995,40 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 	action string, inf issueInfos) bool {
 	switch svr.Type {
 	case CategoryGerrit:
+		switch action {
+		case "rebase a submit",
+			"revert a submit",
+			"abandon a submit",
+			"show reviewers and scores of a submit",
+			"add scores to a submit",
+			"show history of a submit":
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
+				return true
+			}
+		case "list files of a submit by revision":
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
+				return true
+			}
+			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur,
+				"revision(empty for current)")
+		case "download a file of a submit":
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
+				return true
+			}
+			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur,
+				"revision(empty for current)")
+			useInputOrPrompt(svr, inf, IssueinfoStrFile)
+		case "cherry pick a submit":
+			if useInputOrPrompt4ID(svr, authInfo, inf) {
+				return true
+			}
+			useInputOrPromptStr(svr, inf, IssueinfoStrRevCur,
+				"revision(empty for current)")
+			useInputOrPrompt(svr, inf, IssueinfoStrBranch)
+			if len(inf[IssueinfoStrBranch]) < 1 {
+				return true
+			}
+		}
 		break
 	case CategoryJira, CategoryBugzilla:
 		return inputIssueInfo4JB(svr, authInfo, action, inf)
@@ -2032,9 +2096,9 @@ func makeCat2Act() cat2Act {
 			{"cherry pick all my open submits", gerritPickMyOpen},
 			{"cherry pick a submit", gerritPick},
 			{"revert a submit", gerritRevert},
-			{"list files of a submit", gerritListFiles},
 			{"list files of a submit by revision", gerritListFilesByRev},
-			{"list config of a project", gerritListPrj}},
+			{"list config of a project", gerritListPrj},
+			{"download a file of a submit", gerritGetFile}},
 		CategoryJenkins: []action2Func{
 			{"list jobs", jenkinsListJobs},
 			{"show details of a build", jenkinsDetailOnBld},
