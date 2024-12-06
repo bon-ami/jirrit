@@ -1105,7 +1105,7 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 func chkErrRest(bodyBytes []byte,
 	errno int, err error) error {
 	var (
-		dnsErr net.DNSError
+		dnsErr *net.DNSError
 		urlErr *url.Error
 	)
 	switch {
@@ -2029,7 +2029,6 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 				return true
 			}
 		}
-		break
 	case CategoryJira, CategoryBugzilla:
 		return inputIssueInfo4JB(svr, authInfo, action, inf)
 	case CategoryJenkins:
