@@ -7,6 +7,7 @@ on:
   create:
     branches: [ "master" ]
   workflow_dispatch:
+  release:
   push:
     branches: [ "master" ]
   pull_request:
@@ -19,6 +20,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: If no tags
+      if: startsWith(github.ref, 'refs/heads/')
+      run: echo "TAG_NAME=v0.0.0" >> $GITHUB_ENV
+
+    - name: If tags
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
@@ -26,8 +37,8 @@ jobs:
 
     - name: Build
       run: |
-        TAG_NAME=${GITHUB_REF#refs/tags/}
         echo version $TAG_NAME build ${{ github.sha }}
+        [ -z "$TAG_NAME" ] && TAG_NAME="v0.0.0"
         go build -race -ldflags "-X main.Bld=${{ github.sha }} -X main.Ver=$TAG_NAME -extldflags '-static'" -o jirrit
         GOOS=windows go build -ldflags "-X main.Bld=${{ github.sha }} -X main.Ver=$TAG_NAME" -o jirrit.exe
         GOOS=darwin go build -ldflags "-X main.Bld=${{ github.sha }} -X main.Ver=$TAG_NAME" -o jirritMac
@@ -37,3 +48,12 @@ jobs:
         go fmt
         go vet
         go test -v ./...
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: jirrit-artifacts
+        path: |
+          jirrit
+          jirrit.exe
+          jirritMac
