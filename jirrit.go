@@ -375,7 +375,7 @@ func loadCfg(p params) {
 		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
 			os.Exit(extCfg)
 		}
-		if !saveCfg() {
+		if !saveCfg(true) {
 			os.Exit(extCfg)
 		}
 	}
@@ -425,7 +425,7 @@ func watchCfg(p params) {
 			}
 		}
 		svr.Watch = p.w
-		if !saveCfg() {
+		if !saveCfg(false) {
 			os.Exit(extCfg)
 		}
 	}
@@ -502,6 +502,9 @@ func main() {
 				svr.Name+", url:"+svr.URL+
 				", ip:"+svr.IP)
 		}
+		if !saveCfg(false) {
+			os.Exit(extCfg)
+		}
 		return
 	}
 	if p.setSvrCfg {
@@ -514,7 +517,7 @@ func main() {
 		if cfg.Svrs, changed = addSvr(cfg.Svrs, cfg.Pass); !changed {
 			os.Exit(extCfg)
 		}
-		if !saveCfg() {
+		if !saveCfg(false) {
 			os.Exit(extCfg)
 		}
 		return
@@ -585,7 +588,7 @@ func main() {
 			if <-upch {
 				if cfg.AppUp.Interval > 0 {
 					cfg.AppUp.Previous = eztools.TranDate("")
-					saveCfg()
+					saveCfg(false)
 				}
 			}
 		}
@@ -717,7 +720,7 @@ func chkUsr(user string, save bool) string {
 		un = user
 	} else {
 		if save {
-			saveCfg()
+			saveCfg(true)
 		}
 	}
 	return un
@@ -813,7 +816,7 @@ func chkSvr(svr []svrs, pass passwords, cfgSvrOpt string) bool {
 	if !changed {
 		return true
 	}
-	return saveCfg()
+	return saveCfg(false)
 }
 
 func inputPass4Svr(svrType string) (passType, passTxt string, ok bool) {
@@ -918,11 +921,15 @@ func saveProj(svr *svrs, proj string) bool {
 	if !ret {
 		return false
 	}
-	return saveCfg()
+	return saveCfg(false)
 }
 
-func saveCfg() bool {
-	if err := eztools.XMLWriteNoCreate(cfgFile, cfg, "\t"); err != nil {
+func saveCfg(creation bool) bool {
+	fun := eztools.XMLWrite
+	if !creation {
+		fun = eztools.XMLWriteNoCreate
+	}
+	if err := fun(cfgFile, cfg, "\t"); err != nil {
 		Log(true, false, err)
 		return false
 	}
