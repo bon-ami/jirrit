@@ -712,7 +712,7 @@ func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 		IssueinfoStrID, IssueinfoStrAssignee)
 	useInputOrPrompt(svr, issueInfo, IssueinfoStrBranch)
 	useInputOrPrompt(svr, issueInfo, IssueinfoStrProj)
-	useInputOrPromptStr(svr, issueInfo, IssueinfoStrVal,
+	useInputOrPromptStr(svr, issueInfo, IssueinfoStrLink,
 		"more param(such as \"is:stared+has:star\")")
 	var urlAffix string
 	strs := [...][2]string{
@@ -720,7 +720,7 @@ func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 		{"project:", issueInfo[IssueinfoStrProj]},
 		{"branch:", issueInfo[IssueinfoStrBranch]},
 		{"owner:", issueInfo[IssueinfoStrID]},
-		{"", issueInfo[IssueinfoStrVal]}}
+		{"", issueInfo[IssueinfoStrLink]}}
 	for _, v := range strs {
 		if len(v[1]) > 0 {
 			if len(urlAffix) > 0 {
