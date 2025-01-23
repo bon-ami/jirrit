@@ -247,7 +247,117 @@ func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo[IssueinfoStrID] = inf[0][IssueinfoStrID]
 }*/
 
+func gerritParsePickCmds(body map[string]interface{}) issueInfoSlc {
+	Log(true, false, body)
+	retI := body[IssueinfoStrCherry]
+	if retI == nil {
+		Log(stdOutput, false,
+			"NOTHING got intead of string!")
+		return nil
+	}
+	if retS, ok := retI.(string); ok {
+		return issueInfos{
+			IssueinfoStrCherry: retS}.ToSlc()
+	}
+	LogTypeErr(retI, "string")
+	return nil
+}
+
+func gerritParseDlds4Revs(body map[string]interface{}) issueInfoSlc {
+	Log(true, false, "parsing revs", body)
+	dlds := gerritParseRecursively(body,
+		[]string{"fetch", "ssh", "commands"}, gerritParsePickCmds)
+	retI, ok := body[IssueinfoStr_Nmb]
+	if !ok || retI == nil {
+		return dlds
+	}
+	if retF, ok := retI.(float64); ok {
+		retS := strconv.FormatFloat(retF, 'f', 0, 64)
+		if len(dlds) != 1 {
+			Log(true, false,
+				"Invalid number of downloads!")
+			dlds = append(dlds,
+				issueInfos{IssueinfoStrNmb: retS})
+		} else {
+			dlds[0][IssueinfoStrNmb] = retS
+		}
+	} else {
+		LogTypeErr(retI, "float64")
+	}
+	return dlds
+}
+
+func gerritParseDlds(m map[string]interface{},
+	issues issueInfoSlc) issueInfoSlc {
+	issues = gerritParseIssuesOrReviews(m,
+		issues, issueRevsTxt, nil)
+	var (
+		rev string
+		ok  bool
+	)
+	for _, issue1 := range issues {
+		if rev, ok = issue1[IssueinfoStrRevCur]; ok {
+			break
+		}
+	}
+	infs := gerritParseRecursively(m,
+		[]string{"revisions", rev}, gerritParseDlds4Revs)
+	if len(issues) != 1 || len(infs) != 1 {
+		Log(true, false,
+			"Invalid number of revision/downloads!")
+		issues = append(issues, infs...)
+	} else {
+		issues[0][IssueinfoStrNmb] =
+			infs[0][IssueinfoStrNmb]
+		issues[0][IssueinfoStrCherry] =
+			infs[0][IssueinfoStrCherry]
+	}
+	return issues
+}
+
+func gerritParseRev(fields any, issues issueInfoSlc) issueInfoSlc {
+	if fields == nil {
+		return nil
+	}
+	m, ok := fields.(map[string]interface{})
+	if !ok {
+		LogTypeErr(fields, "map string to interface")
+		return nil
+	}
+	return gerritParseIssuesOrReviews(m,
+		issues, issueRev1Txt, nil)
+}
+
+func gerritParseRevs(m map[string]interface{},
+	issues issueInfoSlc) issueInfoSlc {
+	return gerritParseRecursively(m,
+		[]string{"revisions"},
+		func(body map[string]interface{}) (ret issueInfoSlc) {
+			for k, v := range body {
+				ret = gerritParseRev(v, ret)
+				ret[len(ret)-1][IssueinfoStrRevCur] = k
+			}
+			return ret
+		})
+}
+
 func gerritRevs(svr *svrs, authInfo eztools.AuthInfo,
+	issueInfo issueInfos) (issueInfoSlc, error) {
+	if eztools.Debugging && eztools.Verbose > 1 {
+		Log(true, true, eztools.GetCaller(1))
+	}
+	const RestAPIStr = "changes/?q="
+	ret, err := gerritRest4Maps(http.MethodGet, svr.URL+RestAPIStr+
+		issueInfo[IssueinfoStrID]+
+		"&o=ALL_REVISIONS",
+		svr.Magic, authInfo, gerritParseRevs)
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func gerritMyOpenCmts(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -270,75 +380,10 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	looper := func(issueInfo issueInfos) (issueInfoSlc, error) {
 		const RestAPIStr = "changes/?q="
-		parser := func(m map[string]interface{},
-			issues issueInfoSlc) issueInfoSlc {
-			issues = gerritParseIssuesOrReviews(m,
-				issues, issueRevsTxt, nil)
-			var (
-				rev string
-				ok  bool
-			)
-			for _, issue1 := range issues {
-				if rev, ok = issue1[IssueinfoStrRevCur]; ok {
-					break
-				}
-			}
-			parser := func(body map[string]interface{}) issueInfoSlc {
-				parser := func(
-					body map[string]interface{}) issueInfoSlc {
-					retI := body[IssueinfoStrCherry]
-					if retI == nil {
-						Log(stdOutput, false,
-							"NOTHING got intead of string!")
-						return nil
-					}
-					if retS, ok := retI.(string); ok {
-						return issueInfos{
-							IssueinfoStrCherry: retS}.ToSlc()
-					}
-					LogTypeErr(retI, "string")
-					return nil
-				}
-				dlds := gerritParseRecursively(m,
-					[]string{"fetch", "ssh", "commands"}, parser)
-				retI, ok := body[IssueinfoStr_Nmb]
-				if !ok || retI == nil {
-					return dlds
-				}
-				if retF, ok := retI.(float64); ok {
-					retS := strconv.FormatFloat(retF, 'f', 0, 64)
-					if len(dlds) != 1 {
-						Log(true, false,
-							"Invalid number of downloads!")
-						dlds = append(dlds,
-							issueInfos{IssueinfoStrNmb: retS})
-					} else {
-						dlds[0][IssueinfoStrNmb] = retS
-					}
-				} else {
-					LogTypeErr(retI, "float64")
-				}
-				return dlds
-			}
-			infs := gerritParseRecursively(m,
-				[]string{"revisions", rev}, parser)
-			if len(issues) != 1 || len(infs) != 1 {
-				Log(true, false,
-					"Invalid number of revision/downloads!")
-				issues = append(issues, infs...)
-			} else {
-				issues[0][IssueinfoStrNmb] =
-					infs[0][IssueinfoStrNmb]
-				issues[0][IssueinfoStrCherry] =
-					infs[0][IssueinfoStrCherry]
-			}
-			return issues
-		}
-		// +"&o=CURRENT_REVISION" to list a commit and *ALL* for all
 		ret, err := gerritRest4Maps(http.MethodGet, svr.URL+RestAPIStr+
 			issueInfo[IssueinfoStrID]+
 			"&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS",
-			svr.Magic, authInfo, parser)
+			svr.Magic, authInfo, gerritParseDlds)
 		if err != nil {
 			return nil, err
 		}

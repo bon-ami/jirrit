@@ -106,9 +106,10 @@ Usually, these fields can be seen in an issue's detail.
   - list merged submits of someone
   - list my open submits
   - list sbs open submits
-  - list all my open revisions/commits
+  - list my open commits
   - list all open submits
   - show details of a submit (by commit ID or change ID)
+  - show revisions of a submit
   - show history of a submit
   - show reviewers and scores of a submit
   - show current revision or commit of a submit

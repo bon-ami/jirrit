@@ -1508,6 +1508,14 @@ const (
 	IssueinfoStr_Chg_Nmb = "_change_number"
 	// IssueinfoStr_Rev_Nmb revision number string for gerrit
 	IssueinfoStr_Rev_Nmb = "_revision_number"
+	// IssueinfoStrCreated created string for gerrit
+	IssueinfoStrCreated = "created"
+	// IssueinfoStrRef ref string for gerrit
+	IssueinfoStrRef = "ref"
+	// IssueinfoStrAccount accound ID string for gerrit
+	IssueinfoStrAccount = "_account_id"
+	// IssueinfoStrKind kind string for gerrit
+	IssueinfoStrKind = "kind"
 	// IssueinfoStrCommit commit string for gerrit
 	IssueinfoStrCommit = "commit"
 	// IssueinfoStrParents parents string for gerrit
@@ -1607,6 +1615,10 @@ var issueRevsTxt = []string{
 	IssueinfoStrID, IssueinfoStr_Nmb, IssueinfoStrRevCur,
 	IssueinfoStrProj, IssueinfoStrBranch, IssueinfoStrSubmitType,
 	IssueinfoStrTopic}
+
+// issueRev1Txt a revision of a gerrit commit
+var issueRev1Txt = []string{IssueinfoStr_Nmb, IssueinfoStrKind,
+	IssueinfoStrCreated, IssueinfoStrRef, IssueinfoStrAccount}
 
 /*
 	 var issueDldCmds = []string{
@@ -2001,6 +2013,7 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 			"abandon a submit",
 			"show reviewers and scores of a submit",
 			"add scores to a submit",
+			"show revisions of a submit",
 			"show history of a submit":
 			if useInputOrPrompt4ID(svr, authInfo, inf) {
 				return true
@@ -2078,9 +2091,10 @@ func makeCat2Act() cat2Act {
 			{"list merged submits of someone", gerritSbMerged},
 			{"list my open submits", gerritMyOpen},
 			{"list sbs open submits", gerritSbOpen},
-			{"list all my open revisions or commits", gerritRevs},
 			{"list all open submits", gerritAllOpen},
+			{"list my open commits", gerritMyOpenCmts},
 			{"show details of a submit", gerritDetailOnCurrRev},
+			{"show revisions of a submit", gerritRevs},
 			{"show history of a submit", gerritHistory},
 			{"show reviewers and scores of a submit", gerritReviews},
 			{"show current revision or commit of a submit", gerritRev},
