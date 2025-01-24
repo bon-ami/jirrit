@@ -194,7 +194,8 @@ func mkIssueinfo(p params) issueInfos {
 	return inf
 }
 
-func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInfo issueInfos, para params) (err error) {
+func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string,
+	issueInfo issueInfos, para params) (err error) {
 	var choices []string
 	for ; ; svr = nil { // reset nil among loops
 		if svr == nil {
@@ -210,19 +211,24 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInf
 			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
-			eztools.ShowStrln("default project/ID prefix: " + svr.Proj)
+			eztools.ShowStrln("default project/ID prefix: " +
+				svr.Proj)
 		}
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
+		var issueInfoPrev, issueInfoCurr issueInfoSlc
 		for ; ; fun = nil { // reset fun among loops
 			if fun == nil { // reset issueInfo among loops
-				funParam, fun, issueInfo = chooseAct(svr,
+				funParam, fun, issueInfoCurr = chooseAct(svr,
 					authInfo, choices, cats[svr.Type],
-					mkIssueinfo(para))
+					mkIssueinfo(para), issueInfoPrev)
 				if fun == nil {
 					break
 				}
+				issueInfoPrev = nil
+			} else { // first round
+				issueInfoCurr = issueInfoSlc{issueInfo}
 			}
 			looper := func(inf issueInfos) (issueInfoSlc, error) {
 				Log(false, true, svr.Name, funParam, inf)
@@ -239,11 +245,18 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string, issueInf
 					}
 					Log(op, false, e)
 				} else {
-					issues.Print(id, para.fn, para.fv, para.fs)
+					issues.Print(id,
+						para.fn, para.fv, para.fs)
+					issueInfoPrev = append(issueInfoPrev,
+						issues...)
 				}
 				return issues, err
 			}
-			_, err = loopIssues(svr, issueInfo, looper)
+			for _, inf := range issueInfoCurr {
+				if _, err = loopIssues(svr, inf, looper); err != nil {
+					Log(false, false, err)
+				}
+			}
 			if choices == nil || len(choices) < 2 { // no loop
 				break
 			}
@@ -1084,12 +1097,15 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 }
 
 func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
-	funcs []action2Func, issueInfo issueInfos) (string,
-	actionFunc, issueInfos) {
-	var fi int
+	funcs []action2Func, issueInfo issueInfos,
+	issueInfoPrev issueInfoSlc) (string, actionFunc, issueInfoSlc) {
+	var (
+		fi  int
+		ret issueInfoSlc
+	)
 	if uiSilent && len(choices) > 1 {
 		noInteractionAllowed()
-		return "", nil, issueInfo
+		return "", nil, issueInfoSlc{issueInfo}
 	}
 	switch len(choices) {
 	case 0:
@@ -1098,15 +1114,27 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 		Log(false, false, "only action for a server: "+choices[0])
 	default:
 		eztools.ShowStrln(" Choose an action")
-		fi, _ = eztools.ChooseStrings(choices)
-		if fi == eztools.InvalidID {
-			return "", nil, issueInfo
+		const wtFormer = "_with former results_"
+		for _, choice1 := range [...][]string{append(choices, wtFormer), choices} {
+			fi, _ = eztools.ChooseStrings(choice1)
+			if fi == eztools.InvalidID {
+				return "", nil, issueInfoSlc{issueInfo}
+			}
+			eztools.ShowStrln("action chosen:", fi, len(choices))
+			if fi < len(choices) {
+				break
+			}
+			issueInfo = nil // to use former results
+			ret = issueInfoPrev
 		}
 	}
-	if inputIssueInfo4Act(svr, authInfo, funcs[fi].n, issueInfo) {
-		return "", nil, nil
+	if issueInfo != nil {
+		if inputIssueInfo4Act(svr, authInfo, funcs[fi].n, issueInfo) {
+			return "", nil, nil
+		}
+		ret = issueInfoSlc{issueInfo}
 	}
-	return funcs[fi].n, funcs[fi].f, issueInfo
+	return funcs[fi].n, funcs[fi].f, ret
 }
 
 func chkErrRest(bodyBytes []byte,
@@ -1183,8 +1211,9 @@ func restFile(method, url string, authInfo eztools.AuthInfo,
 }
 
 // restAttachment sends a request and save the attachement in the response
+// parameters: method, url, authInfo, bodyReq, magic(reserved)
 func restAttachment(method, url string, authInfo eztools.AuthInfo,
-	bodyReq io.Reader, magic string) (fileName string, err error) {
+	bodyReq io.Reader, _ string) (fileName string, err error) {
 	logReq(method, url)
 	resp, err := eztools.HTTPSendAuth(method,
 		url, "", authInfo, bodyReq)
