@@ -59,7 +59,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 	return issues, nil
 }
 
-func jenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
+func JenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseJob(svr, authInfo, issueInfo)
 	if err != nil {
@@ -87,7 +87,7 @@ func jenkinsChooseBld(svr *svrs, authInfo eztools.AuthInfo,
 		return issueInfo, err
 	}
 
-	issues, err := jenkinsListBlds(svr, authInfo, issueInfo)
+	issues, err := JenkinsListBlds(svr, authInfo, issueInfo)
 	if err != nil {
 		return issueInfo, eztools.ErrNoValidResults
 	}
@@ -114,7 +114,7 @@ func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 		return issueInfo, nil
 	}
 
-	issues, err := jenkinsListJobs(svr, authInfo, issueInfo)
+	issues, err := JenkinsListJobs(svr, authInfo, issueInfo)
 	if err != nil {
 		return issueInfo, eztools.ErrNoValidResults
 	}
@@ -192,7 +192,7 @@ func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
 	return issues, nil
 }
 
-func jenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
+func JenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIStr = "api/json"
 	bodyMap, err := restMap(http.MethodGet,
@@ -419,7 +419,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 	return issueInfo, nil
 }
 
-func jenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
+func JenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseBld(svr, authInfo, issueInfo)
 	if err != nil {
@@ -440,7 +440,7 @@ func jenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
 	return issueInfo.ToSlc(), err
 }
 
-func jenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
+func JenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseBld(svr, authInfo, issueInfo)
 	if err != nil {

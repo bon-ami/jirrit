@@ -53,6 +53,8 @@ const (
 	PassToken = "token"
 	// intGerritMerge is interval between each status check to merge a submit, in seconds
 	intGerritMerge = 15
+	// actionSep is the separator for multiple actions
+	actionSep = ";"
 )
 
 type sliceFlag []string
@@ -194,7 +196,7 @@ func mkIssueinfo(p params) issueInfos {
 	return inf
 }
 
-func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string,
+func mainLoop(svr *svrs, cats cat2Act, fun []actionFunc, funStr []string,
 	issueInfo issueInfos, para params) (err error) {
 	var choices []string
 	for ; ; svr = nil { // reset nil among loops
@@ -214,26 +216,40 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string,
 			eztools.ShowStrln("default project/ID prefix: " +
 				svr.Proj)
 		}
+		var (
+			issueInfoPrev, issueInfoCurr issueInfoSlc
+			fun1                         actionFunc
+			funStr1                      string
+		)
 		if fun == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
-		var issueInfoPrev, issueInfoCurr issueInfoSlc
-		for ; ; fun = nil { // reset fun among loops
-			if fun == nil { // reset issueInfo among loops
-				funParam, fun, issueInfoCurr = chooseAct(svr,
-					authInfo, choices, cats[svr.Type],
-					mkIssueinfo(para), issueInfoPrev)
-				if fun == nil {
-					break
-				}
+		for funIndx := 0; ; fun1 = nil { // reset fun among loops
+			if fun != nil && funIndx < len(fun) {
+				// looping silent actions
+				fun1 = fun[funIndx]
+				funStr1 = funStr[funIndx]
+				issueInfoCurr = issueInfoPrev
 				issueInfoPrev = nil
-			} else { // first round
-				issueInfoCurr = issueInfoSlc{issueInfo}
+				funIndx++
+				Log(true, false, "actions:", funStr1)
+			} else {
+				if fun1 == nil { // reset issueInfo among loops
+					funStr1, fun1, issueInfoCurr = chooseAct(svr,
+						authInfo, choices, cats[svr.Type],
+						mkIssueinfo(para), issueInfoPrev)
+					if fun1 == nil {
+						break
+					}
+					issueInfoPrev = nil
+				} else { // first round and silent
+					issueInfoCurr = issueInfoSlc{issueInfo}
+				}
 			}
 			looper := func(inf issueInfos) (issueInfoSlc, error) {
-				Log(false, true, svr.Name, funParam, inf)
+				Log(false, true, svr.Name, funStr1, inf)
 				id := inf[IssueinfoStrID]
-				issues, err := fun(svr, authInfo, inf)
+				issues, err := fun1(svr, authInfo, inf)
 				if err != nil {
 					var op bool
 					e := err
@@ -257,11 +273,11 @@ func mainLoop(svr *svrs, cats cat2Act, fun actionFunc, funParam string,
 					Log(false, false, err)
 				}
 			}
-			if choices == nil || len(choices) < 2 { // no loop
+			if choices == nil || len(choices) < 2 || (fun != nil && funIndx == len(fun)) {
 				break
 			}
 		}
-		if choices == nil || len(cfg.Svrs) < 2 { // no loop
+		if choices == nil || len(cfg.Svrs) < 2 { // TODO: no loop
 			break
 		}
 	}
@@ -285,7 +301,8 @@ func flagParse(ParamDef, cfgSvrOpt string) params {
 	flag.BoolVar(&p.setSvrCfg, cfgSvrOpt, false,
 		"set servers as config")
 	flag.StringVar(&p.r, "r", "", "server name, to be together with -a")
-	flag.StringVar(&p.a, "a", "", "action, to be together with -r")
+	flag.StringVar(&p.a, "a", "", "action, to be together with -r. "+
+		"multiple actions separated by "+actionSep)
 	flag.StringVar(&p.w, "w", ParamDef, "JIRA ID to store in settings, "+
 		"to be together with -r. current setting shown, if empty value.")
 	flag.StringVar(&p.k, "k", "", "key or description. reject reason for JIRA")
@@ -312,15 +329,17 @@ func flagParse(ParamDef, cfgSvrOpt string) params {
 	flag.StringVar(&p.cfg, "cfg", "", "config file")
 	flag.StringVar(&p.log, "log", "", "log file")
 	flag.Var(&paramS, "s", "solution for bugzilla closure. "+
-		"If solution field defined in config, one string overrides all, "+
-		"while multiple strings are appended to each field definition, "+
-		"such as \"-s 'guten morgen; bonne soirée'\" is similar to "+
+		"If solution field defined in config, "+
+		"one string overrides all, while multiple strings are "+
+		"appended to each field definition, such as "+
+		"\"-s 'guten morgen; bonne soirée'\" is similar to "+
 		"\"-s morgen -s tag\" if \"guten\" & \"bonne\" "+
 		"defined in config as in example.xml.")
 	flag.StringVar(&p.fn, "fn", "", "output filter, name. "+
 		"to be used together with fv or fs")
 	flag.StringVar(&p.fv, "fv", "", "output filter, value. "+
-		"to be used together with fn. results with this name-value pair only")
+		"to be used together with fn. results with "+
+		"this name-value pair only")
 	flag.StringVar(&p.fs, "fs", "", "output filter, python3 script. "+
 		"not to be used together with fn or fv. "+
 		"results filtered by return value 0 from script fv, "+
@@ -349,14 +368,17 @@ func flagHelp() {
 	eztools.ShowStrln("", extRslt, "result error")
 	eztools.ShowStrln("", extGram, "request error")
 	eztools.ShowStrln("", extSrvr, "server error")
-	eztools.ShowStrln("::When inputting ID's, there are following options for some actions::")
+	eztools.ShowStrln("::When inputting ID's, there are following",
+		"options for some actions::")
 	eztools.ShowStrln(" 1. single ID, such as 0 or X-0")
 	eztools.ShowStrln(" 2. multiple IDs, such as 0,0,0 or X-0,2,1")
 	eztools.ShowStrln(" 3. ID range, such as 0,,2 or X-0,2")
 	eztools.ShowStrln("")
 	flag.Usage()
 	eztools.ShowStrln("")
-	eztools.ShowStrln("::Action strings, \"a\", to be used with server names, \"r\", only, and that will eliminate interactions in UI::")
+	eztools.ShowStrln("::Action strings, \"a\", to be used with",
+		"server names, \"r\", only, and that will",
+		"eliminate interactions in UI::")
 	for cat, i := range makeCat2Act() {
 		eztools.ShowStrln("\t\t" + cat)
 		for _, j := range i {
@@ -444,19 +466,22 @@ func watchCfg(p params) {
 	}
 }
 
-func matchFuncFromParam(p params, svr *svrs, cats cat2Act) (fun actionFunc, funParam string) {
-	funParam = "N/A"
-	if len(p.a) > 0 {
+func matchFuncFromParam(p params, svr *svrs, cats cat2Act) (fun []actionFunc, funStr []string) {
+	if len(p.a) <= 0 {
+		return
+	}
+	acts := strings.Split(p.a, actionSep)
+	for _, act := range acts {
 		for _, v := range cats[svr.Type] {
-			if p.a == v.n {
+			if act == v.n {
 				uiSilent = true
-				fun = v.f
-				funParam = v.n
+				fun = append(fun, v.f)
+				funStr = append(funStr, v.n)
 				break
 			}
 		}
 		if fun == nil {
-			Log(true, false, "\""+p.a+
+			Log(true, false, "\""+act+
 				"\" NOT recognized as a command")
 		}
 	}
@@ -552,9 +577,9 @@ func main() {
 	go chkUpdate(cfg.EzToolsCfg, upch)
 
 	var (
-		fun      actionFunc
-		funParam string
-		svr      *svrs
+		fun    []actionFunc
+		funStr []string
+		svr    *svrs
 	)
 	switch len(cfg.Svrs) {
 	case 0:
@@ -576,19 +601,19 @@ func main() {
 	issueInfo := mkIssueinfo(p)
 	svrParam := "N/A"
 	if svr != nil {
-		fun, funParam = matchFuncFromParam(p, svr, cats)
+		fun, funStr = matchFuncFromParam(p, svr, cats)
 		svrParam = svr.Name
 	}
 	eztools.AuthInsecureTLS = true
 	Log(false, false, "runtime params: server="+
-		svrParam+", action="+funParam+", info array:")
+		svrParam+", action=", funStr, ", info array:")
 	Log(false, false, issueInfo)
 	if p.reverse {
 		step = -1
 	} else {
 		step = 1
 	}
-	err := mainLoop(svr, cats, fun, funParam, issueInfo, p)
+	err := mainLoop(svr, cats, fun, funStr, issueInfo, p)
 
 	if eztools.Debugging {
 		eztools.ShowStrln("waiting for update check...")
@@ -1895,15 +1920,15 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 	)
 	switch svr.Type {
 	case CategoryJira:
-		listFunc = jiraMyOpen
+		listFunc = JiraMyOpen
 		strIndCmp = IssueinfoStrProj
 		strIndSum = IssueinfoStrSummary
 	case CategoryBugzilla:
-		listFunc = bugzillaMyOpen
+		listFunc = BugzillaMyOpen
 		strIndCmp = IssueinfoStrProj
 		strIndSum = IssueinfoStrSummary
 	case CategoryGerrit:
-		listFunc = gerritMyOpen
+		listFunc = GerritMyOpen
 		strIndCmp = IssueinfoStrBranch
 		strIndSum = IssueinfoStrSubject
 	}
@@ -2100,74 +2125,74 @@ func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
 func makeCat2Act() cat2Act {
 	return cat2Act{
 		CategoryJira: []action2Func{
-			{"transfer a case to someone", jiraTransfer},
-			{"move status of a case", jiraTransition},
-			{"show details of a case", jiraDetail},
-			{"list comments of a case", jiraComments},
-			{"add a comment to a case", jiraAddComment},
-			{"delete a comment from a case", jiraDelComment},
-			{"change a comment from a case", jiraModComment},
-			{"list my open cases", jiraMyOpen},
-			{"link a case to another", jiraLink},
-			{"list watchers of a case", jiraWatcherList},
-			{"check whether watching a case", jiraWatcherCheck},
-			{"watch a case", jiraWatcherAdd},
-			{"unwatch a case", jiraWatcherDel},
-			{"add a file to a case", jiraAddFile},
-			{"list files attached to a case", jiraListFile},
-			{"get a file to a case", jiraGetFile},
-			{"remove a file attached to a case", jiraDelFile},
-			{"reject a case from any known statuses", jiraReject},
-			{"close a case to resolved from any known statuses", jiraClose},
+			{"transfer a case to someone", JiraTransfer},
+			{"move status of a case", JiraTransition},
+			{"show details of a case", JiraDetail},
+			{"list comments of a case", JiraComments},
+			{"add a comment to a case", JiraAddComment},
+			{"delete a comment from a case", JiraDelComment},
+			{"change a comment from a case", JiraModComment},
+			{"list my open cases", JiraMyOpen},
+			{"link a case to another", JiraLink},
+			{"list watchers of a case", JiraWatcherList},
+			{"check whether watching a case", JiraWatcherCheck},
+			{"watch a case", JiraWatcherAdd},
+			{"unwatch a case", JiraWatcherDel},
+			{"add a file to a case", JiraAddFile},
+			{"list files attached to a case", JiraListFile},
+			{"get a file to a case", JiraGetFile},
+			{"remove a file attached to a case", JiraDelFile},
+			{"reject a case from any known statuses", JiraReject},
+			{"close a case to resolved from any known statuses", JiraClose},
 			// the last two are to be hidden from choices,
 			// if lack of configuration of Tst*
-			{"close a case with default design as steps", jiraCloseDef},
-			{"close a case with general requirement as steps", jiraCloseGen}},
+			{"close a case with default design as steps", JiraCloseDef},
+			{"close a case with general requirement as steps", JiraCloseGen}},
 		CategoryGerrit: []action2Func{
-			{"list merged submits of someone", gerritSbMerged},
-			{"list my open submits", gerritMyOpen},
-			{"list sbs open submits", gerritSbOpen},
-			{"list all open submits", gerritAllOpen},
-			{"list my open commits", gerritMyOpenCmts},
-			{"show details of a submit", gerritDetailOnCurrRev},
-			{"show revisions of a submit", gerritRevs},
-			{"show history of a submit", gerritHistory},
-			{"show reviewers and scores of a submit", gerritReviews},
-			{"show current revision or commit of a submit", gerritRev},
-			{"rebase a submit", gerritRebase},
-			{"merge a submit", gerritMerge},
-			{"show related submits of one", gerritRelated},
-			{"add scores to a submit", gerritScore},
-			{"add scores, wait for it to be mergable and merge a submit", gerritWaitNMerge},
-			{"wait for mergable and merge sbs submits", gerritWaitNMergeSb},
-			{"abandon all my open submits", gerritAbandonMyOpen},
-			{"abandon a submit", gerritAbandon},
-			{"cherry pick all my open submits", gerritPickMyOpen},
-			{"cherry pick a submit", gerritPick},
-			{"revert a submit", gerritRevert},
-			{"list files of a submit by revision", gerritListFilesByRev},
-			{"list config of a project", gerritListPrj},
-			{"download a file of a submit", gerritGetFile}},
+			{"list merged submits of someone", GerritSbMerged},
+			{"list my open submits", GerritMyOpen},
+			{"list sbs open submits", GerritSbOpen},
+			{"list all open submits", GerritAllOpen},
+			{"list my open commits", GerritMyOpenCmts},
+			{"show details of a submit", GerritDetailOnCurrRev},
+			{"show revisions of a submit", GerritRevs},
+			{"show history of a submit", GerritHistory},
+			{"show reviewers and scores of a submit", GerritReviews},
+			{"show current revision or commit of a submit", GerritRev},
+			{"rebase a submit", GerritRebase},
+			{"merge a submit", GerritMerge},
+			{"show related submits of one", GerritRelated},
+			{"add scores to a submit", GerritScore},
+			{"add scores, wait for it to be mergable and merge a submit", GerritWaitNMerge},
+			{"wait for mergable and merge sbs submits", GerritWaitNMergeSb},
+			{"abandon all my open submits", GerritAbandonMyOpen},
+			{"abandon a submit", GerritAbandon},
+			{"cherry pick all my open submits", GerritPickMyOpen},
+			{"cherry pick a submit", GerritPick},
+			{"revert a submit", GerritRevert},
+			{"list files of a submit by revision", GerritListFilesByRev},
+			{"list config of a project", GerritListPrj},
+			{"download a file of a submit", GerritGetFile}},
 		CategoryJenkins: []action2Func{
-			{"list jobs", jenkinsListJobs},
-			{"show details of a build", jenkinsDetailOnBld},
-			{"get log of a build", jenkinsLogOfBld},
-			{"list builds", jenkinsListBlds}},
+			{"list jobs", JenkinsListJobs},
+			{"show details of a build", JenkinsDetailOnBld},
+			{"get log of a build", JenkinsLogOfBld},
+			{"list builds", JenkinsListBlds}},
 		CategoryBugzilla: []action2Func{
-			{"transfer a case to someone", bugzillaTransfer},
-			{"move status of a case", bugzillaTransition},
-			{"show details of a case", bugzillaDetail},
-			{"list comments of a case", bugzillaComments},
-			{"add a comment to a case", bugzillaAddComment},
-			{"list my open cases", bugzillaMyOpen},
-			{"link a case to another", bugzillaLink},
-			{"list watchers of a case", bugzillaWatcherList},
-			{"watch a case", bugzillaWatcherAdd},
-			{"unwatch a case", bugzillaWatcherDel},
-			{"add a file to a case", bugzillaAddFile},
-			{"list files attached to a case", bugzillaListFile},
-			{"get a file to a case", bugzillaGetFile},
-			{"reject a case from any known statuses", bugzillaReject},
-			{"close a case to resolved from any known statuses", bugzillaClose},
+			{"transfer a case to someone", BugzillaTransfer},
+			{"move status of a case", BugzillaTransition},
+			{"show details of a case", BugzillaDetail},
+			{"list comments of a case", BugzillaComments},
+			{"add a comment to a case", BugzillaAddComment},
+			{"list my open cases", BugzillaMyOpen},
+			{"link a case to another", BugzillaLink},
+			{"list watchers of a case", BugzillaWatcherList},
+			{"watch a case", BugzillaWatcherAdd},
+			{"unwatch a case", BugzillaWatcherDel},
+			{"add a file to a case", BugzillaAddFile},
+			{"list files attached to a case", BugzillaListFile},
+			{"get a file to a case", BugzillaGetFile},
+			{"reject a case from any known statuses", BugzillaReject},
+			{"close a case to resolved from any known statuses", BugzillaClose},
 		}}
 }

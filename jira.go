@@ -264,7 +264,7 @@ func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
 	return issues, nil
 }
 
-func jiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
+func JiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrSummary]) < 1 {
@@ -674,7 +674,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-func jiraReject(svr *svrs, authInfo eztools.AuthInfo,
+func JiraReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
@@ -720,24 +720,24 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, jiraCmtNTran(svr, authInfo, issueInfo, Steps)
 }
 
-func jiraClose(svr *svrs, authInfo eztools.AuthInfo,
+func JiraClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[IssueinfoStrLink])
 }
 
-func jiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
+func JiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo,
 		issueInfo, "default AOSP/vendor/design")
 }
 
-func jiraCloseGen(svr *svrs, authInfo eztools.AuthInfo,
+func JiraCloseGen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo,
 		issueInfo, "general requirement")
 }
 
-func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
+func JiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -759,7 +759,7 @@ func jiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
+func JiraLink(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	// TODO: get these from server
 	linkChoices := []struct {
@@ -836,14 +836,14 @@ func jiraLink(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
+func JiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
 	if len(issueInfo[IssueinfoStrKey]) < 1 {
-		inf, err := jiraComments(svr, authInfo, issueInfo)
+		inf, err := JiraComments(svr, authInfo, issueInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -875,7 +875,7 @@ func jiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
+func JiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	// TODO: select key
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
@@ -889,7 +889,7 @@ func jiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
+func JiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
@@ -937,7 +937,7 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 	return jiraParse1Cmt(body)
 }
 
-func jiraComments(svr *svrs, authInfo eztools.AuthInfo,
+func JiraComments(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -964,7 +964,7 @@ func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 	return bodyMap, err
 }
 
-func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
+func JiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	bodyMap, err := jiraDetailExec(svr, authInfo, issueInfo)
 	if err != nil {
@@ -978,7 +978,7 @@ func jiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 	//return jiraParseIssues(svr, bodyMap), err
 }
 
-func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+func JiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIStr = "rest/api/latest/search?jql="
 	var states string
@@ -998,7 +998,7 @@ func jiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return jiraParseIssues(bodyMap), err
 }
 
-func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
+func JiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1031,7 +1031,7 @@ func jiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	return res, nil
 }
 
-func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
+func JiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1053,7 +1053,7 @@ func jiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	return res, nil
 }
 
-func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
+func JiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1064,7 +1064,7 @@ func jiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
+func JiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1126,7 +1126,7 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 	return
 }
 
-func jiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
+func JiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrFile]) < 1 {
@@ -1142,7 +1142,7 @@ func jiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraListFile(svr *svrs, authInfo eztools.AuthInfo,
+func JiraListFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	bodyMap, err := jiraDetailExec(svr, authInfo, issueInfo)
 	if err != nil {
@@ -1153,7 +1153,7 @@ func jiraListFile(svr *svrs, authInfo eztools.AuthInfo,
 
 func jiraGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
-	inf, err := jiraListFile(svr, authInfo, issueInfo)
+	inf, err := JiraListFile(svr, authInfo, issueInfo)
 	if err != nil {
 		return issueInfo, err
 	}
@@ -1181,7 +1181,7 @@ func jiraGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 	return issueInfo, nil
 }
 
-func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
+func JiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	/*isDir := false
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
@@ -1225,7 +1225,7 @@ func jiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	return issueInfo.ToSlc(), err
 }
 
-func jiraDelFile(svr *svrs, authInfo eztools.AuthInfo,
+func JiraDelFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrKey]) < 1 {
 		if len(issueInfo[IssueinfoStrID]) < 1 {

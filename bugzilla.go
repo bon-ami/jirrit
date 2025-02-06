@@ -59,8 +59,8 @@ func parseTypicalBZNum(svr *svrs, num string) (nonDigit,
 	return "", "", false, false
 }*/
 
-// bugzillaTransfer transfer an issue to someone else, and additionally to a component
-func bugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaTransfer transfer an issue to someone else, and additionally to a component
+func BugzillaTransfer(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrSummary]) < 1 {
@@ -260,11 +260,11 @@ func bugzillaTranFromAvail(svr *svrs, authInfo eztools.AuthInfo,
 	return ret, err
 }
 
-// bugzillaReject rejects an issue
+// BugzillaReject rejects an issue
 //
 //	If there are multiple steps, and comment is provided,
 //	it is added during all steps!
-func bugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
+func BugzillaReject(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
@@ -373,11 +373,11 @@ func bugzillaBody4Tran(svr *svrs, issueInfo issueInfos, reso string, solutionNee
 	return tranJSON
 }
 
-// bugzillaClose closes an issue
+// BugzillaClose closes an issue
 //
 //	If there are multiple steps, and comment is provided,
 //	it is added during all steps!
-func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
+func BugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
@@ -395,8 +395,8 @@ func bugzillaClose(svr *svrs, authInfo eztools.AuthInfo,
 	return bugzillaTranFromAvail(svr, authInfo, issueInfo, Steps, makeBody)
 }
 
-// bugzillaTransition transitions an issue to a state
-func bugzillaTransition(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaTransition transitions an issue to a state
+func BugzillaTransition(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -416,8 +416,8 @@ func bugzillaTransition(svr *svrs, authInfo eztools.AuthInfo,
 		tranID, cmtReq, nil)
 }
 
-// bugzillaLink links two issues
-func bugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaLink links two issues
+func BugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrLink]) < 1 ||
@@ -456,8 +456,8 @@ func bugzillaLink(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-// bugzillaAddComment adds a comment to an issue
-func bugzillaAddComment(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaAddComment adds a comment to an issue
+func BugzillaAddComment(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
@@ -491,8 +491,8 @@ func bugzillaAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-// bugzillaComments lists comments of an issue
-func bugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaComments lists comments of an issue
+func BugzillaComments(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -581,7 +581,7 @@ func bugzillaGetTrans(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, stt string) (string, []string, []bool, error) {
 	if len(stt) < 1 {
 		var ok bool
-		slcInf, err := bugzillaDetail(svr, authInfo, issueInfo)
+		slcInf, err := BugzillaDetail(svr, authInfo, issueInfo)
 		if err != nil || slcInf == nil || len(slcInf) != 1 {
 			return "", nil, nil, eztools.ErrOutOfBound
 		}
@@ -642,8 +642,8 @@ func bugzillaDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 			"", authInfo), authInfo, nil, svr.Magic)
 }
 
-// bugzillaDetail show details of an issue
-func bugzillaDetail(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaDetail show details of an issue
+func BugzillaDetail(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -806,8 +806,8 @@ func bugzillaParseComments(m map[string]interface{}) issueInfoSlc {
 	return nil
 }
 
-// bugzillaMyOpen list all open issues of configured user
-func bugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaMyOpen list all open issues of configured user
+func BugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIBZStr = "rest/bug?"
 	var states string
@@ -828,7 +828,7 @@ func bugzillaMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return bugzillaParseIssues(bodyMap), nil
 }
 
-func bugzillaWatcherList(svr *svrs, authInfo eztools.AuthInfo,
+func BugzillaWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -850,8 +850,8 @@ func bugzillaWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	return res, nil
 }
 
-// bugzillaWatcherAdd adds user to cc
-func bugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaWatcherAdd adds user to cc
+func BugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -881,8 +881,8 @@ func bugzillaWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-// bugzillaWatcherDel removes user from cc
-func bugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaWatcherDel removes user from cc
+func BugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -912,7 +912,7 @@ func bugzillaWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
+func BugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrFile]) < 1 ||
@@ -959,7 +959,7 @@ func bugzillaAddFile(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func bugzillaListFile(svr *svrs, authInfo eztools.AuthInfo,
+func BugzillaListFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1036,7 +1036,7 @@ func bugzillaParseAttachments(bodyMap map[string]interface{}, tp string, dataNee
 
 func bugzillaGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfos, error) {
-	inf, err := bugzillaListFile(svr, authInfo, issueInfo)
+	inf, err := BugzillaListFile(svr, authInfo, issueInfo)
 	if err != nil {
 		return issueInfo, err
 	}
@@ -1062,8 +1062,8 @@ func bugzillaGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 	return issueInfo, nil
 }
 
-// bugzillaGetFile saves an attachment
-func bugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
+// BugzillaGetFile saves an attachment
+func BugzillaGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput

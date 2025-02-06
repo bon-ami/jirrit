@@ -324,8 +324,7 @@ func gerritParseRev(fields any, issues issueInfoSlc) issueInfoSlc {
 		LogTypeErr(fields, "map string to interface")
 		return nil
 	}
-	return gerritParseIssuesOrReviews(m,
-		issues, issueRev1Txt, nil)
+	return gerritParseIssuesOrReviews(m, issues, issueRev1Txt, nil)
 }
 
 func gerritParseRevs(m map[string]interface{},
@@ -341,7 +340,7 @@ func gerritParseRevs(m map[string]interface{},
 		})
 }
 
-func gerritRevs(svr *svrs, authInfo eztools.AuthInfo,
+func GerritRevs(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -357,7 +356,7 @@ func gerritRevs(svr *svrs, authInfo eztools.AuthInfo,
 	return ret, nil
 }
 
-func gerritMyOpenCmts(svr *svrs, authInfo eztools.AuthInfo,
+func GerritMyOpenCmts(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -370,7 +369,7 @@ func gerritMyOpenCmts(svr *svrs, authInfo eztools.AuthInfo,
 		issueInfo, f)
 }
 
-func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
+func GerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -402,7 +401,7 @@ func gerritRev(svr *svrs, authInfo eztools.AuthInfo,
 	return loopIssues(svr, issueInfo, looper)
 }
 
-func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
+func GerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -452,7 +451,7 @@ func gerritDetailOnCurrRev(svr *svrs, authInfo eztools.AuthInfo,
 	return loopIssues(svr, issueInfo, looper)
 }
 
-func gerritHistory(svr *svrs, authInfo eztools.AuthInfo,
+func GerritHistory(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIStr = "changes/"
 	return gerritGetHistory(svr.URL+RestAPIStr+
@@ -600,7 +599,7 @@ func gerritParseFiles(body map[string]interface{}) issueInfoSlc {
 	return issues
 }
 
-func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
+func GerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrRevCur]) < 1 {
 		const RestAPIStr = "changes/?q="
@@ -624,10 +623,10 @@ func gerritListFilesByRev(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritParseFiles(bodyMap), nil
 }
 
-func gerritGetFile(svr *svrs, authInfo eztools.AuthInfo,
+func GerritGetFile(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrRevCur]) < 1 {
-		inf, err := gerritRev(svr, authInfo, issueInfo)
+		inf, err := GerritRev(svr, authInfo, issueInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -698,7 +697,7 @@ func gerritParseRecursively(m map[string]interface{}, str []string,
 }
 
 // no ID will return, since not in replies
-func gerritReviews(svr *svrs, authInfo eztools.AuthInfo,
+func GerritReviews(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	const RestAPIStr = "changes/"
 	return gerritGetReviews(svr.URL+RestAPIStr+
@@ -736,12 +735,12 @@ func gerritGetIssuesWtOwner(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritGetIssues(svr.URL+RestAPIStr+urlAffix, svr.Magic, authInfo)
 }
 
-func gerritSbMerged(svr *svrs, authInfo eztools.AuthInfo,
+func GerritSbMerged(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritGetIssuesWtOwner(svr, authInfo, "merged", issueInfo)
 }
 
-func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
+func GerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if !uiSilent {
 		if cfm := eztools.PromptStr("This may take quite a while..." +
@@ -753,12 +752,12 @@ func gerritAllOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritGetIssues(svr.URL+RestAPIStr, svr.Magic, authInfo)
 }
 
-func gerritSbOpen(svr *svrs, authInfo eztools.AuthInfo,
+func GerritSbOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritGetIssuesWtOwner(svr, authInfo, "open", issueInfo)
 }
 
-func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+func GerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	issueInfo[IssueinfoStrID] = authInfo.User
 	defer func() {
@@ -767,24 +766,24 @@ func gerritMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritGetIssuesWtOwner(svr, authInfo, "open", issueInfo)
 }
 
-func gerritRebase(svr *svrs, authInfo eztools.AuthInfo,
+func GerritRebase(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/rebase")
 }
 
-func gerritRevert(svr *svrs, authInfo eztools.AuthInfo,
+func GerritRevert(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/revert")
 }
 
-func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
+func GerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if useInputOrPrompt4ID(svr, authInfo, issueInfo) {
 		return nil, eztools.ErrInvalidInput
 	}
 	looper := func(issueInfo issueInfos) (issueInfoSlc, error) {
 		// check mergable only, without submittable
-		inf, err := gerritDetailOnCurrRev(svr, authInfo, issueInfo)
+		inf, err := GerritDetailOnCurrRev(svr, authInfo, issueInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -802,20 +801,20 @@ func gerritMerge(svr *svrs, authInfo eztools.AuthInfo,
 	return loopIssues(svr, issueInfo, looper)
 }
 
-func gerritAbandon(svr *svrs, authInfo eztools.AuthInfo,
+func GerritAbandon(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritActOn1WtAnyID(svr, authInfo, issueInfo, nil, "/abandon")
 }
 
-func gerritAbandonMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+func GerritAbandonMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	return gerritActOnMyOpen(svr, authInfo, issueInfo, "/abandon")
 }
 
-func gerritPick(svr *svrs, authInfo eztools.AuthInfo,
+func GerritPick(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrRevCur]) < 1 {
-		inf, err := gerritRev(svr, authInfo, issueInfo)
+		inf, err := GerritRev(svr, authInfo, issueInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -875,12 +874,12 @@ func gerritProcRevLoopMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	f func(*svrs, eztools.AuthInfo, issueInfos,
 		issueInfoSlc) issueInfoSlc) (res issueInfoSlc,
 	err error) {
-	issues, err := gerritMyOpen(svr, authInfo, issueInfo)
+	issues, err := GerritMyOpen(svr, authInfo, issueInfo)
 	if err != nil {
 		return
 	}
 	for _, issueInfo := range issues {
-		inf, err := gerritRev(svr, authInfo, issueInfo)
+		inf, err := GerritRev(svr, authInfo, issueInfo)
 		if err != nil {
 			Log(true, false, err)
 			continue
@@ -891,8 +890,8 @@ func gerritProcRevLoopMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-// gerritPickMyOpen cherry picks all my open submits
-func gerritPickMyOpen(svr *svrs, authInfo eztools.AuthInfo,
+// GerritPickMyOpen cherry picks all my open submits
+func GerritPickMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	branch := issueInfo[IssueinfoStrBranch]
 	f := func(svr *svrs, authInfo eztools.AuthInfo,
@@ -908,7 +907,7 @@ func gerritPickMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 
 func gerritActOnMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos, action string) (res issueInfoSlc, err error) {
-	issues, err := gerritMyOpen(svr, authInfo, issueInfo)
+	issues, err := GerritMyOpen(svr, authInfo, issueInfo)
 	if err != nil {
 		return
 	}
@@ -1018,18 +1017,18 @@ func gerritScoreNGetRej(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-// gerritScore add unapproved scores
+// GerritScore add unapproved scores
 // return values:
 //
 //	inf = nil if success
 //	inf = info of current revision if more than one / no revisions found?
 //	inf = rejected fields that needs to approve but failed
-func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
+func GerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (inf issueInfoSlc, err error) {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}*/
-	inf, err = gerritRev(svr, authInfo, issueInfo)
+	inf, err = GerritRev(svr, authInfo, issueInfo)
 	if err != nil {
 		return
 	}
@@ -1043,7 +1042,7 @@ func gerritScore(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-func gerritRelated(svr *svrs, authInfo eztools.AuthInfo,
+func GerritRelated(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (inf issueInfoSlc, err error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -1052,7 +1051,7 @@ func gerritRelated(svr *svrs, authInfo eztools.AuthInfo,
 		return nil, eztools.ErrInvalidInput
 	}
 	looper := func(issueInfo issueInfos) (inf issueInfoSlc, err error) {
-		inf, err = gerritRev(svr, authInfo, issueInfo)
+		inf, err = GerritRev(svr, authInfo, issueInfo)
 		if err != nil || len(inf) != 1 {
 			return
 		}
@@ -1117,7 +1116,7 @@ func gerritFuncLoopSbOpen(svr *svrs, authInfo eztools.AuthInfo,
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
 	}
-	issues, err := gerritSbOpen(svr, authInfo, issueInfo)
+	issues, err := GerritSbOpen(svr, authInfo, issueInfo)
 	if err != nil {
 		return
 	}
@@ -1130,16 +1129,16 @@ func gerritFuncLoopSbOpen(svr *svrs, authInfo eztools.AuthInfo,
 	return
 }
 
-func gerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
+func GerritWaitNMergeSb(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if uiSilent || !eztools.Debugging {
 		Log(true, false, "bulk wait and merge supported in interaction+debugging mode")
 		return nil, eztools.ErrAccess
 	}
-	return gerritFuncLoopSbOpen(svr, authInfo, issueInfo, gerritWaitNMerge)
+	return gerritFuncLoopSbOpen(svr, authInfo, issueInfo, GerritWaitNMerge)
 }
 
-func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
+func GerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
@@ -1149,7 +1148,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 	}
 	looper := func(issueInfo issueInfos) (issueInfoSlc, error) {
 		var ret issueInfoSlc
-		cur, err := gerritDetailOnCurrRev(svr, authInfo, issueInfo)
+		cur, err := GerritDetailOnCurrRev(svr, authInfo, issueInfo)
 		if err != nil || len(cur) < 1 {
 			Log(true, false, "no details available for", issueInfo[IssueinfoStrID], err)
 			return nil, eztools.ErrAccess
@@ -1160,7 +1159,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		// match commit number=cur[IssueinfoStr_Nmb] or
 		// commit id=gerritRev(svr, authInfo, inf[i])[IssueinfoStrID]
-		inf, err := gerritRelated(svr, authInfo, issueInfo)
+		inf, err := GerritRelated(svr, authInfo, issueInfo)
 		if err != nil || len(inf) < 1 {
 			Log(true, false, "no related commits for", issueInfo[IssueinfoStrID], err)
 			return nil, eztools.ErrAccess
@@ -1170,7 +1169,7 @@ func gerritWaitNMerge(svr *svrs, authInfo eztools.AuthInfo,
 				continue
 			}
 			if len(inf[i][IssueinfoStrParents]) > 0 {
-				if parent1, err := gerritWaitNMerge(svr, authInfo,
+				if parent1, err := GerritWaitNMerge(svr, authInfo,
 					issueInfos{IssueinfoStrID: inf[i][IssueinfoStrParents]}); err != nil {
 					Log(true, false, "parent",
 						inf[i][IssueinfoStrParents],
@@ -1208,7 +1207,7 @@ func gerritWaitNMerge1(svr *svrs, authInfo eztools.AuthInfo,
 	eztools.ShowStr("waiting for ", issueInfo,
 		" to be submittable/mergeable.")
 	for err == nil {
-		inf, err = gerritDetailOnCurrRev(svr, authInfo, issueInfo)
+		inf, err = GerritDetailOnCurrRev(svr, authInfo, issueInfo)
 		if err != nil {
 			break
 		}
@@ -1242,7 +1241,7 @@ func gerritWaitNMerge1(svr *svrs, authInfo eztools.AuthInfo,
 		          values:map[ 0:No score +1:Looks good to me, but someone else must approve +2:Looks good to me, approved -1:I would prefer this is not merged as is -2:This shall not be merged]]*/
 
 		if !scored {
-			rev, err = gerritRev(svr, authInfo, issueInfo)
+			rev, err = GerritRev(svr, authInfo, issueInfo)
 			if err != nil {
 				return nil, err
 			}
@@ -1301,7 +1300,7 @@ func gerritWaitNMerge1(svr *svrs, authInfo eztools.AuthInfo,
 	return gerritActOn1(svr, authInfo, issueInfo, nil, "/submit")
 }
 
-func gerritListPrj(svr *svrs, authInfo eztools.AuthInfo,
+func GerritListPrj(svr *svrs, authInfo eztools.AuthInfo,
 	issueInfo issueInfos) (issueInfoSlc, error) {
 	if eztools.Debugging && eztools.Verbose > 1 {
 		Log(true, true, eztools.GetCaller(1))
