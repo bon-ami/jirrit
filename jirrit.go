@@ -1918,19 +1918,23 @@ func cfmInputOrPromptStr(svr *svrs, inf IssueInfos, ind, prompt string) bool {
 	return true
 }
 
-func useInputOrPromptStr(svr *svrs, inf IssueInfos, ind, prompt string) {
+// useInputOrPromptStr
+// Return: whether nothing is provided (either input or as a param)
+func useInputOrPromptStr(svr *svrs, inf IssueInfos, ind, prompt string) bool {
 	if len(inf[ind]) > 0 {
-		return
+		return false
 	}
 	if uiSilent {
 		noInteractionAllowed()
-		return
+		return true
 	}
-	cfmInputOrPromptStr(svr, inf, ind, prompt)
+	return !cfmInputOrPromptStr(svr, inf, ind, prompt)
 }
 
-func useInputOrPrompt(svr *svrs, inf IssueInfos, ind string) {
-	useInputOrPromptStr(svr, inf, ind, ind)
+// useInputOrPrompt
+// Return: whether nothing is provided (either input or as a param)
+func useInputOrPrompt(svr *svrs, inf IssueInfos, ind string) bool {
+	return useInputOrPromptStr(svr, inf, ind, ind)
 }
 
 // useInputOrPrompt4ID lists open cases to choose from
@@ -2082,8 +2086,14 @@ func inputIssueInfo4JB(svr *svrs, authInfo eztools.AuthInfo,
 		}
 		useInputOrPromptStr(svr, inf,
 			IssueinfoStrKey, "comment ID")
-	case "add a comment to a case",
-		"reject a case from any known statuses":
+	case "add a comment to a case":
+		if useInputOrPrompt(svr, inf, IssueinfoStrComments) {
+			return true
+		}
+		if useInputOrPrompt4ID(svr, authInfo, inf) {
+			return true
+		}
+	case "reject a case from any known statuses":
 		if useInputOrPrompt4ID(svr, authInfo, inf) {
 			return true
 		}

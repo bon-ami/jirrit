@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"sync"
 	"testing"
 
 	"gitee.com/bon-ami/eztools/v6"
@@ -15,44 +14,66 @@ const (
 )
 
 var (
-	ParamsTest       params
-	svrNameFromParam string
-	actionsAll       cat2Act
-	cfgLoad          sync.Once
+	ParamsTest params
+	actionsAll cat2Act
+	// cfgLoad    sync.Once
 )
 
 type TestSuite struct {
 	suite.Suite
-	st                                             int
-	t                                              *testing.T
 	category, action, dependsOnDesc, dependsOnFunc string
 	svr                                            *svrs
 	authInfo                                       eztools.AuthInfo
 	funs                                           []action2Func
 	issueInfo                                      IssueInfos
+	skipped                                        bool
+}
+
+func (s *TestSuite) Skip(args ...any) {
+	s.skipped = true
+	s.T().Skip(args...)
+}
+
+func (s *TestSuite) IsSkipped() bool {
+	return s.skipped
 }
 
 // SetupTest loads cfg on the first run, and runs the depended test
+func (s *TestSuite) SetDependency(desc, funcName string) {
+	s.dependsOnDesc = desc
+	s.dependsOnFunc = funcName
+}
+
 func (s *TestSuite) SetupTest() {
-	cfgLoad.Do(func() {
-		s.loadCfg()
-	})
+	/* 	cfgLoad.Do(func() {
+		eztools.SetLogFunc(func(l ...any) {
+			func(m ...any) {
+				t.T().Log(m)
+			}(eztools.GetCallerLog(), l)
+		})
+	}) */
 	if s.issueInfo == nil {
 		s.issueInfo = mkIssueinfo(ParamsTest)
 	}
-	if len(s.dependsOnDesc) > 0 {
-		s.st = 2
-		s.Run(s.dependsOnFunc, func() {
-			suite.Run(s.T(), &TestSuite{category: s.category,
-				action: s.dependsOnDesc, issueInfo: s.issueInfo, st: s.st})
-		})
-	}
 	t := s.T()
+	if len(s.dependsOnDesc) > 0 {
+		if len(ParamsTest.i) < 1 {
+			// dependent test only when ID is not provided
+			sui := TestSuite{category: s.category,
+				action: s.dependsOnDesc, issueInfo: s.issueInfo}
+			s.Run(s.dependsOnFunc, func() {
+				suite.Run(t, &sui)
+			})
+			if sui.IsSkipped() {
+				t.SkipNow()
+			}
+		}
+	}
 	cat := s.category
 	action := s.action
 	if s.svr == nil {
 		var ok bool
-		s.svr, ok = mkSvrByType(svrNameFromParam, cat)
+		s.svr, ok = mkSvrByType("", cat)
 		if !ok {
 			t.Skip("no server specified")
 		}
@@ -72,10 +93,10 @@ func (s *TestSuite) SetupTest() {
 
 // Test1 is the main test function
 func (s *TestSuite) Test1() {
-	t := s.T()
+	// t := s.T()
 	for _, fun1 := range s.funs {
 		if inputIssueInfo4Act(s.svr, s.authInfo, fun1.n, s.issueInfo) {
-			t.Skip(fun1.n, infoSep, "NOT enough info to run")
+			s.Skip(fun1.n, infoSep, "NOT enough info to run")
 		}
 		looper := DefLooper{ParamsTest, s.svr,
 			s.authInfo, fun1.n, fun1.f, nil, maxResults}
@@ -109,26 +130,6 @@ func mkSvrByType(name, category string) (*svrs, bool) {
 	return nil, false
 }
 
-// loadCfg loads the config file and params, and should run once only
-// test/action related info, such as svrs, is loaded later
-func (t *TestSuite) loadCfg() {
-	/*	var err []error
-		 	cfgFile, err = eztools.XMLReadDefault("", "", "", "", module, &cfg)
-
-			if err != nil {
-				t.Skip("no config file found")
-			} */
-	eztools.SetLogFunc(func(l ...any) {
-		func(m ...any) {
-			t.T().Log(m)
-		}(eztools.GetCallerLog(), l)
-	})
-	svrNameFromParam = ParamsTest.r
-
-	loadCfg(ParamsTest)
-	actionsAll = makeCat2Act()
-}
-
 func TestGerritMyOpen(t *testing.T) {
 	// test1(t, CategoryGerrit, "list my open submits")
 }
@@ -141,7 +142,6 @@ func TestSave(t *testing.T) {
 		if res && len(prjOld) > 0 {
 			saveProj(&cfg.Svrs[i], prjOld)
 		}
-		//break
 	}
 }
 
@@ -151,5 +151,8 @@ func init() {
 
 func TestMain(m *testing.M) {
 	ParamsTest.Parse()
+	// test/action related info, such as svrs, is loaded later
+	loadCfg(ParamsTest)
+	actionsAll = makeCat2Act()
 	os.Exit(m.Run())
 }
