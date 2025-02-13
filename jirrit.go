@@ -55,6 +55,8 @@ const (
 	intGerritMerge = 15
 	// actionSep is the separator for multiple actions
 	actionSep = ";"
+	// issueSeparator is the separator for multiple IDs
+	issueSeparator = ","
 )
 
 type sliceFlag []string
@@ -173,120 +175,14 @@ func Log(onscreen, wttime bool, inf ...any) {
 type params struct {
 	h, ver, v, vv, vvv, reverse, getSvrCfg, setSvrCfg         bool
 	r, a, w, k, f, z, i, b, cfg, log, hd, p, l, c, fn, fv, fs string
+	Def, CfgSvrOpt                                            string
 }
 
-func mkIssueinfo(p params) issueInfos {
-	inf := make(issueInfos)
-	matrix := [...][]string{
-		{p.i, IssueinfoStrID},
-		{p.k, IssueinfoStrKey},
-		{p.hd, IssueinfoStrSummary},
-		{p.p, IssueinfoStrProj},
-		{p.b, IssueinfoStrBranch},
-		{p.l, IssueinfoStrLink},
-		{p.f, IssueinfoStrFile},
-		{p.z, IssueinfoStrSize},
-		{p.c, IssueinfoStrComments}}
-	// paramS to be handled when needed
-	for _, i := range matrix {
-		if len(i[0]) > 0 {
-			inf[i[1]] = i[0]
-		}
-	}
-	return inf
-}
-
-func mainLoop(svr *svrs, cats cat2Act, fun []actionFunc, funStr []string,
-	issueInfo issueInfos, para params) (err error) {
-	var choices []string
-	for ; ; svr = nil { // reset nil among loops
-		if svr == nil {
-			svr = chooseSvr(cats, cfg.Svrs)
-			if svr == nil {
-				break
-			}
-		}
-		var authInfo eztools.AuthInfo
-		authInfo, err = cfg2AuthInfo(*svr, cfg)
-		if err != nil {
-			Log(false, false, err)
-			os.Exit(extCfg)
-		}
-		if len(svr.Proj) > 0 && !uiSilent {
-			eztools.ShowStrln("default project/ID prefix: " +
-				svr.Proj)
-		}
-		var (
-			issueInfoPrev, issueInfoCurr issueInfoSlc
-			fun1                         actionFunc
-			funStr1                      string
-		)
-		if fun == nil {
-			choices = makeActs2Choose(*svr, cats[svr.Type])
-		}
-		for funIndx := 0; ; fun1 = nil { // reset fun among loops
-			if fun != nil && funIndx < len(fun) {
-				// looping silent actions
-				fun1 = fun[funIndx]
-				funStr1 = funStr[funIndx]
-				issueInfoCurr = issueInfoPrev
-				issueInfoPrev = nil
-				funIndx++
-				Log(true, false, "actions:", funStr1)
-			} else {
-				if fun1 == nil { // reset issueInfo among loops
-					funStr1, fun1, issueInfoCurr = chooseAct(svr,
-						authInfo, choices, cats[svr.Type],
-						mkIssueinfo(para), issueInfoPrev)
-					if fun1 == nil {
-						break
-					}
-					issueInfoPrev = nil
-				} else { // first round and silent
-					issueInfoCurr = issueInfoSlc{issueInfo}
-				}
-			}
-			looper := func(inf issueInfos) (issueInfoSlc, error) {
-				Log(false, true, svr.Name, funStr1, inf)
-				id := inf[IssueinfoStrID]
-				issues, err := fun1(svr, authInfo, inf)
-				if err != nil {
-					var op bool
-					e := err
-					if err == eztools.ErrNoValidResults {
-						if !uiSilent {
-							op = true
-						}
-						e = eztools.ErrNoValidResults
-					}
-					Log(op, false, e)
-				} else {
-					issues.Print(id,
-						para.fn, para.fv, para.fs)
-					issueInfoPrev = append(issueInfoPrev,
-						issues...)
-				}
-				return issues, err
-			}
-			for _, inf := range issueInfoCurr {
-				if _, err = loopIssues(svr, inf, looper); err != nil {
-					Log(false, false, err)
-				}
-			}
-			if choices == nil || len(choices) < 2 || (fun != nil && funIndx == len(fun)) {
-				break
-			}
-		}
-		if choices == nil || len(cfg.Svrs) < 2 { // TODO: no loop
-			break
-		}
-	}
-	return
-}
-
-func flagParse(ParamDef, cfgSvrOpt string) params {
-	var p params
-
+func (p *params) Declare() {
+	const ParamDef = "_"
+	const cfgSvrOpt = "setsvrcfg"
+	p.Def = ParamDef
+	p.CfgSvrOpt = cfgSvrOpt
 	flag.BoolVar(&p.h, "h", false, "help message")
 	flag.BoolVar(&p.ver, "ver", false, "version info")
 	flag.BoolVar(&p.ver, "version", false, "version info")
@@ -344,7 +240,163 @@ func flagParse(ParamDef, cfgSvrOpt string) params {
 		"not to be used together with fn or fv. "+
 		"results filtered by return value 0 from script fv, "+
 		"run by command fn. Note this may be very time-consuming")
+}
+
+func (p params) Parse() {
 	flag.Parse()
+	eztools.AuthInsecureTLS = true
+	if p.reverse {
+		step = -1
+	} else {
+		step = 1
+	}
+}
+
+func mkIssueinfo(p params) IssueInfos {
+	inf := make(IssueInfos)
+	matrix := [...][]string{
+		{p.i, IssueinfoStrID},
+		{p.k, IssueinfoStrKey},
+		{p.hd, IssueinfoStrSummary},
+		{p.p, IssueinfoStrProj},
+		{p.b, IssueinfoStrBranch},
+		{p.l, IssueinfoStrLink},
+		{p.f, IssueinfoStrFile},
+		{p.z, IssueinfoStrSize},
+		{p.c, IssueinfoStrComments}}
+	// paramS to be handled when needed
+	for _, i := range matrix {
+		if len(i[0]) > 0 {
+			inf[i[1]] = i[0]
+		}
+	}
+	return inf
+}
+
+// DefLooper to loop one action/function with multiple ID's
+type DefLooper struct {
+	para          params
+	svr           *svrs
+	authInfo      eztools.AuthInfo
+	funStr1       string       // A string describing the function
+	fun1          actionFunc   // Function for action to be called
+	issueInfoPrev IssueInfoSlc // issue information slices acumulated among loops
+	maxResults    int          // Maximum number of results in each loop
+}
+
+// SetFun to set the function to be called in all loops
+func (l *DefLooper) SetFun(str string, f actionFunc) {
+	l.funStr1 = str
+	l.fun1 = f
+}
+
+// ResetIssueInfo to reset the issue information slices
+func (l *DefLooper) ResetIssueInfo() {
+	l.issueInfoPrev = nil
+}
+
+// GetIssueInfo to get the issue information slices after all done
+func (l *DefLooper) GetIssueInfo() IssueInfoSlc {
+	return l.issueInfoPrev
+}
+
+// Loop to be used with loopIssues
+func (l *DefLooper) Loop(inf IssueInfos) (IssueInfoSlc, error) {
+	Log(false, true, l.svr.Name, l.funStr1, inf)
+	id := inf[IssueinfoStrID]
+	issues, err := l.fun1(l.svr, l.authInfo, inf)
+	if err != nil {
+		var op bool
+		e := err
+		if err == eztools.ErrNoValidResults {
+			if !uiSilent {
+				op = true
+			}
+			e = eztools.ErrNoValidResults
+		}
+		Log(op, false, e)
+	} else {
+		if (l.maxResults > 0) && (len(issues) > l.maxResults) {
+			Log(true, false, "limiting to", l.maxResults, "results")
+			issues = issues[:l.maxResults]
+		}
+		issues.Print(id, l.para.fn, l.para.fv, l.para.fs)
+		l.issueInfoPrev = append(l.issueInfoPrev, issues...)
+	}
+	return issues, err
+}
+
+func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
+	issueInfo IssueInfos, para params) (err error) {
+	var choices []string
+	for ; ; svr = nil { // reset nil among loops
+		if svr == nil {
+			svr = chooseSvr(cats, cfg.Svrs)
+			if svr == nil {
+				break
+			}
+		}
+		var authInfo eztools.AuthInfo
+		authInfo, err = cfg2AuthInfo(*svr, cfg)
+		if err != nil {
+			Log(false, false, err)
+			os.Exit(extCfg)
+		}
+		if len(svr.Proj) > 0 && !uiSilent {
+			eztools.ShowStrln("default project/ID prefix: " +
+				svr.Proj)
+		}
+		var (
+			fun1    actionFunc
+			funStr1 string
+		)
+		if funs == nil {
+			choices = makeActs2Choose(*svr, cats[svr.Type])
+		}
+		looper := DefLooper{para, svr, authInfo, funStr1, fun1, nil, -1}
+		for funIndx := 0; ; fun1 = nil { // reset fun1 among loops
+			var issueInfoCurr IssueInfoSlc
+			if funs != nil && funIndx < len(funs) {
+				// looping silent actions
+				fun1 = funs[funIndx].f
+				funStr1 = funs[funIndx].n
+				issueInfoCurr = looper.GetIssueInfo()
+				funIndx++
+				Log(true, false, "actions:", funStr1)
+			} else {
+				if fun1 == nil { // reset issueInfo among loops
+					funStr1, fun1, issueInfoCurr = chooseAct(svr,
+						authInfo, choices, cats[svr.Type],
+						mkIssueinfo(para), looper.GetIssueInfo())
+					if fun1 == nil {
+						break
+					}
+				} else { // first round and silent
+					issueInfoCurr = IssueInfoSlc{issueInfo}
+				}
+			}
+			looper.ResetIssueInfo()
+			looper.SetFun(funStr1, fun1)
+			for _, inf := range issueInfoCurr {
+				if _, err = loopIssues(svr, inf, looper.Loop); err != nil {
+					Log(false, false, err)
+				}
+			}
+			if choices == nil || len(choices) < 2 || (funs != nil && funIndx == len(funs)) {
+				break
+			}
+		}
+		if choices == nil || len(cfg.Svrs) < 2 { // TODO: no loop
+			break
+		}
+	}
+	return
+}
+
+func flagParse() params {
+	var p params
+	p.Declare()
+	p.Parse()
 
 	eztools.Debugging = p.v || p.vv || p.vvv
 	switch {
@@ -466,26 +518,26 @@ func watchCfg(p params) {
 	}
 }
 
-func matchFuncFromParam(p params, svr *svrs, cats cat2Act) (fun []actionFunc, funStr []string) {
-	if len(p.a) <= 0 {
-		return
+func matchFuncFromParam(action string, svr *svrs, cats cat2Act) []action2Func {
+	if len(action) <= 0 {
+		return nil
 	}
-	acts := strings.Split(p.a, actionSep)
+	var ret []action2Func
+	acts := strings.Split(action, actionSep)
 	for _, act := range acts {
 		for _, v := range cats[svr.Type] {
 			if act == v.n {
 				uiSilent = true
-				fun = append(fun, v.f)
-				funStr = append(funStr, v.n)
+				ret = append(ret, action2Func{v.n, v.f})
 				break
 			}
 		}
-		if fun == nil {
+		if ret == nil {
 			Log(true, false, "\""+act+
 				"\" NOT recognized as a command")
 		}
 	}
-	return
+	return ret
 }
 
 func errExit(err error) {
@@ -513,12 +565,37 @@ func errExit(err error) {
 	}
 }
 
+func mkSvrFromParam(p string) (svr *svrs, ok bool) {
+	switch len(cfg.Svrs) {
+	case 0:
+		return
+		// eztools.LogFatal("NO server configured!")
+	case 1:
+		svr = &cfg.Svrs[0]
+		ok = true
+		return
+	}
+	if len(p) > 0 {
+		for i, v := range cfg.Svrs {
+			if p == v.Name {
+				svr = &cfg.Svrs[i]
+				ok = true
+				break
+			}
+		}
+		/* 		if svr == nil {
+			Log(true, false, "Unknown server "+p.r)
+		} */
+	} else {
+		ok = true
+	}
+	return
+}
+
 func main() {
-	const ParamDef = "_"
 	svrTypes = []string{CategoryJira, CategoryGerrit, CategoryJenkins, CategoryBugzilla}
 
-	const cfgSvrOpt = "setsvrcfg"
-	p := flagParse(ParamDef, cfgSvrOpt)
+	p := flagParse()
 	if p.ver {
 		eztools.ShowStrln(module + " version " + Ver + " build " + Bld)
 		return
@@ -562,12 +639,12 @@ func main() {
 	}
 	if !uiSilent {
 		cfg.User = chkUsr(cfg.User, true)
-		if !chkSvr(cfg.Svrs, cfg.Pass, cfgSvrOpt) {
-			failSvrCfg(cfgSvrOpt)
+		if !chkSvr(cfg.Svrs, cfg.Pass, p.CfgSvrOpt) {
+			failSvrCfg(p.CfgSvrOpt)
 			os.Exit(extCfg)
 		}
 	}
-	if p.w != ParamDef {
+	if p.w != p.Def {
 		watchCfg(p)
 		return
 	}
@@ -577,48 +654,31 @@ func main() {
 	go chkUpdate(cfg.EzToolsCfg, upch)
 
 	var (
-		fun    []actionFunc
+		funs   []action2Func
 		funStr []string
-		svr    *svrs
 	)
-	switch len(cfg.Svrs) {
-	case 0:
-		eztools.LogFatal("NO server configured!")
-	case 1:
-		svr = &cfg.Svrs[0]
-	}
-	if len(p.r) > 0 {
-		for i, v := range cfg.Svrs {
-			if p.r == v.Name {
-				svr = &cfg.Svrs[i]
-				break
-			}
-		}
-		if svr == nil {
-			Log(true, false, "Unknown server "+p.r)
-		}
+	svr, ok := mkSvrFromParam(p.r)
+	if !ok {
+		eztools.LogFatal("NO server configured or none matched!", p.r)
 	}
 	issueInfo := mkIssueinfo(p)
 	svrParam := "N/A"
 	if svr != nil {
-		fun, funStr = matchFuncFromParam(p, svr, cats)
+		funs = matchFuncFromParam(p.a, svr, cats)
 		svrParam = svr.Name
 	}
-	eztools.AuthInsecureTLS = true
 	Log(false, false, "runtime params: server="+
 		svrParam+", action=", funStr, ", info array:")
 	Log(false, false, issueInfo)
-	if p.reverse {
-		step = -1
-	} else {
-		step = 1
-	}
-	err := mainLoop(svr, cats, fun, funStr, issueInfo, p)
+	err := mainLoop(svr, cats, funs, issueInfo, p)
 
 	if eztools.Debugging {
 		eztools.ShowStrln("waiting for update check...")
 	}
 	if <-upch {
+		if eztools.Debugging {
+			eztools.ShowStrln("waiting for update check to start...")
+		}
 		if <-upch {
 			if eztools.Debugging {
 				eztools.ShowStrln("waiting for update check to end...")
@@ -636,8 +696,8 @@ func main() {
 
 // Print outputs the results
 // Parameters: original ID, filter parameters, name, value, script
-func (issues issueInfoSlc) Print(id, fn, fv, fs string) {
-	funcScript := func(issueInfo issueInfos) bool {
+func (issues IssueInfoSlc) Print(id, fn, fv, fs string) {
+	funcScript := func(issueInfo IssueInfos) bool {
 		jsonData, err := json.Marshal(issueInfo)
 		if err != nil {
 			Log(true, false, "Error serializing JSON:", err)
@@ -676,12 +736,15 @@ func (issues issueInfoSlc) Print(id, fn, fv, fs string) {
 		Log(true, false, "No results.")
 	} else {
 		var i int
-		if step < 1 {
+		if step == 0 {
+			step = 1
+		}
+		if step < 0 {
 			i = len(issues) - 1
 		} else {
 			i = 0
 		}
-		var fun func(issueInfos) bool
+		var fun func(IssueInfos) bool
 		if len(fn) > 0 {
 			switch {
 			case len(fs) > 0:
@@ -691,7 +754,7 @@ func (issues issueInfoSlc) Print(id, fn, fv, fs string) {
 				}
 				fun = funcScript
 			case len(fv) > 0:
-				fun = func(issueInfo issueInfos) bool {
+				fun = func(issueInfo IssueInfos) bool {
 					return issueInfo[fn] == fv
 				}
 			}
@@ -1057,7 +1120,7 @@ func cfg2AuthInfo(svr svrs, cfg jirrit) (authInfo eztools.AuthInfo, err error) {
 category name -> []action2Func
 cat2Act
 */
-type actionFunc func(*svrs, eztools.AuthInfo, issueInfos) (issueInfoSlc, error)
+type actionFunc func(*svrs, eztools.AuthInfo, IssueInfos) (IssueInfoSlc, error)
 type action2Func struct {
 	n string
 	f actionFunc
@@ -1122,15 +1185,15 @@ func makeActs2Choose(svr svrs, funcs []action2Func) []string {
 }
 
 func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
-	funcs []action2Func, issueInfo issueInfos,
-	issueInfoPrev issueInfoSlc) (string, actionFunc, issueInfoSlc) {
+	funcs []action2Func, issueInfo IssueInfos,
+	issueInfoPrev IssueInfoSlc) (string, actionFunc, IssueInfoSlc) {
 	var (
 		fi  int
-		ret issueInfoSlc
+		ret IssueInfoSlc
 	)
 	if uiSilent && len(choices) > 1 {
 		noInteractionAllowed()
-		return "", nil, issueInfoSlc{issueInfo}
+		return "", nil, IssueInfoSlc{issueInfo}
 	}
 	switch len(choices) {
 	case 0:
@@ -1143,9 +1206,8 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 		for _, choice1 := range [...][]string{append(choices, wtFormer), choices} {
 			fi, _ = eztools.ChooseStrings(choice1)
 			if fi == eztools.InvalidID {
-				return "", nil, issueInfoSlc{issueInfo}
+				return "", nil, IssueInfoSlc{issueInfo}
 			}
-			eztools.ShowStrln("action chosen:", fi, len(choices))
 			if fi < len(choices) {
 				break
 			}
@@ -1157,7 +1219,7 @@ func chooseAct(svr *svrs, authInfo eztools.AuthInfo, choices []string,
 		if inputIssueInfo4Act(svr, authInfo, funcs[fi].n, issueInfo) {
 			return "", nil, nil
 		}
-		ret = issueInfoSlc{issueInfo}
+		ret = IssueInfoSlc{issueInfo}
 	}
 	return funcs[fi].n, funcs[fi].f, ret
 }
@@ -1429,11 +1491,11 @@ func chkNLoopStringMap(m interface{},
 
 // parseIssues loops a map of string to a slice of map of string
 func parseIssues(issueKey string, m map[string]interface{},
-	fun func(map[string]interface{}) issueInfos) issueInfoSlc {
+	fun func(map[string]interface{}) IssueInfos) IssueInfoSlc {
 	/*if eztools.Debugging && eztools.Verbose > 1 {
 		eztools.ShowStrln(strs)
 	}*/
-	results := make(issueInfoSlc, 0)
+	results := make(IssueInfoSlc, 0)
 	loopStringMap(m, issueKey, nil,
 		func(i string, v interface{}) bool {
 			//eztools.ShowStrln("func " + i)
@@ -1623,41 +1685,23 @@ const (
 	IssueinfoStrAdded = "added"
 )
 
-type issueInfos map[string]string
-type issueInfoSlc []issueInfos
+type IssueInfos map[string]string
+type IssueInfoSlc []IssueInfos
 
-func makeIssueInfo() (inf issueInfos) {
-	return make(issueInfos)
+func makeIssueInfo() (inf IssueInfos) {
+	return make(IssueInfos)
 }
 
-func (inf issueInfos) ToSlc() issueInfoSlc {
-	return issueInfoSlc{inf}
+func (inf IssueInfos) ToSlc() IssueInfoSlc {
+	return IssueInfoSlc{inf}
 }
 
-func (issues issueInfoSlc) ToMapSlc() (res []map[string]string) {
+func (issues IssueInfoSlc) ToMapSlc() (res []map[string]string) {
 	for _, i := range issues {
 		res = append(res, i)
 	}
 	return
 }
-
-//type scoreInfos [IssueinfoStrScore + 1]int
-
-/*func (issueInfo *issueInfos) String() string {
-	var res string
-	for _, v := range issueInfo {
-		switch len(res) {
-		case 0:
-			res += "[ "
-		default:
-			res += ", "
-
-		}
-		res += "\"" + v + "\""
-	}
-	res += " ]"
-	return res
-}*/
 
 var issueInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrKey, IssueinfoStrSubject,
@@ -1690,15 +1734,6 @@ var reviewInfoTxt = []string{
 	IssueinfoStrID, IssueinfoStrName, IssueinfoStrVerified,
 	IssueinfoStrCodereview, IssueinfoStrDispname, IssueinfoStrApprovals}
 
-/*var jiraInfoTxt = issueInfos{ISSUEINFO_STR_ID, ISSUEINFO_STR_KEY,
-ISSUEINFO_STR_SUMMARY, ISSUEINFO_STR_PROJ, ISSUEINFO_STR_DISPNAME,
-ISSUEINFO_STR_STATE}*/
-/*var jiraDetailTxt = issueInfos{
-ISSUEINFO_STR_ID, ISSUEINFO_STR_DESC, ISSUEINFO_STR_SUMMARY,
-ISSUEINFO_STR_COMMENT, ISSUEINFO_STR_DISPNAME, ISSUEINFO_STR_STATE}*/
-
-const issueSeparator = ","
-
 // loopIssues runs a function on all numbers between, inclusively,
 // X-0 and X-1, or 0,1 from input in format of X-0,1 or 0,1
 // If it is not a range, the function's return values are returned.
@@ -1706,8 +1741,8 @@ const issueSeparator = ","
 // IssueinfoStrID is set for each loop of function fun,
 // from multiple ID's in one issueInfo,
 // while other fields use the former values returned from function fun
-func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
-	issueInfoSlc, error)) (issueInfoOut issueInfoSlc, err error) {
+func loopIssues(svr *svrs, issueInfo IssueInfos, fun func(IssueInfos) (
+	IssueInfoSlc, error)) (issueInfoOut IssueInfoSlc, err error) {
 	printID := func() {
 		if err == nil {
 			Log(false, false, "Done with "+
@@ -1820,7 +1855,7 @@ func loopIssues(svr *svrs, issueInfo issueInfos, fun func(issueInfos) (
 	return
 }
 
-func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
+func cfmInputOrPromptStrMultiLines(inf IssueInfos, ind, prompt string) {
 	if uiSilent {
 		noInteractionAllowed()
 		return
@@ -1841,7 +1876,7 @@ func cfmInputOrPromptStrMultiLines(inf issueInfos, ind, prompt string) {
 // cfmInputOrPromptStr does not accept multiple ID format for input
 // parse JIRA number format for JIRA servers and ID strings
 // return value: whether anything new is input
-func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
+func cfmInputOrPromptStr(svr *svrs, inf IssueInfos, ind, prompt string) bool {
 	const linefeed = " (end with \\ to input multi lines)"
 	var def, base string
 	var changes, smart bool // no smart affix available by default
@@ -1883,7 +1918,7 @@ func cfmInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) bool {
 	return true
 }
 
-func useInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) {
+func useInputOrPromptStr(svr *svrs, inf IssueInfos, ind, prompt string) {
 	if len(inf[ind]) > 0 {
 		return
 	}
@@ -1894,14 +1929,15 @@ func useInputOrPromptStr(svr *svrs, inf issueInfos, ind, prompt string) {
 	cfmInputOrPromptStr(svr, inf, ind, prompt)
 }
 
-func useInputOrPrompt(svr *svrs, inf issueInfos, ind string) {
+func useInputOrPrompt(svr *svrs, inf IssueInfos, ind string) {
 	useInputOrPromptStr(svr, inf, ind, ind)
 }
 
+// useInputOrPrompt4ID lists open cases to choose from
 // Parameters: fun=function to list issues for user to choose from
 // Return value: true=no ID input; false=sth. input
 func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) bool {
+	issueInfo IssueInfos) bool {
 	/*switch svr.Type {
 	case CategoryGerrit:
 		defer gerritAnyID2ID(svr, authInfo, issueInfo)
@@ -1916,7 +1952,7 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 	var (
 		strIndCmp, strIndSum string
 		listFunc             func(svr *svrs, authInfo eztools.AuthInfo,
-			issueInfo issueInfos) (issueInfoSlc, error)
+			issueInfo IssueInfos) (IssueInfoSlc, error)
 	)
 	switch svr.Type {
 	case CategoryJira:
@@ -1962,9 +1998,9 @@ func useInputOrPrompt4ID(svr *svrs, authInfo eztools.AuthInfo,
 	return false
 }
 
-// inputIssueInfo4JB is for Jira and Bugzilla
+// inputIssueInfo4JB is inputIssueInfo4Act for Jira and Bugzilla
 func inputIssueInfo4JB(svr *svrs, authInfo eztools.AuthInfo,
-	action string, inf issueInfos) bool {
+	action string, inf IssueInfos) bool {
 	switch action {
 	case "close a case to resolved from any known statuses":
 		if useInputOrPrompt4ID(svr, authInfo, inf) {
@@ -2064,8 +2100,10 @@ func inputIssueInfo4JB(svr *svrs, authInfo eztools.AuthInfo,
 	return false
 }
 
+// inputIssueInfo4Act asks for input specific to the action and server type, and update
+// inf accordingly. Return true if not enough info is given, false otherwise.
 func inputIssueInfo4Act(svr *svrs, authInfo eztools.AuthInfo,
-	action string, inf issueInfos) bool {
+	action string, inf IssueInfos) bool {
 	switch svr.Type {
 	case CategoryGerrit:
 		switch action {

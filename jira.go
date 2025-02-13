@@ -99,8 +99,8 @@ func parseTypicalJiraNum(svr *svrs, num string) (nonDigit,
 }
 
 // check map type before looping it
-func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
-	issueInfoOut = make(issueInfos)
+func jiraParse1Field(m map[string]interface{}) (issueInfoOut IssueInfos) {
+	issueInfoOut = make(IssueInfos)
 	for i, v := range m {
 		if v == nil {
 			continue
@@ -133,7 +133,7 @@ func jiraParse1Field(m map[string]interface{}) (issueInfoOut issueInfos) {
 	return
 }
 
-func jiraParse1Issue(m map[string]interface{}) (issueInfoOut issueInfos) {
+func jiraParse1Issue(m map[string]interface{}) (issueInfoOut IssueInfos) {
 	var id []string
 	id, _ = loopStringMap(m, "fields",
 		[]string{IssueinfoStrKey},
@@ -201,7 +201,7 @@ func jiraParseTrans(m map[string]interface{}) (tranNames, tranIDs []string) {
 	return
 }
 
-func jiraParseIssues(m map[string]interface{}) issueInfoSlc {
+func jiraParseIssues(m map[string]interface{}) IssueInfoSlc {
 	return parseIssues("issues", m, jiraParse1Issue)
 }
 
@@ -211,7 +211,7 @@ func jiraParseIssues(m map[string]interface{}) issueInfoSlc {
 //	IssueinfoStrBranch=date
 //	IssueinfoStrID
 //	IssueinfoStrKey=user
-func jiraParse1Cmt(m map[string]interface{}) (issueInfos, error) {
+func jiraParse1Cmt(m map[string]interface{}) (IssueInfos, error) {
 	var author string
 	inf, ok := loopStringMap(m, "author",
 		[]string{"body", "updated", "id"},
@@ -227,16 +227,16 @@ func jiraParse1Cmt(m map[string]interface{}) (issueInfos, error) {
 	if !ok || len(inf) < 1 {
 		return nil, eztools.ErrNoValidResults
 	}
-	return issueInfos{
+	return IssueInfos{
 		IssueinfoStrComments: inf[0],
 		IssueinfoStrBranch:   inf[1],
 		IssueinfoStrID:       inf[2],
 		IssueinfoStrKey:      author}, nil
 }
 
-func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
+func jiraParseCmts(m map[string]interface{}) (IssueInfoSlc, error) {
 	var (
-		issues issueInfoSlc
+		issues IssueInfoSlc
 	)
 	loopStringMap(m, IssueinfoStrComments, nil,
 		func(i string, v interface{}) bool {
@@ -265,7 +265,7 @@ func jiraParseCmts(m map[string]interface{}) (issueInfoSlc, error) {
 }
 
 func JiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrSummary]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -332,7 +332,7 @@ func JiraTransfer(svr *svrs, authInfo eztools.AuthInfo,
 
 type mustFlds struct {
 	name    string
-	choices issueInfoSlc
+	choices IssueInfoSlc
 }
 
 func jiraParseAllowedVal(vals interface{}) (musts []mustFlds) {
@@ -532,7 +532,7 @@ func jiraTranExec(svr *svrs, authInfo eztools.AuthInfo,
 
 // jiraCmtNTran is transitions for reject & close, adding comments
 func jiraCmtNTran(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, steps []string) (err error) {
+	issueInfo IssueInfos, steps []string) (err error) {
 	if len(issueInfo[IssueinfoStrComments]) > 0 {
 		_, err := jiraAddComment1(svr, authInfo, issueInfo)
 		if err != nil {
@@ -598,7 +598,7 @@ func jiraConstructFields(in string) string {
 }
 
 func jiraEditWtFields(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, jsonInner string) error {
+	issueInfo IssueInfos, jsonInner string) error {
 	jsonStr := jiraConstructFields(jsonInner)
 	if eztools.Debugging && eztools.Verbose > 0 {
 		Log(false, false, "Processing "+issueInfo[IssueinfoStrID])
@@ -640,7 +640,7 @@ func jiraEditMeta(svr *svrs, authInfo eztools.AuthInfo, id, filter string) (inte
 // jiraEditMeta get possible reject reasons
 // reject reason stored in IssueinfoStrKey
 func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (jsonStr string) {
+	issueInfo IssueInfos) (jsonStr string) {
 	if len(svr.Flds.RejectRsn) > 0 {
 		if len(issueInfo[IssueinfoStrKey]) < 1 {
 			// get all possible reasons
@@ -675,7 +675,7 @@ func jiraGetDesc(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraReject(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranRej)
 	if Steps == nil {
 		Log(true, false, "No transitions configured for this server!")
@@ -693,7 +693,7 @@ func JiraReject(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos, qa string) (issueInfoSlc, error) {
+	issueInfo IssueInfos, qa string) (IssueInfoSlc, error) {
 	Steps := makeStates(svr, StateTypeTranCls)
 	if Steps == nil {
 		Log(true, false, "No transitions configured for this server!")
@@ -721,24 +721,24 @@ func jiraCloseWtQA(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraClose(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo, issueInfo, issueInfo[IssueinfoStrLink])
 }
 
 func JiraCloseDef(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo,
 		issueInfo, "default AOSP/vendor/design")
 }
 
 func JiraCloseGen(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	return jiraCloseWtQA(svr, authInfo,
 		issueInfo, "general requirement")
 }
 
 func JiraTransition(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -760,7 +760,7 @@ func JiraTransition(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraLink(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	// TODO: get these from server
 	linkChoices := []struct {
 		name, inward, outward string
@@ -837,7 +837,7 @@ func JiraLink(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraModComment(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -876,7 +876,7 @@ func JiraModComment(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	// TODO: select key
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrKey]) < 1 {
@@ -890,7 +890,7 @@ func JiraDelComment(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraAddComment(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrComments]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -922,7 +922,7 @@ func jiraPostSth(svr *svrs, urlSuffix string, authInfo eztools.AuthInfo,
 }
 
 func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfos, error) {
+	issueInfo IssueInfos) (IssueInfos, error) {
 	type comment1 struct {
 		Comment1 string `json:"body"`
 	}
@@ -938,7 +938,7 @@ func jiraAddComment1(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraComments(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -952,7 +952,7 @@ func JiraComments(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (map[string]interface{}, error) {
+	issueInfo IssueInfos) (map[string]interface{}, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -965,7 +965,7 @@ func jiraDetailExec(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraDetail(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	bodyMap, err := jiraDetailExec(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err
@@ -979,7 +979,7 @@ func JiraDetail(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	const RestAPIStr = "rest/api/latest/search?jql="
 	var states string
 	for _, v := range svr.State {
@@ -999,7 +999,7 @@ func JiraMyOpen(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -1008,7 +1008,7 @@ func JiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	var res issueInfoSlc
+	var res IssueInfoSlc
 	loopStringMap(bodyMap, "watchers", nil,
 		func(_ string, watchersI interface{}) bool {
 			watchersS, ok := watchersI.([]interface{})
@@ -1022,7 +1022,7 @@ func JiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 				if inf == nil {
 					return false
 				}
-				res = append(res, issueInfos{
+				res = append(res, IssueInfos{
 					IssueinfoStrDispname: inf[1],
 					IssueinfoStrID:       inf[0]})
 			}
@@ -1032,7 +1032,7 @@ func JiraWatcherList(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -1041,20 +1041,20 @@ func JiraWatcherCheck(svr *svrs, authInfo eztools.AuthInfo,
 	if err != nil {
 		return nil, err
 	}
-	var res issueInfoSlc
+	var res IssueInfoSlc
 	watchingI := bodyMap["isWatching"]
 	watching, ok := watchingI.(bool)
 	if !ok {
 		LogTypeErr(watchingI, "bool")
 		return nil, err
 	}
-	res = append(res, issueInfos{
+	res = append(res, IssueInfos{
 		IssueinfoStrState: strconv.FormatBool(watching)})
 	return res, nil
 }
 
 func JiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -1065,7 +1065,7 @@ func JiraWatcherAdd(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 {
 		return nil, eztools.ErrInvalidInput
 	}
@@ -1078,7 +1078,7 @@ func JiraWatcherDel(svr *svrs, authInfo eztools.AuthInfo,
 	return nil, err
 }
 
-func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) {
+func jiraParseAttachments(bodyMap map[string]interface{}) (issues IssueInfoSlc) {
 	bodyInt := bodyMap["fields"]
 	if bodyInt == nil {
 		Log(stdOutput, false, "NO fields to parse")
@@ -1115,7 +1115,7 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 				sz = eztools.TranSize(int64(szI), 1, false)
 			}
 		}
-		issues = append(issues, issueInfos{
+		issues = append(issues, IssueInfos{
 			IssueinfoStrBin:  inf[0],
 			IssueinfoStrLink: inf[1],
 			IssueinfoStrFile: inf[2],
@@ -1127,7 +1127,7 @@ func jiraParseAttachments(bodyMap map[string]interface{}) (issues issueInfoSlc) 
 }
 
 func JiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrID]) < 1 ||
 		len(issueInfo[IssueinfoStrFile]) < 1 {
 		return nil, eztools.ErrInvalidInput
@@ -1143,7 +1143,7 @@ func JiraAddFile(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraListFile(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	bodyMap, err := jiraDetailExec(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err
@@ -1152,7 +1152,7 @@ func JiraListFile(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jiraGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfos, error) {
+	issueInfo IssueInfos) (IssueInfos, error) {
 	inf, err := JiraListFile(svr, authInfo, issueInfo)
 	if err != nil {
 		return issueInfo, err
@@ -1182,7 +1182,7 @@ func jiraGetFileInf(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	/*isDir := false
 	fi, err := os.Stat(issueInfo[IssueinfoStrFile])
 	if err == nil || !os.IsNotExist(err) {
@@ -1226,7 +1226,7 @@ func JiraGetFile(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JiraDelFile(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	if len(issueInfo[IssueinfoStrKey]) < 1 {
 		if len(issueInfo[IssueinfoStrID]) < 1 {
 			return nil, eztools.ErrInvalidInput

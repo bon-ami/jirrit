@@ -11,7 +11,7 @@ import (
 )
 
 // jenkinsParseBlds get "name" & "url" from "jobs" or sth.
-func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
+func jenkinsParseBlds(i interface{}) (IssueInfoSlc, error) {
 	if i == nil {
 		Log(false, false, "NO builds got")
 		return nil, nil
@@ -21,7 +21,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 		LogTypeErr(i, "slice")
 		return nil, nil
 	}
-	var issues issueInfoSlc
+	var issues IssueInfoSlc
 	for _, e := range a {
 		m, ok := e.(map[string]interface{})
 		if !ok {
@@ -51,7 +51,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 				" got instead of string!")
 			continue
 		}
-		issues = append(issues, issueInfos{
+		issues = append(issues, IssueInfos{
 			IssueinfoStrID:  strconv.FormatFloat(ns, 'f', 0, 64),
 			IssueinfoStrURL: us,
 		})
@@ -60,7 +60,7 @@ func jenkinsParseBlds(i interface{}) (issueInfoSlc, error) {
 }
 
 func JenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseJob(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func JenkinsListBlds(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jenkinsChooseBld(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfos, error) {
+	issueInfo IssueInfos) (IssueInfos, error) {
 	issueInfo, err := jenkinsChooseJob(svr, authInfo, issueInfo)
 	if err != nil || len(issueInfo[IssueinfoStrID]) > 0 {
 		return issueInfo, err
@@ -109,7 +109,7 @@ func jenkinsChooseBld(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfos, error) {
+	issueInfo IssueInfos) (IssueInfos, error) {
 	if len(issueInfo[IssueinfoStrProj]) > 0 {
 		return issueInfo, nil
 	}
@@ -136,7 +136,7 @@ func jenkinsChooseJob(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 // jenkinsParseJobs get "name" & "url" from "jobs" or sth.
-func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
+func jenkinsParseJobs(i interface{}, num string) (IssueInfoSlc, error) {
 	if i == nil {
 		Log(false, false, "NO jobs got")
 		return nil, nil
@@ -146,7 +146,7 @@ func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
 		LogTypeErr(i, "slice")
 		return nil, nil
 	}
-	var issues issueInfoSlc
+	var issues IssueInfoSlc
 	count, _ := strconv.Atoi(num)
 	for _, e := range a {
 		m, ok := e.(map[string]interface{})
@@ -177,7 +177,7 @@ func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
 				" got instead of string!")
 			continue
 		}
-		issues = append(issues, issueInfos{
+		issues = append(issues, IssueInfos{
 			IssueinfoStrName: ns,
 			IssueinfoStrURL:  us,
 		})
@@ -193,7 +193,7 @@ func jenkinsParseJobs(i interface{}, num string) (issueInfoSlc, error) {
 }
 
 func JenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	const RestAPIStr = "api/json"
 	bodyMap, err := restMap(http.MethodGet,
 		svr.URL+RestAPIStr, authInfo, nil, svr.Magic)
@@ -203,7 +203,7 @@ func JenkinsListJobs(svr *svrs, authInfo eztools.AuthInfo,
 	return jenkinsParseJobs(bodyMap[IssueinfoStrJob], issueInfo[IssueinfoStrSize])
 }
 
-func jenkinsParseBldActParams(parIn any, issueInfo issueInfos) bool {
+func jenkinsParseBldActParams(parIn any, issueInfo IssueInfos) bool {
 	par1Map, ok := parIn.(map[string]interface{})
 	if !ok {
 		return false
@@ -253,7 +253,7 @@ func jenkinsParseBldActParams(parIn any, issueInfo issueInfos) bool {
 	return true
 }
 
-func jenkinsParseBldParams(act1Map map[string]any, issueInfo issueInfos) bool {
+func jenkinsParseBldParams(act1Map map[string]any, issueInfo IssueInfos) bool {
 	parAny := act1Map["parameters"]
 	if parAny == nil {
 		Log(false, false, "parameters NOT found")
@@ -270,7 +270,7 @@ func jenkinsParseBldParams(act1Map map[string]any, issueInfo issueInfos) bool {
 	return true
 }
 
-func jenkinsParseBldActCause(parIn any, issueInfo issueInfos) bool {
+func jenkinsParseBldActCause(parIn any, issueInfo IssueInfos) bool {
 	par1Map, ok := parIn.(map[string]interface{})
 	if !ok {
 		return false
@@ -308,7 +308,7 @@ func jenkinsParseBldActCause(parIn any, issueInfo issueInfos) bool {
 	return true
 }
 
-func jenkinsParseBldCause(act1Map map[string]any, issueInfo issueInfos) bool {
+func jenkinsParseBldCause(act1Map map[string]any, issueInfo IssueInfos) bool {
 	parAny := act1Map["causes"]
 	if parAny == nil {
 		Log(false, false, "parameters NOT found")
@@ -327,7 +327,7 @@ func jenkinsParseBldCause(act1Map map[string]any, issueInfo issueInfos) bool {
 
 // jenkinsParseBldDisp parses first level of results
 // Return value: true if any parsed
-func jenkinsParseBldDisp(act1Map map[string]any, issueInfo issueInfos) (ret bool) {
+func jenkinsParseBldDisp(act1Map map[string]any, issueInfo IssueInfos) (ret bool) {
 	table := []struct {
 		key string
 		fun func(any) bool
@@ -380,8 +380,8 @@ func jenkinsParseBldDisp(act1Map map[string]any, issueInfo issueInfos) (ret bool
 	return
 }
 
-func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
-	issueInfo := make(issueInfos)
+func jenkinsParseDtlBld(bodyMap map[string]interface{}) (IssueInfos, error) {
+	issueInfo := make(IssueInfos)
 	if bodyMap["actions"] == nil {
 		Log(false, false, "NO actions found")
 		return nil, eztools.ErrNoValidResults
@@ -420,7 +420,7 @@ func jenkinsParseDtlBld(bodyMap map[string]interface{}) (issueInfos, error) {
 }
 
 func JenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseBld(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err
@@ -441,7 +441,7 @@ func JenkinsDetailOnBld(svr *svrs, authInfo eztools.AuthInfo,
 }
 
 func JenkinsLogOfBld(svr *svrs, authInfo eztools.AuthInfo,
-	issueInfo issueInfos) (issueInfoSlc, error) {
+	issueInfo IssueInfos) (IssueInfoSlc, error) {
 	issueInfo, err := jenkinsChooseBld(svr, authInfo, issueInfo)
 	if err != nil {
 		return nil, err

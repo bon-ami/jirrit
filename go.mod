@@ -6,6 +6,7 @@ toolchain go1.23.0
 
 require (
 	gitee.com/bon-ami/eztools/v6 v6.3.0
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 )
 
@@ -15,6 +16,7 @@ require (
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Xuanwo/go-locale v1.1.2 // indirect
 	github.com/cention-sany/utf7 v0.0.0-20170124080048-26cad61bd60a // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.7 // indirect
 	github.com/go-ldap/ldap/v3 v3.4.8 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
@@ -28,6 +30,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.4.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sanbornm/go-selfupdate v0.0.0-20230714125711-e1c03e3d6ac7 // indirect
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0 // indirect
@@ -37,4 +40,5 @@ require (
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/term v0.26.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
