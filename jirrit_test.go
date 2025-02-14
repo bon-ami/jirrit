@@ -45,7 +45,8 @@ func (s *TestSuite) SetDependency(desc, funcName string) {
 }
 
 func (s *TestSuite) SetupTest() {
-	/* 	cfgLoad.Do(func() {
+	/* 	// to use testing for logging
+		cfgLoad.Do(func() {
 		eztools.SetLogFunc(func(l ...any) {
 			func(m ...any) {
 				t.T().Log(m)
@@ -128,10 +129,6 @@ func mkSvrByType(name, category string) (*svrs, bool) {
 		}
 	}
 	return nil, false
-}
-
-func TestGerritMyOpen(t *testing.T) {
-	// test1(t, CategoryGerrit, "list my open submits")
 }
 
 func TestSave(t *testing.T) {
