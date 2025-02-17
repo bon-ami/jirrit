@@ -329,7 +329,7 @@ func (l *DefLooper) Loop(inf IssueInfos) (IssueInfoSlc, error) {
 func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
 	issueInfo IssueInfos, para params) (err error) {
 	var choices []string
-	for ; ; svr = nil { // reset nil among loops
+	for ; ; svr = nil { // reset among loops
 		if svr == nil {
 			svr = chooseSvr(cats, cfg.Svrs)
 			if svr == nil {
@@ -346,47 +346,66 @@ func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
 			eztools.ShowStrln("default project/ID prefix: " +
 				svr.Proj)
 		}
-		var (
-			fun1    actionFunc
-			funStr1 string
-		)
 		if funs == nil {
 			choices = makeActs2Choose(*svr, cats[svr.Type])
 		}
-		looper := DefLooper{para, svr, authInfo, funStr1, fun1, nil, -1}
-		for funIndx := 0; ; fun1 = nil { // reset fun1 among loops
-			var issueInfoCurr IssueInfoSlc
-			if funs != nil && funIndx < len(funs) {
-				// looping silent actions
-				fun1 = funs[funIndx].f
-				funStr1 = funs[funIndx].n
-				issueInfoCurr = looper.GetIssueInfo()
-				funIndx++
-				Log(true, false, "actions:", funStr1)
-			} else {
-				if fun1 == nil { // reset issueInfo among loops
-					funStr1, fun1, issueInfoCurr = chooseAct(svr,
-						authInfo, choices, cats[svr.Type],
-						mkIssueinfo(para), looper.GetIssueInfo())
-					if fun1 == nil {
-						break
-					}
-				} else { // first round and silent
-					issueInfoCurr = IssueInfoSlc{issueInfo}
-				}
+		looper := DefLooper{
+			para: para, svr: svr, authInfo: authInfo, maxResults: -1}
+		err = LoopActions(svr, funs, issueInfo, &looper,
+			(choices == nil || len(choices) < 2),
+			func() (string, actionFunc, IssueInfoSlc) {
+				return chooseAct(svr,
+					authInfo, choices, cats[svr.Type],
+					mkIssueinfo(para), looper.GetIssueInfo())
+			})
+		if funs != nil || len(cfg.Svrs) < 2 {
+			break
+		}
+	}
+	return
+}
+
+func LoopActions(svr *svrs, funs []action2Func, issueInfo IssueInfos,
+	looper *DefLooper, noLoopInteraction bool,
+	chooseAct func() (string, actionFunc, IssueInfoSlc)) (err error) {
+	var (
+		fun1    actionFunc
+		funStr1 string
+	)
+	for funIndx := 0; ; fun1 = nil { // reset fun1 among loops
+		var issueInfoCurr IssueInfoSlc
+		if funs != nil && funIndx < len(funs) {
+			// looping silent actions
+			fun1 = funs[funIndx].f
+			funStr1 = funs[funIndx].n
+			issueInfoCurr = looper.GetIssueInfo()
+			funIndx++
+			Log(true, false, "one action:", funStr1)
+		} else {
+			// if fun1 == nil { // reset issueInfo among loops
+			if chooseAct != nil {
+				funStr1, fun1, issueInfoCurr = chooseAct()
 			}
-			looper.ResetIssueInfo()
-			looper.SetFun(funStr1, fun1)
-			for _, inf := range issueInfoCurr {
-				if _, err = loopIssues(svr, inf, looper.Loop); err != nil {
-					Log(false, false, err)
-				}
-			}
-			if choices == nil || len(choices) < 2 || (funs != nil && funIndx == len(funs)) {
-				break
+			// } else { // first round and silent
+			// issueInfoCurr = IssueInfoSlc{issueInfo}
+			// }
+		}
+		if fun1 == nil {
+			break
+		}
+		// use issueInfoCurr to loop issues
+		// looper.issueInfoPrev is used for new results
+		looper.ResetIssueInfo()
+		looper.SetFun(funStr1, fun1)
+		if issueInfoCurr == nil {
+			issueInfoCurr = IssueInfoSlc{makeIssueInfo()}
+		}
+		for _, inf := range issueInfoCurr {
+			if _, err = loopIssues(svr, inf, looper.Loop); err != nil {
+				Log(false, false, err)
 			}
 		}
-		if choices == nil || len(cfg.Svrs) < 2 { // TODO: no loop
+		if noLoopInteraction || (funs != nil && funIndx == len(funs)) {
 			break
 		}
 	}
@@ -518,6 +537,7 @@ func watchCfg(p params) {
 	}
 }
 
+// matchFuncFromParam parses action strings to strings and functions
 func matchFuncFromParam(action string, svr *svrs, cats cat2Act) []action2Func {
 	if len(action) <= 0 {
 		return nil

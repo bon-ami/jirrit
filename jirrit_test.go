@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"sync"
 	"testing"
 
 	"gitee.com/bon-ami/eztools/v6"
@@ -16,7 +17,7 @@ const (
 var (
 	ParamsTest params
 	actionsAll cat2Act
-	// cfgLoad    sync.Once
+	cfgLoad    sync.Once
 )
 
 type TestSuite struct {
@@ -26,7 +27,7 @@ type TestSuite struct {
 	authInfo                                       eztools.AuthInfo
 	funs                                           []action2Func
 	issueInfo                                      IssueInfos
-	skipped                                        bool
+	skipped, log2testing                           bool
 }
 
 func (s *TestSuite) Skip(args ...any) {
@@ -45,50 +46,49 @@ func (s *TestSuite) SetDependency(desc, funcName string) {
 }
 
 func (s *TestSuite) SetupTest() {
-	/* 	// to use testing for logging
+	// to use testing for logging
+	if s.log2testing {
 		cfgLoad.Do(func() {
-		eztools.SetLogFunc(func(l ...any) {
-			func(m ...any) {
-				t.T().Log(m)
-			}(eztools.GetCallerLog(), l)
+			eztools.SetLogFunc(func(l ...any) {
+				func(m ...any) {
+					s.T().Log(m)
+				}(eztools.GetCallerLog(), l)
+			})
 		})
-	}) */
+	}
 	if s.issueInfo == nil {
 		s.issueInfo = mkIssueinfo(ParamsTest)
 	}
-	t := s.T()
+	if s.svr == nil {
+		var ok bool
+		s.svr, ok = mkSvrByType(ParamsTest.r, s.category)
+		if !ok {
+			s.Skip("no server specified")
+		}
+		var err error
+		s.authInfo, err = cfg2AuthInfo(*s.svr, cfg)
+		if err != nil {
+			s.Skip("NO password configured for", infoSep, s.svr.Name, infoSep, err)
+		}
+		if len(s.authInfo.User) < 1 {
+			s.Skip("NO user configured for authinfo", infoSep, err)
+		}
+	}
 	if len(s.dependsOnDesc) > 0 {
 		if len(ParamsTest.i) < 1 {
 			// dependent test only when ID is not provided
 			sui := TestSuite{category: s.category,
 				action: s.dependsOnDesc, issueInfo: s.issueInfo}
 			s.Run(s.dependsOnFunc, func() {
-				suite.Run(t, &sui)
+				suite.Run(s.T(), &sui)
 			})
 			if sui.IsSkipped() {
-				t.SkipNow()
+				s.T().SkipNow()
 			}
 		}
 	}
-	cat := s.category
-	action := s.action
-	if s.svr == nil {
-		var ok bool
-		s.svr, ok = mkSvrByType("", cat)
-		if !ok {
-			t.Skip("no server specified")
-		}
-		var err error
-		s.authInfo, err = cfg2AuthInfo(*s.svr, cfg)
-		if err != nil {
-			t.Skip("NO password configured for", infoSep, s.svr.Name, infoSep, err)
-		}
-		if len(s.authInfo.User) < 1 {
-			t.Skip("NO user configured for authinfo", infoSep, err)
-		}
-	}
 	if s.funs == nil {
-		s.funs = matchFuncFromParam(action, s.svr, actionsAll)
+		s.funs = matchFuncFromParam(s.action, s.svr, actionsAll)
 	}
 }
 
@@ -101,11 +101,14 @@ func (s *TestSuite) Test1() {
 		}
 		looper := DefLooper{ParamsTest, s.svr,
 			s.authInfo, fun1.n, fun1.f, nil, maxResults}
-		if _, err := loopIssues(s.svr, s.issueInfo, looper.Loop); err != nil {
-			Log(false, false, err)
+		inf, err := loopIssues(s.svr, s.issueInfo, looper.Loop)
+		if err != nil {
+			// Log(false, false, err)
+			// .NoError(err)
+			s.FailNow(fun1.n, err)
 		}
-		inf := looper.GetIssueInfo()
-		// only IDs are stored for next rounds
+		// inf := looper.GetIssueInfo()
+		// only IDs are stored for sub tests
 		for _, info := range inf {
 			if len(s.issueInfo[IssueinfoStrID]) > 0 {
 				s.issueInfo[IssueinfoStrID] += issueSeparator

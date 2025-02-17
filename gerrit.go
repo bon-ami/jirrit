@@ -248,7 +248,6 @@ func gerritAnyID2ID(svr *svrs, authInfo eztools.AuthInfo,
 }*/
 
 func gerritParsePickCmds(body map[string]interface{}) IssueInfoSlc {
-	Log(true, false, body)
 	retI := body[IssueinfoStrCherry]
 	if retI == nil {
 		Log(stdOutput, false,
@@ -264,7 +263,6 @@ func gerritParsePickCmds(body map[string]interface{}) IssueInfoSlc {
 }
 
 func gerritParseDlds4Revs(body map[string]interface{}) IssueInfoSlc {
-	Log(true, false, "parsing revs", body)
 	dlds := gerritParseRecursively(body,
 		[]string{"fetch", "ssh", "commands"}, gerritParsePickCmds)
 	retI, ok := body[IssueinfoStr_Nmb]

@@ -114,3 +114,7 @@ func TestGerritListConfigOfProject(t *testing.T) {
 func TestGerritDownloadFileOfSubmit(t *testing.T) {
 	GerritTests(t, "download a file of a submit", false)
 }
+
+func TestGerritMultiple(t *testing.T) {
+	GerritTests(t, "list my open submits;show current revision or commit of a submit", false)
+}
