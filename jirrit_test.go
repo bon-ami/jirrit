@@ -94,27 +94,15 @@ func (s *TestSuite) SetupTest() {
 
 // Test1 is the main test function
 func (s *TestSuite) Test1() {
-	// t := s.T()
-	for _, fun1 := range s.funs {
-		if inputIssueInfo4Act(s.svr, s.authInfo, fun1.n, s.issueInfo) {
-			s.Skip(fun1.n, infoSep, "NOT enough info to run")
+	looper := DefLooper{para: ParamsTest, svr: s.svr,
+		authInfo: s.authInfo, maxResults: maxResults}
+	errs := LoopActions(s.svr, s.funs, s.issueInfo, &looper, nil)
+	if errs != nil {
+		// Log(false, false, err)
+		for _, err1 := range errs {
+			s.T().Error(err1)
 		}
-		looper := DefLooper{ParamsTest, s.svr,
-			s.authInfo, fun1.n, fun1.f, nil, maxResults}
-		inf, err := loopIssues(s.svr, s.issueInfo, looper.Loop)
-		if err != nil {
-			// Log(false, false, err)
-			// .NoError(err)
-			s.FailNow(fun1.n, err)
-		}
-		// inf := looper.GetIssueInfo()
-		// only IDs are stored for sub tests
-		for _, info := range inf {
-			if len(s.issueInfo[IssueinfoStrID]) > 0 {
-				s.issueInfo[IssueinfoStrID] += issueSeparator
-			}
-			s.issueInfo[IssueinfoStrID] += info[IssueinfoStrID]
-		}
+		s.T().FailNow()
 	}
 }
 

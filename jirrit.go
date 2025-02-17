@@ -327,7 +327,7 @@ func (l *DefLooper) Loop(inf IssueInfos) (IssueInfoSlc, error) {
 }
 
 func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
-	issueInfo IssueInfos, para params) (err error) {
+	issueInfo IssueInfos, para params) (err []error) {
 	var choices []string
 	for ; ; svr = nil { // reset among loops
 		if svr == nil {
@@ -336,10 +336,9 @@ func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
 				break
 			}
 		}
-		var authInfo eztools.AuthInfo
-		authInfo, err = cfg2AuthInfo(*svr, cfg)
-		if err != nil {
-			Log(false, false, err)
+		authInfo, errCfg := cfg2AuthInfo(*svr, cfg)
+		if errCfg != nil {
+			Log(false, false, errCfg)
 			os.Exit(extCfg)
 		}
 		if len(svr.Proj) > 0 && !uiSilent {
@@ -352,7 +351,6 @@ func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
 		looper := DefLooper{
 			para: para, svr: svr, authInfo: authInfo, maxResults: -1}
 		err = LoopActions(svr, funs, issueInfo, &looper,
-			(choices == nil || len(choices) < 2),
 			func() (string, actionFunc, IssueInfoSlc) {
 				return chooseAct(svr,
 					authInfo, choices, cats[svr.Type],
@@ -365,9 +363,12 @@ func mainLoop(svr *svrs, cats cat2Act, funs []action2Func,
 	return
 }
 
+// LoopActions
+// when all looper fails for one action, this returns
+// Return value: non-nil errors, action results wrapped with action names
 func LoopActions(svr *svrs, funs []action2Func, issueInfo IssueInfos,
-	looper *DefLooper, noLoopInteraction bool,
-	chooseAct func() (string, actionFunc, IssueInfoSlc)) (err error) {
+	looper *DefLooper,
+	chooseAct func() (string, actionFunc, IssueInfoSlc)) (err []error) {
 	var (
 		fun1    actionFunc
 		funStr1 string
@@ -380,7 +381,9 @@ func LoopActions(svr *svrs, funs []action2Func, issueInfo IssueInfos,
 			funStr1 = funs[funIndx].n
 			issueInfoCurr = looper.GetIssueInfo()
 			funIndx++
-			Log(true, false, "one action:", funStr1)
+			if eztools.Debugging && eztools.Verbose > 0 {
+				Log(true, false, "one action:", funStr1)
+			}
 		} else {
 			// if fun1 == nil { // reset issueInfo among loops
 			if chooseAct != nil {
@@ -391,6 +394,9 @@ func LoopActions(svr *svrs, funs []action2Func, issueInfo IssueInfos,
 			// }
 		}
 		if fun1 == nil {
+			if eztools.Debugging && eztools.Verbose > 0 {
+				Log(true, false, "NO action!")
+			}
 			break
 		}
 		// use issueInfoCurr to loop issues
@@ -401,11 +407,12 @@ func LoopActions(svr *svrs, funs []action2Func, issueInfo IssueInfos,
 			issueInfoCurr = IssueInfoSlc{makeIssueInfo()}
 		}
 		for _, inf := range issueInfoCurr {
-			if _, err = loopIssues(svr, inf, looper.Loop); err != nil {
-				Log(false, false, err)
+			if _, err1 := loopIssues(svr, inf, looper.Loop); err1 != nil {
+				Log(false, false, err1)
+				err = append(err, fmt.Errorf("%s: %w", funStr1, err1))
 			}
 		}
-		if noLoopInteraction || (funs != nil && funIndx == len(funs)) {
+		if err != nil || (funs != nil && funIndx == len(funs)) {
 			break
 		}
 	}
@@ -711,7 +718,10 @@ func main() {
 			}
 		}
 	}
-	errExit(err)
+	if err != nil {
+		errExit(err[0])
+	}
+	errExit(nil)
 }
 
 // Print outputs the results
