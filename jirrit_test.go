@@ -140,7 +140,12 @@ func init() {
 func TestMain(m *testing.M) {
 	ParamsTest.Parse()
 	// test/action related info, such as svrs, is loaded later
-	loadCfg(ParamsTest)
+	var errs []error
+	cfgFile, errs = eztools.XMLReadDefault(ParamsTest.cfg, "", "", "", module, &cfg)
+	if errs != nil {
+		eztools.ShowStrln("NO config file for tests")
+		os.Exit(0)
+	}
 	actionsAll = makeCat2Act()
 	os.Exit(m.Run())
 }
